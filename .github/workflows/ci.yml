@@ -1,0 +1,74 @@
+name: Verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: integration
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.33'
+          python-version: '3.13'
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --frozen
+      - run: python3 scripts/budget.py >> "$GITHUB_STEP_SUMMARY"
+      - run: npm run verify
+      - run: npm run integration
+        env:
+          INTEGRATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/integration
+      - name: Build production image (no hosted credentials)
+        run: docker build --tag connectsphere:ci .
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # GitHub Free private repositories use repository secrets, not environments.
+    concurrency:
+      group: shared-demo
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.33'
+          python-version: '3.13'
+      - run: uv sync --frozen --no-dev
+      - name: Apply reviewed additive migrations
+        run: uv run --frozen --no-dev alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.DEMO_MIGRATION_DATABASE_URL }}
+      - name: Deploy and verify exact commit
+        run: uv run --frozen --no-dev python scripts/deploy.py
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+          DEMO_URL: ${{ vars.DEMO_URL }}
+      - if: failure()
+        run: echo "Merged, deployment failed. See failed step; database migration may already have applied." >> "$GITHUB_STEP_SUMMARY"

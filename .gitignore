@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv/
+node_modules/
+frontend/dist/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+supabase/.temp/
+supabase/.branches/
+test-results/
+playwright-report/
+artifacts/

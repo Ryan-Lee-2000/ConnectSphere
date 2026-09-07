@@ -1,0 +1,4 @@
+body { margin: 0; background: #f5f7fa; color: #172b4d; font-family: system-ui, sans-serif; }
+main { max-width: 65ch; margin: 48px auto; padding: 24px; }
+h1 { font-size: 2rem; }
+p { line-height: 1.6; }

@@ -1,0 +1,5 @@
+# Rename to CODEOWNERS after replacing these placeholders with actual usernames.
+# A backup maintainer avoids depending on Ryan's availability.
+# /backend/migrations/ @primary-maintainer @backup-maintainer
+# /.github/ @primary-maintainer @backup-maintainer
+# /scripts/deploy.py @primary-maintainer @backup-maintainer
