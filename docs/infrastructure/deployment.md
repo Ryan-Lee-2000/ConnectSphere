@@ -12,12 +12,12 @@ See [Dependabot version updates](https://docs.github.com/en/code-security/concep
 
 The committed .github/dependabot.yml prepares weekly updates for pnpm, uv, Docker and Actions,
 with minor/patch grouping and one open version-update PR per ecosystem. It becomes active when
-uploaded to the default branch. Automatic merging is not configured. See docs/repository-setup.md.
+uploaded to the default branch. Automatic merging is not configured. See docs/infrastructure/repository-setup.md.
 Dependency PRs must pass the same required checks as other changes; budget remains UNKNOWN.
 
 ## Local production image
 
-The Windows production build and runtime passed on 2026-09-07; see VERIFICATION.md for evidence.
+The Windows production build and runtime passed on 2026-09-07; see docs/infrastructure/verification.md for evidence.
 Local Docker Desktop containers must use host.docker.internal to reach Supabase on the host.
 Keep browser-facing Supabase URLs on 127.0.0.1. Pass database credentials only at runtime;
 only the Supabase URL and public publishable key belong in frontend build arguments.
@@ -28,7 +28,7 @@ This check does not activate hosting or prove macOS/clean-clone acceptance.
 ## Hosted activation
 
 Maintainer setup:
-1. Follow docs/repository-setup.md for Ryan's private personal GitHub Free repository.
+1. Follow docs/infrastructure/repository-setup.md for Ryan's private personal GitHub Free repository.
    Confirm spending controls before uploading/enabling workflows and confirm course access requirements.
 2. Use the documented manual PR/review rule. Private GitHub Free does not enforce branch
    protection or provide deployment environments. All collaborators with write access must be trusted.

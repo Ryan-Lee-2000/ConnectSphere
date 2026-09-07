@@ -33,7 +33,7 @@ def assess(data, now=None):
 
 
 if __name__ == "__main__":
-    path = Path(__file__).resolve().parents[1] / "docs/ci-budget.json"
+    path = Path(__file__).resolve().parents[1] / "docs/infrastructure/ci-budget.json"
     data = json.loads(path.read_text())
     print(f"Actions budget: {assess(data)}")
     print(json.dumps(data, indent=2))

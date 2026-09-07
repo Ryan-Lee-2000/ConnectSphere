@@ -87,7 +87,7 @@ source handoff. macOS and genuine clean-clone checks remain outstanding.
 - Database setup, browser tests and production Docker were not repeated in this extraction;
   their previous results above apply to the original workspace. No additional stack was started.
 - Reviewed native command execution and added macOS AirPlay port-conflict guidance plus
-  docs/onboarding-checklist.md for Wednesday, 9 September. Actual macOS execution remains untested.
+  docs/onboarding/checklist.md for Wednesday, 9 September. Actual macOS execution remains untested.
 
 Readiness: prepared for teammate trials and repository/hosting planning. This is a fresh-source
 Windows rehearsal with existing machine tools/caches, not a clean machine or Git-clone certification.
@@ -113,3 +113,15 @@ Connected the private Ryan-Lee-2000/ConnectSphere repository, preserving its ini
 commit b7960766c8fdc5067d24fe10c6e9331a6836b50e. Earlier no-Git observations above describe
 the environment at the time of those tests. Actions was enabled with zero runs, then disabled
 before upload because account usage/spending controls remain unverified. Hosting stays disabled.
+
+## Documentation organisation (2026-09-07)
+
+Moved onboarding, development and infrastructure documents into grouped folders; merged
+CONTRIBUTING guidance into the development workflow. Tool configuration remains at root.
+Updated budget-file lookup, archive rules and references. The first verification attempt failed
+formatting due to mixed line endings in the packaging test; formatting was corrected and the
+full rerun passed: lint, formatting, 23 Python tests, two frontend tests, typecheck and build.
+One PostgreSQL test skipped by design; separate integration, browser and Docker runtime checks
+were not rerun for this reorganisation. Existing pytest cache permission warning remains.
+Local Markdown links and relocated archive contents passed inspection. Budget reads the moved
+file successfully and reports UNKNOWN. GitHub Actions remains disabled; no hosted checks claimed.

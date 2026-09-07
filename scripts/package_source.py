@@ -35,8 +35,7 @@ PATTERNS = (
     "e2e/*.ts",
     "playwright.config.ts",
     "docs/**/*.md",
-    "docs/ci-budget.json",
-    "tasks/*.md",
+    "docs/infrastructure/ci-budget.json",
     "supabase/config.toml",
 )
 

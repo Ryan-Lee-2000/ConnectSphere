@@ -10,7 +10,7 @@ upload on 2026-09-07; re-enable only after the account budget review below.
 1. Create an empty private repository without generated README, licence or .gitignore.
 2. Before uploading the workflow, check account-wide Actions usage and available controls that
    stop paid usage. Keep Actions disabled until this is confirmed. Do not enable paid overages.
-   Record the actual allowance and consumption in docs/ci-budget.json; UNKNOWN is not zero.
+   Record the actual allowance and consumption in docs/infrastructure/ci-budget.json; UNKNOWN is not zero.
 3. Upload reviewed source only, following README. Never upload local environment files or caches.
 4. Invite teammates as collaborators. Choose a backup reviewer for periods when Ryan is unavailable.
 5. Enable Actions after budget review, with read-only default workflow-token permissions and
@@ -48,7 +48,7 @@ commands are not guaranteed by Dependabot. Normal tests still run on dependency 
 
 ## Hosting later
 
-Keep DEPLOY_ENABLED unset or false. Add no hosted credentials until docs/deployment.md is complete.
+Keep DEPLOY_ENABLED unset or false. Add no hosted credentials until docs/infrastructure/deployment.md is complete.
 The future free-plan workflow uses repository Actions secrets, with no environment approval gate.
 Repository write access must therefore be trusted: workflow editors can change how secrets are used.
 The main-branch condition is normal workflow routing, not protection against a collaborator editing it.
