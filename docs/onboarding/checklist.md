@@ -41,9 +41,9 @@ prefix commands as described in README. Run the following from the project folde
 For port conflicts, see README troubleshooting, including macOS AirPlay Receiver on port 5000.
 The separate PostgreSQL migration gate needs an empty disposable database; follow README exactly.
 It has already passed on Ryan's machine but is not covered by the quick suite's skipped test.
-Production Docker evidence is in VERIFICATION.md; teammates need not repeat it as a first-run step.
+Production Docker evidence is in docs/infrastructure/verification.md; teammates need not repeat it as a first-run step.
 
-## Result to record in VERIFICATION.md
+## Result to record in docs/infrastructure/verification.md
 
 - Developer, date, OS version and CPU (Apple Silicon/Intel or Windows architecture)
 - Git commit when available, otherwise archive identity/date

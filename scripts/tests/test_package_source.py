@@ -9,6 +9,8 @@ def test_source_archive_excludes_local_secrets_and_generated_files(tmp_path):
         ".env.example",
         "frontend/src/App.tsx",
         "backend/app/__init__.py",
+        "docs/infrastructure/ci-budget.json",
+        "docs/infrastructure/tasks/INF-01.md",
         ".env",
         "frontend/.env.local",
         "frontend/dist/assets/old-demo.js",
@@ -22,6 +24,6 @@ def test_source_archive_excludes_local_secrets_and_generated_files(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("fixture")
     archive = tmp_path / "handoff.zip"
-    assert package_source(tmp_path, archive) == 4
+    assert package_source(tmp_path, archive) == 6
     with ZipFile(archive) as contents:
-        assert set(contents.namelist()) == set(files[:4])
+        assert set(contents.namelist()) == set(files[:6])

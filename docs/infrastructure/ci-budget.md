@@ -18,7 +18,7 @@ After choosing repo owner: verify the owner's billing API/permissions, included 
 allowance, then implement retrieval and a pinned issue update in a trusted scheduled workflow.
 The standard GITHUB_TOKEN is not assumed to have billing access. Don't expose billing tokens
 to PR jobs. API failure must retain an UNKNOWN state. Avoid adding paid reporting services.
-This pending integration is tracked in tasks/INF-04.md.
+This pending integration is tracked in docs/infrastructure/tasks/INF-04.md.
 
 CI uses Linux, bounded job time, PR/push-main triggers and cancellation of obsolete verification.
 Deployment serialization has its own group; don't cancel an active migration/deploy when
