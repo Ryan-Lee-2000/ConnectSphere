@@ -1,6 +1,9 @@
 # CI budget visibility
 
-Current status: UNKNOWN; no real GitHub owner exists yet.
+Snapshot recorded from Ryan-Lee-2000 account screenshots on 2026-09-07: 521/2,000 minutes,
+0/0.5 GB storage as rounded by the dashboard, $0 billable usage. Actions paid budget is $0
+with Stop usage enabled; included-usage alerts are on. Storage is a displayed approximation,
+not byte-accurate telemetry. The snapshot expires after 24 hours and is not live usage.
 Run npm run budget. CI displays the same snapshot in its run summary.
 
 The foundation provides a transparent MANUAL snapshot, not a working live billing integration.

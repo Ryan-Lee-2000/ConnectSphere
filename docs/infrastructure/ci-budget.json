@@ -1,10 +1,10 @@
 {
-  "owner": null,
-  "source": null,
-  "month": null,
-  "verified_at": null,
-  "allowance_minutes": null,
-  "used_minutes": null,
-  "storage_limit_mb": null,
-  "storage_used_mb": null
+  "owner": "Ryan-Lee-2000",
+  "source": "User-provided GitHub account billing screenshots, current month; storage displayed rounded as 0 GB. Actions paid budget $0 with Stop usage Yes.",
+  "month": "2026-09",
+  "verified_at": "2026-09-07T14:06:39.905338+00:00",
+  "allowance_minutes": 2000,
+  "used_minutes": 521,
+  "storage_limit_mb": 500,
+  "storage_used_mb": 0
 }
