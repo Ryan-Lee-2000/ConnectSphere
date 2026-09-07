@@ -56,3 +56,16 @@ The main-branch condition is normal workflow routing, not protection against a c
 Sources: [branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches),
 [environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
 [Dependabot options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+
+## Initial dependency review (2026-09-07)
+
+PR #2 changes only the Docker Python image to 3.14, conflicting with the project's Python
+3.13 requirement. Defer it until a coordinated runtime migration is approved. PRs #3 (Vitest 5)
+and #4 (Gunicorn 26) are untested major application/test-tool upgrades and remain deferred,
+not certified as compatible or unsafe. Review security advisories separately before hosting.
+PR #1's pnpm Action update is included in the consolidated CI runtime maintenance PR.
+The maintenance change moves checkout/setup-node/pnpm setup to v6 and setup-uv to v7;
+upstream manifests declare node24 for each. Installed Node 24, pnpm 10.15.1, uv 0.11.33
+and Python 3.13 stay pinned. setup-node's automatic package-manager cache is disabled,
+avoiding a dependency on pnpm before its installation step. Dependabot proposals remain
+subject to human review; no application dependency updates are merged by this review.
