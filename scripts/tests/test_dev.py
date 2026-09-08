@@ -1,5 +1,6 @@
 """Onboarding failures should explain recovery and never leave servers behind."""
 
+import json
 import socket
 import subprocess
 import sys
@@ -9,6 +10,69 @@ from types import SimpleNamespace
 import pytest
 
 from scripts import dev
+
+
+def test_setup_uses_local_configuration_despite_inherited_hosted_values(monkeypatch, tmp_path):
+    (tmp_path / "frontend").mkdir()
+    monkeypatch.setattr(dev, "ROOT", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["dev.py", "setup"])
+    monkeypatch.setattr(dev, "doctor", lambda: None)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/hosted")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.invalid")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "hosted-fixture")
+    calls = []
+
+    def run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "API_URL": "http://127.0.0.1:54321",
+                    "DB_URL": "postgresql://postgres:fixture@127.0.0.1:54322/postgres",
+                    "ANON_KEY": "local-public",
+                    "SERVICE_ROLE_KEY": "local-secret",
+                }
+            )
+        )
+
+    monkeypatch.setattr(dev, "run", run)
+    dev.main()
+    for args, kwargs in calls[-2:]:
+        assert (
+            kwargs["env"]["DATABASE_URL"]
+            == "postgresql+psycopg://postgres:fixture@127.0.0.1:54322/postgres"
+        )
+        assert kwargs["env"]["SUPABASE_URL"] == "http://127.0.0.1:54321"
+        assert kwargs["env"]["SUPABASE_SERVICE_ROLE_KEY"] == "local-secret"
+    assert calls[-2][0][-3:] == ("alembic", "upgrade", "head")
+    assert calls[-1][0][-1] == "scripts/seed.py"
+
+
+@pytest.mark.parametrize(
+    "database", ["postgresql://example.invalid/db", "postgresql://localhost.example.invalid/db"]
+)
+def test_setup_rejects_nonlocal_database_before_writing_configuration(
+    monkeypatch, tmp_path, database
+):
+    monkeypatch.setattr(dev, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        dev,
+        "run",
+        lambda *a, **kw: SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "API_URL": "http://127.0.0.1:54321",
+                    "DB_URL": database,
+                    "ANON_KEY": "fixture",
+                    "SERVICE_ROLE_KEY": "fixture",
+                }
+            )
+        ),
+    )
+    with pytest.raises(RuntimeError, match="non-local database"):
+        dev.local_env()
+    assert not (tmp_path / ".env").exists()
 
 
 def test_pnpm_bootstrap_handles_paths_with_spaces(monkeypatch, tmp_path):

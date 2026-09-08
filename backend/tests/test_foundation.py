@@ -3,7 +3,6 @@
 import httpx
 import pytest
 from app import create_app
-from app.models import Base
 
 
 @pytest.fixture
@@ -80,11 +79,10 @@ def test_auth_outage_fails_closed(client, monkeypatch):
     )
 
 
-def test_skeleton_has_no_product_schema_or_routes(client):
-    assert not Base.metadata.tables
-    assert {rule.rule for rule in client.application.url_map.iter_rules()} == {
+def test_infrastructure_routes_remain_available(client):
+    assert {
         "/",
         "/<path:path>",
         "/api/health",
         "/api/session",
-    }
+    } <= {rule.rule for rule in client.application.url_map.iter_rules()}

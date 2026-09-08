@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,12 +31,13 @@ def command_args(args):
     return [executable, *args[1:]]
 
 
-def run(*args, capture=False):
+def run(*args, capture=False, env=None):
     return subprocess.run(
         command_args(args),
         check=True,
         text=True,
         cwd=ROOT,
+        env=env,
         stdout=subprocess.PIPE if capture else None,
     )
 
@@ -88,11 +90,21 @@ def local_env():
     data = json.loads(run("pnpm", "exec", "supabase", "status", "-o", "json", capture=True).stdout)
     api = data["API_URL"]
     # Only accept loopback: setup must never seed or overwrite a hosted project.
-    if not api.startswith(("http://127.0.0.1:", "http://localhost:")):
+    if urlparse(api).scheme != "http" or urlparse(api).hostname not in (
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    ):
         raise RuntimeError("Refusing non-local Supabase setup")
     public = data.get("ANON_KEY") or data["PUBLISHABLE_KEY"]
     secret = data.get("SERVICE_ROLE_KEY") or data["SECRET_KEY"]
     db = data["DB_URL"].replace("postgresql://", "postgresql+psycopg://", 1)
+    if urlparse(db).scheme != "postgresql+psycopg" or urlparse(db).hostname not in (
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    ):
+        raise RuntimeError("Refusing non-local database setup")
     target = ROOT / ".env"
     if target.exists() and "http://127.0.0.1:" not in target.read_text():
         raise RuntimeError("Existing .env is not known-local. Move it before local setup.")
@@ -105,6 +117,13 @@ def local_env():
     (ROOT / "frontend/.env.local").write_text(
         f"VITE_SUPABASE_URL={api}\nVITE_SUPABASE_PUBLISHABLE_KEY={public}\n"
     )
+    return {
+        **os.environ,
+        "DATABASE_URL": db,
+        "SUPABASE_URL": api,
+        "SUPABASE_PUBLISHABLE_KEY": public,
+        "SUPABASE_SERVICE_ROLE_KEY": secret,
+    }
 
 
 def main():
@@ -117,9 +136,9 @@ def main():
         run("pnpm", "install", "--frozen-lockfile")
         run("uv", "sync", "--frozen")
         run("pnpm", "exec", "supabase", "start")
-        local_env()
-        run("uv", "run", "--frozen", "alembic", "upgrade", "head")
-        run("uv", "run", "--frozen", "python", "scripts/seed.py")
+        environment = local_env()
+        run("uv", "run", "--frozen", "alembic", "upgrade", "head", env=environment)
+        run("uv", "run", "--frozen", "python", "scripts/seed.py", env=environment)
         print("Setup complete. Run npm start, then open http://127.0.0.1:5173.")
     elif cmd == "migrate":
         run("uv", "run", "--frozen", "alembic", "upgrade", "head")
