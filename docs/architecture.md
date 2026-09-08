@@ -1,5 +1,8 @@
 # Sprint 0 architecture boundaries
 
+See the [C4 model](architecture/c4.md) for context, containers, deployment views, trade-offs
+and links from the design to implementation and tests.
+
 One monorepo: React + TypeScript + Vite; Flask application factory; SQLAlchemy + Alembic;
 local Supabase PostgreSQL and Auth. Dependencies are locked in uv.lock and pnpm-lock.yaml.
 Native Windows and macOS use npm commands. Make and WSL are optional.
