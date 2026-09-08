@@ -1,62 +1,75 @@
-# Activate shared demo after creating accounts
+# Shared demo deployment
 
-Status: DISABLED. GitHub remote: https://github.com/Ryan-Lee-2000/ConnectSphere.
-No Render service or Supabase cloud project is configured. Repository Actions is disabled pending budget review.
-Ordinary contributors eventually only merge reviewed PRs and read the Verify workflow summary.
+Status recorded 2026-09-08: GitHub deployment enabled and successfully rehearsed.
 
-## Dependency maintenance and CI/CD
+- Repository: https://github.com/Ryan-Lee-2000/ConnectSphere (private, personal GitHub Free)
+- Demo: https://connectsphere-mmay.onrender.com
+- Render service: srv-dafcmr0n74is739ekup0; Docker, Singapore, Free instance
+- Supabase project: kwsjxsigdbcvxxiiozvt; hosted Auth and PostgreSQL
+- GitHub variable DEPLOY_ENABLED=true. Keep Render's own Auto-Deploy off to avoid duplicate deploys.
 
-Dependabot proposes dependency-update pull requests; GitHub Actions runs verification and the
-gated deployment workflow. They serve different purposes and can be used together.
-See [Dependabot version updates](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependabot-version-updates).
+## What happens after a merge
 
-The committed .github/dependabot.yml prepares weekly updates for pnpm, uv, Docker and Actions,
-with minor/patch grouping and one open version-update PR per ecosystem. It becomes active when
-uploaded to the default branch. Automatic merging is not configured. See docs/infrastructure/repository-setup.md.
-Dependency PRs must pass the same required checks as other changes; budget remains UNKNOWN.
+A push to main runs verification, the disposable PostgreSQL migration test and a Docker build.
+Only after those pass does the deploy job apply Alembic migrations to hosted Supabase, ask Render
+for the exact Git commit, poll deployment status, then check /api/health for status ok and that
+same commit. PRs run checks without deployment. Documentation merges also trigger deployment.
+Render rebuilds the selected commit; this is not promotion of the immutable image built in CI.
 
-## Local production image
+The first successful full rehearsal used commit 8c2d82fdae1a30925aa74ded38df01332bad17de:
+[Verify run, attempt 2](https://github.com/Ryan-Lee-2000/ConnectSphere/actions/runs/34132621922/attempts/2).
+Checks took 1m21s and deployment 59s. See [verification evidence](verification.md), including
+separate user-run hosted Auth and baseline checks. Real Auth/browser tests are not automated
+CI gates. Failure recovery and teammate/macOS onboarding remain untested.
 
-The Windows production build and runtime passed on 2026-09-07; see docs/infrastructure/verification.md for evidence.
-Local Docker Desktop containers must use host.docker.internal to reach Supabase on the host.
-Keep browser-facing Supabase URLs on 127.0.0.1. Pass database credentials only at runtime;
-only the Supabase URL and public publishable key belong in frontend build arguments.
-Bind the local production test port to 127.0.0.1. Use the existing foundation browser smoke test
-against that port, then remove the test app container while retaining Supabase data.
-This check does not activate hosting or prove macOS/clean-clone acceptance.
+## Configuration inventory
 
-## Hosted activation
+GitHub repository Actions secrets (values never belong in source):
+- RENDER_API_KEY
+- DEMO_MIGRATION_DATABASE_URL
 
-Maintainer setup:
-1. Follow docs/infrastructure/repository-setup.md for Ryan's private personal GitHub Free repository.
-   Confirm spending controls before uploading/enabling workflows and confirm course access requirements.
-2. Use the documented manual PR/review rule. Private GitHub Free does not enforce branch
-   protection or provide deployment environments. All collaborators with write access must be trusted.
-3. Configure $0 paid usage controls in billing before enabling Actions.
-4. Create Supabase Free project and Render Free Docker web service linked to main.
-   Disable Render automatic deploys. Use default free URL; select no paid resources.
-5. Set Render build arguments VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY via its
-   supported Docker build environment configuration. Set the same SUPABASE_URL and
-   SUPABASE_PUBLISHABLE_KEY for Flask at runtime, plus server-only DATABASE_URL.
-   Render's RENDER_GIT_COMMIT is used by /api/health to identify the deployed version.
-6. Configure GitHub repository Actions secrets RENDER_API_KEY and DEMO_MIGRATION_DATABASE_URL.
-   Configure repository variables RENDER_SERVICE_ID and DEMO_URL.
-   Use the Supabase dashboard's compatible connection string (SSL; session pooler if IPv4 needs it);
-   prefix postgresql+psycopg:// for SQLAlchemy. Keep migration/runtime credentials server-side.
-7. Provision hosted demo accounts separately. NEVER run the local seed against cloud.
-8. Test Docker build/start locally, CI PostgreSQL gate, real hosted auth, Data API denial for any product tables added later, and migration
-   compatibility. Enable repository variable DEPLOY_ENABLED=true only after these pass.
+GitHub repository variables:
+- RENDER_SERVICE_ID=srv-dafcmr0n74is739ekup0
+- DEMO_URL=https://connectsphere-mmay.onrender.com
+- DEPLOY_ENABLED=true
 
-On subsequent passing main pushes: migrations, exact-commit deploy, status poll, health/commit check.
-The deployment script polls at 10-second intervals, with bounded timeout.
-No migration runs in each Gunicorn worker or on app startup.
+Render environment variables: DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
+VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY. Only the two VITE values belong in
+frontend build arguments. Database credentials stay server-side. The session-pooler URL uses
+postgresql+psycopg:// with SSL required, port 5432 and the project-specific pooler username.
+Never copy a local .env into Render or run the local seed against cloud.
 
-Migration policy: deploy additive/backwards-compatible changes while the old app is live.
-Do not merge destructive migrations through this automatic path.
-Recovery: inspect failed step. An app rollback does not undo a migration. Redeploy a known
-compatible commit through a reviewed main revert; review any data repair separately.
+Render settings: main branch, repository root, Docker context '.', Dockerfile './Dockerfile',
+health path /api/health, no Docker command override, no pre-deploy command. The Dockerfile starts
+Gunicorn. RENDER_GIT_COMMIT identifies the deployed version. Migrations do not run on app startup.
+Hosted demo accounts are provisioned separately; the verification account has no business role.
 
-Cost limitations: one free demo, no guaranteed uptime. Wake it before a presentation.
-Data stays in Supabase, not Render's ephemeral disk. No paid domains, schedulers or background
-workers. Actual external notification email is not implemented by the foundation.
+## Review, budget and recovery
+
+Private GitHub Free does not enforce the team's PR/review rule or provide environment approvals.
+Repository workflow editors must be trusted with how repository secrets are used. Humans review
+and merge; agents do not deploy from ordinary local feature work.
+
+The user supplied account screenshots showing a $0 paid Actions budget with Stop usage enabled
+and included-usage alerts on. Usage is a dated manual snapshot, not live billing telemetry;
+run npm run budget and follow [budget guidance](ci-budget.md). Do not enable paid services.
+
+Set DEPLOY_ENABLED=false to prevent future GitHub deployment jobs. This does not cancel an
+already running job. Keep Render Auto-Deploy off. Inspect a failure before retrying: a failed
+application deploy may follow a successful migration. An app rollback does not undo a migration.
+Use reviewed additive/backwards-compatible migrations while the previous app is live; never
+merge destructive migrations into this automatic path. Redeploy a compatible commit through a
+reviewed main revert and review data repair separately. Failure recovery has not been rehearsed.
+
+The demo uses free hosting with no uptime guarantee. Check it before presentations; data lives
+in Supabase rather than Render's ephemeral disk. No paid domains, schedulers or workers are configured.
+Product-table RLS, role/organisation permissions and Data API denial tests must accompany future
+approved tables; the current foundation has no product tables.
+
+## Local production checks
+
+Docker Desktop containers reach host Supabase through host.docker.internal; browser URLs stay
+on 127.0.0.1. Bind local production test ports to loopback and preserve database volumes when
+removing test app containers. Local checks do not certify macOS or a fresh teammate clone.
+
 Sources: https://render.com/docs/free and https://api-docs.render.com/reference/create-deploy

@@ -1,5 +1,12 @@
 # Sprint 0 foundation verification
 
+## Current handoff status (2026-09-08)
+
+Hosted connectivity, Auth, the baseline and GitHub deployment have passed. Actual teammate
+Windows/macOS clean-clone checks and failure-recovery rehearsal remain pending; INF-01 is not Done.
+Earlier sections below are dated historical evidence, including statuses superseded by activation.
+
+
 Date: 2026-09-07. Scope: product-free foundation only. Earlier feature-demo results do not
 certify this skeleton and are not included in the team handoff.
 
@@ -125,3 +132,29 @@ One PostgreSQL test skipped by design; separate integration, browser and Docker 
 were not rerun for this reorganisation. Existing pytest cache permission warning remains.
 Local Markdown links and relocated archive contents passed inspection. Budget reads the moved
 file successfully and reports UNKNOWN. GitHub Actions remains disabled; no hosted checks claimed.
+
+## Hosted activation evidence (2026-09-07; recorded 2026-09-08)
+
+- Public endpoint checks returned homepage 200, /api/health 200 with status ok and commit
+  8c2d82fdae1a30925aa74ded38df01332bad17de, and anonymous /api/session 401.
+- User-provided terminal screenshot: hosted Auth check passed health, missing/invalid token
+  rejection, real hosted sign-in and matching Render user identity; session signed out. Earlier
+  sign-in attempts failed with invalid_credentials; user identified password-pasting trouble.
+  No application fix was required; the earlier email-typo hypothesis was not established.
+- User-provided terminal screenshot: target/schema preflight and both baseline applications
+  passed at sprint0_base, with no product tables. Local .env and Auth records unchanged.
+  These were one-off ignored artifacts/check_hosted_auth.py and check_hosted_baseline.py,
+  using hidden prompts, not reusable checks included in the source handoff.
+- GitHub [full rehearsal, attempt 2](https://github.com/Ryan-Lee-2000/ConnectSphere/actions/runs/34132621922/attempts/2)
+  succeeded for commit 8c2d82fdae1a30925aa74ded38df01332bad17de. Checks job: 1m21s;
+  hosted migration and exact-commit Render deployment/health job: 59s.
+- Automated coverage: lint/format, 23 Python tests (one PostgreSQL test skipped in the quick
+  suite), two frontend tests, typecheck/build, separate PostgreSQL gate and Docker image build.
+  Real hosted Auth/browser validation is manual, not a per-PR or per-deploy automated gate.
+- GitHub deployment enabled; repository secret names and variables configured. No secret values
+  are recorded here. Render Auto-Deploy is intended to remain off per user setup instructions.
+- $0 paid Actions budget with Stop usage and alerts confirmed from user screenshots. The usage
+  snapshot expires after 24 hours; automated account-wide retrieval remains incomplete.
+
+This documentation update does not rerun hosted sign-in or migrations. It records the existing
+passing evidence; it does not claim new teammate tests, product features or failure recovery.
