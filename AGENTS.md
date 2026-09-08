@@ -29,7 +29,7 @@ A story is not Done merely because a PR exists. Record review and deployment sep
 Run npm run budget. UNKNOWN means account usage is unverified, not zero.
 Conserve CI; do not trigger optional repeated runs while budget is unknown/critical.
 Do not weaken required tests. Never add a paid service or change billing settings.
-Deployment is disabled until a maintainer completes docs/infrastructure/deployment.md.
+Shared deployment is enabled through GitHub Actions on passing main pushes; see docs/infrastructure/deployment.md.
 Do not invoke deploy.py or hosted migrations from ordinary local feature work.
 
 ## Secrets

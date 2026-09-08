@@ -53,5 +53,5 @@ Production Docker evidence is in docs/infrastructure/verification.md; teammates 
 - Recovery attempted and rerun result; any remaining blocker
 
 Do not share .env contents, Auth tokens or entire Supabase status output.
-Keep real macOS/teammate results pending until performed. Local preparation is sufficient to
-begin repository and hosting planning; it does not make INF-01 Done or enable deployment.
+Keep real macOS/teammate results pending until performed. The shared demo and automated deployment are verified separately; they do not
+prove a teammate can set up a fresh clone and do not make INF-01 Done.

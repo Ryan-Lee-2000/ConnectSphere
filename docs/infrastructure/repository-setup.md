@@ -2,10 +2,10 @@
 
 Owner: Ryan's personal account. Visibility: private. Teammates: collaborators.
 No subscription upgrade is required. Repository: https://github.com/Ryan-Lee-2000/ConnectSphere.
-Collaborator invitations/usernames remain pending. Actions was disabled before the foundation
-upload on 2026-09-07; re-enable only after the account budget review below.
+Collaborator invitations/usernames have not been verified. Actions is enabled following the
+account budget review; PR verification and main deployment have passed.
 
-## Before the first upload
+## Initial setup checklist (retained for reference)
 
 1. Create an empty private repository without generated README, licence or .gitignore.
 2. Before uploading the workflow, check account-wide Actions usage and available controls that
@@ -37,7 +37,7 @@ frontend build, a separate disposable PostgreSQL migration test and production D
 The job has a 20-minute limit; obsolete PR runs are cancelled. No reports or images are uploaded.
 The Docker build uses no hosted credentials and is a build check, not a runtime/Auth check.
 Real local Auth/browser and Docker runtime checks remain local acceptance evidence; they must
-be rerun for relevant changes. Automating that remaining gate needs review before deployment activation.
+be rerun for relevant changes. They are not automated CI gates. Hosted Auth was verified manually before deployment activation.
 
 Dependabot checks npm (including the pnpm workspace), uv, Docker and Actions weekly on Mondays
 at 09:00 Singapore time. Minor/patch updates are grouped within JavaScript, Python and Actions;
@@ -46,10 +46,11 @@ not a global one-PR limit. Security updates have separate scheduling/limits. Rev
 version changes against README, launchers and Dockerfile; updates to embedded tool-install
 commands are not guaranteed by Dependabot. Normal tests still run on dependency PRs.
 
-## Hosting later
+## Active hosting
 
-Keep DEPLOY_ENABLED unset or false. Add no hosted credentials until docs/infrastructure/deployment.md is complete.
-The future free-plan workflow uses repository Actions secrets, with no environment approval gate.
+DEPLOY_ENABLED is true. Set it false to pause future GitHub deployments; this does not cancel
+a running deployment. See docs/infrastructure/deployment.md for configuration and recovery.
+The free-plan workflow uses repository Actions secrets, with no environment approval gate.
 Repository write access must therefore be trusted: workflow editors can change how secrets are used.
 The main-branch condition is normal workflow routing, not protection against a collaborator editing it.
 
@@ -62,7 +63,7 @@ Sources: [branch protection](https://docs.github.com/en/repositories/configuring
 PR #2 changes only the Docker Python image to 3.14, conflicting with the project's Python
 3.13 requirement. Defer it until a coordinated runtime migration is approved. PRs #3 (Vitest 5)
 and #4 (Gunicorn 26) are untested major application/test-tool upgrades and remain deferred,
-not certified as compatible or unsafe. Review security advisories separately before hosting.
+not certified as compatible or unsafe. Security advisory and major-upgrade review remain separate maintenance work.
 PR #1's pnpm Action update is included in the consolidated CI runtime maintenance PR.
 The maintenance change moves checkout/setup-node/pnpm setup to v6 and setup-uv to v7;
 upstream manifests declare node24 for each. Installed Node 24, pnpm 10.15.1, uv 0.11.33

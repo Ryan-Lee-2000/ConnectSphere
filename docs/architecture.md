@@ -36,7 +36,7 @@ SQLite supports fast infrastructure tests; PostgreSQL migration checks remain a 
 The browser smoke test proves the shell, API/database connectivity and actual local Auth token
 validation. It is not a product story or an estimation benchmark.
 
-Flask serves the built React files in the production Docker image. The disabled deployment
+Flask serves the built React files in the production Docker image. The enabled deployment
 workflow rebuilds the verified commit on Render; this is not promotion of an immutable CI image.
-Hosting activation, secrets and budget controls require maintainer setup. No paid services,
+Hosted Auth, the empty baseline and the main deployment path have been verified. No paid services,
 hosted migrations or deployments are part of ordinary local development.

@@ -11,7 +11,7 @@ No Release 1 product story is implemented or estimated by this foundation.
 - SQLAlchemy metadata and an empty Alembic baseline, ready for approved domain migrations
 - Local Supabase PostgreSQL/Auth and one role-free Auth fixture for infrastructure tests
 - Backend, frontend, PostgreSQL migration and browser/Auth smoke tests
-- Common agent instructions, PR guidance, CI configuration and disabled deployment tooling
+- Common agent instructions, PR guidance, working CI and verified shared deployment
 
 There are no event screens, event endpoints, product-domain tables, business-role fixtures or
 sample stories to copy into the backlog. Role/organisation authorisation must be implemented
@@ -144,9 +144,11 @@ Use [the Wednesday onboarding checklist](docs/onboarding/checklist.md) to record
 
 - Native Windows and macOS clean-clone acceptance must be recorded in `docs/infrastructure/verification.md`.
 - The full authoritative requirements baseline and team backlog must be supplied before product work.
-- Hosted accounts, billing controls and deployment are not activated. Budget remains UNKNOWN.
+- Shared demo: https://connectsphere-mmay.onrender.com. Hosted Auth, baseline and automated deployment passed.
+- GitHub Actions paid budget was verified at $0 with Stop usage enabled. Run `npm run budget`
+  for the dated snapshot; it expires after 24 hours and does not retrieve live usage.
 - CI and Dependabot configuration are prepared; follow [repository setup](docs/infrastructure/repository-setup.md)
-  for the personal GitHub Free account. GitHub execution remains unverified.
+  for the personal GitHub Free account. PR checks and the main deployment workflow have passed.
 
 The local Supabase project ID is `connectsphere-foundation`. It has an empty product schema;
 only Alembic's revision table is created. Old local databases are not migrated or reset by this
@@ -158,5 +160,4 @@ Share source through the team repository, not a copy of your working directory. 
 For an archive handoff before Git exists, use `npm run package:source`; it creates an explicit
 source-only ZIP under ignored `artifacts/` and includes no local credentials or generated output.
 
-See `docs/infrastructure/tasks/INF-01.md` for infrastructure acceptance and `docs/infrastructure/deployment.md` before enabling
-any shared deployment.
+See `docs/infrastructure/tasks/INF-01.md` for infrastructure acceptance and `docs/infrastructure/deployment.md` for the active shared deployment and recovery procedure.

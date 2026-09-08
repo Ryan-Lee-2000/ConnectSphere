@@ -35,7 +35,9 @@ Different agent tools read the same AGENTS.md; CLAUDE.md forwards to it. Jira is
 6. Meet required CI checks and the team's Definition of Done. Track deployment separately.
 7. Demonstrate the outcome and record review effort, rework and blockers for the retrospective.
 
-CI and shared deployment need repository/account activation before they can be rehearsed.
+CI and shared deployment are active: PRs run checks; passing main pushes run migrations,
+deploy the selected commit and verify live health. Even a documentation merge triggers this
+workflow. Review the deployment job after merging; a successful merge alone is not deployment evidence.
 A local simulation must not be recorded as a passing hosted pipeline. Budget UNKNOWN means
 unverified account usage; avoid optional repeated CI runs and never weaken required gates.
 
