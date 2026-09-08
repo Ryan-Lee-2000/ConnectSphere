@@ -16,8 +16,8 @@ Keep existing projects' Node versions: README includes an isolated Node 24 comma
 Download dependencies on a reliable connection before the session if possible. First setup takes
 longer than daily startup. No separate Python, pnpm, Make or Supabase CLI installation is needed.
 
-Use your own fresh clone once the repository exists, or extract the source-only archive into a
-new folder. Do not copy anyone's .env, .venv, node_modules or database files. Stop any other local
+Use your own fresh clone of the team repository in a new folder. Start with the
+[project orientation](start-here.md). Do not copy anyone's .env, .venv, node_modules or database files. Stop any other local
 Supabase stack using the same ports through its own project; never reset it.
 
 ## Run and record

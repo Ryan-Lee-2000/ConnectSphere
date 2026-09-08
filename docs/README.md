@@ -5,9 +5,11 @@ Paths written as plain text in these documents are relative to the repository ro
 
 | Need | Document |
 | --- | --- |
+| Join the project | [Start here](onboarding/start-here.md) |
 | Set up your machine | [Onboarding checklist](onboarding/checklist.md) |
 | Work on a task and submit a PR | [Development workflow](development/workflow.md) |
 | Understand application boundaries | [Architecture](architecture.md) |
+| View the system design | [C4 model](architecture/c4.md) |
 | Understand the product scope | [Requirements](requirements.md) |
 | Configure the GitHub repository | [Repository setup](infrastructure/repository-setup.md) |
 | Configure hosting later | [Deployment](infrastructure/deployment.md) |
