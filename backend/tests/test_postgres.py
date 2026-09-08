@@ -5,6 +5,8 @@ import subprocess
 import sys
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 
@@ -22,7 +24,7 @@ def test_empty_baseline_migration_is_rerunnable():
             pytest.fail("Integration database is not empty; provide a fresh disposable database")
         for _ in range(2):
             subprocess.run(
-                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                [sys.executable, "-m", "alembic", "upgrade", "sprint0_base"],
                 check=True,
                 env={**os.environ, "DATABASE_URL": url},
             )
@@ -32,5 +34,17 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(text("select version_num from alembic_version")).scalar()
                 == "sprint0_base"
             )
+        for _ in range(2):
+            subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                check=True,
+                env={**os.environ, "DATABASE_URL": url},
+            )
+        heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
+        assert len(heads) == 1, "Resolve competing migration heads before merging"
+        with engine.connect() as conn:
+            assert set(
+                conn.execute(text("select version_num from alembic_version")).scalars()
+            ) == set(heads)
     finally:
         engine.dispose()

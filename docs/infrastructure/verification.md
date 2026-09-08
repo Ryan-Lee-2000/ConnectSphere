@@ -6,6 +6,23 @@ Hosted connectivity, Auth, the baseline and GitHub deployment have passed. Actua
 Windows/macOS clean-clone checks and failure-recovery rehearsal remain pending; INF-01 is not Done.
 Earlier sections below are dated historical evidence, including statuses superseded by activation.
 
+## Foundation review fixes (2026-09-08)
+
+- Local setup validates the database host and passes generated local configuration explicitly to
+  migrations and seeding, overriding inherited hosted configuration for those child processes.
+  Regression tests use fake URLs and do not contact hosted services.
+- Route checks preserve required infrastructure routes while allowing approved additions.
+  PostgreSQL checks apply sprint0_base twice and verify its empty schema, then upgrade to the
+  current single head twice and verify the revision. Merged migrations were not edited.
+- Native Windows verification passed: lint/format, 26 Python tests, two frontend tests,
+  typecheck and build. The quick suite skipped one PostgreSQL test as configured.
+- The separate PostgreSQL gate passed against a fresh disposable PostgreSQL 17 container.
+  Non-fatal warnings: existing pytest cache permissions and Alembic path_separator deprecation.
+- Budget reported NORMAL from the dated snapshot, not live telemetry. Browser/Auth, production
+  Docker runtime, hosted deployment, macOS and teammate onboarding were not rerun for these fixes.
+- Scope, reference-story selection, ownership and Definition of Done remain team decisions.
+  These fixes do not mark INF-01 Done. Review and deployment remain separate from local checks.
+
 
 Date: 2026-09-07. Scope: product-free foundation only. Earlier feature-demo results do not
 certify this skeleton and are not included in the team handoff.
