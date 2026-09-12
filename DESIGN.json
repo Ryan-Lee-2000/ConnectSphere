@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-10T15:10:00+08:00",
+  "title": "Design System: ConnectSphere",
+  "extensions": {
+    "colorMeta": {
+      "mineral-teal": {
+        "role": "primary",
+        "displayName": "Mineral Teal",
+        "canonical": "oklch(43% 0.09 190)",
+        "tonalRamp": ["oklch(15% 0.035 190)", "oklch(25% 0.06 190)", "oklch(34% 0.078 190)", "oklch(43% 0.09 190)", "oklch(56% 0.08 190)", "oklch(70% 0.06 190)", "oklch(84% 0.035 190)", "oklch(95% 0.014 190)"]
+      },
+      "mineral-teal-hover": {
+        "role": "primary",
+        "displayName": "Mineral Teal Hover",
+        "canonical": "oklch(38% 0.085 190)",
+        "tonalRamp": ["oklch(15% 0.035 190)", "oklch(25% 0.06 190)", "oklch(34% 0.078 190)", "oklch(38% 0.085 190)", "oklch(52% 0.078 190)", "oklch(68% 0.06 190)", "oklch(83% 0.034 190)", "oklch(95% 0.014 190)"]
+      },
+      "mineral-teal-active": {
+        "role": "primary",
+        "displayName": "Mineral Teal Active",
+        "canonical": "oklch(34% 0.078 190)",
+        "tonalRamp": ["oklch(15% 0.035 190)", "oklch(24% 0.055 190)", "oklch(30% 0.07 190)", "oklch(34% 0.078 190)", "oklch(50% 0.074 190)", "oklch(66% 0.055 190)", "oklch(82% 0.032 190)", "oklch(95% 0.014 190)"]
+      },
+      "ink-navy": {
+        "role": "neutral",
+        "displayName": "Ink Navy",
+        "canonical": "oklch(27% 0.055 252)",
+        "tonalRamp": ["oklch(15% 0.03 252)", "oklch(21% 0.045 252)", "oklch(27% 0.055 252)", "oklch(38% 0.052 252)", "oklch(52% 0.043 252)", "oklch(67% 0.032 252)", "oklch(82% 0.019 252)", "oklch(95% 0.008 252)"]
+      },
+      "muted-slate": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "oklch(48% 0.035 248)",
+        "tonalRamp": ["oklch(15% 0.018 248)", "oklch(25% 0.026 248)", "oklch(36% 0.032 248)", "oklch(48% 0.035 248)", "oklch(60% 0.03 248)", "oklch(72% 0.023 248)", "oklch(84% 0.015 248)", "oklch(95% 0.007 248)"]
+      },
+      "atlas-paper": {
+        "role": "neutral",
+        "displayName": "Atlas Paper",
+        "canonical": "oklch(98% 0.008 210)",
+        "tonalRamp": ["oklch(15% 0.01 210)", "oklch(28% 0.012 210)", "oklch(42% 0.013 210)", "oklch(56% 0.014 210)", "oklch(70% 0.014 210)", "oklch(82% 0.012 210)", "oklch(92% 0.01 210)", "oklch(98% 0.008 210)"]
+      },
+      "mist-surface": {
+        "role": "neutral",
+        "displayName": "Mist Surface",
+        "canonical": "oklch(96% 0.012 210)",
+        "tonalRamp": ["oklch(15% 0.01 210)", "oklch(28% 0.013 210)", "oklch(42% 0.016 210)", "oklch(56% 0.018 210)", "oklch(70% 0.018 210)", "oklch(82% 0.016 210)", "oklch(90% 0.014 210)", "oklch(96% 0.012 210)"]
+      },
+      "raised-surface": {
+        "role": "neutral",
+        "displayName": "Raised Surface",
+        "canonical": "oklch(99% 0.006 210)",
+        "tonalRamp": ["oklch(15% 0.008 210)", "oklch(28% 0.01 210)", "oklch(42% 0.011 210)", "oklch(56% 0.012 210)", "oklch(70% 0.011 210)", "oklch(84% 0.009 210)", "oklch(94% 0.007 210)", "oklch(99% 0.006 210)"]
+      },
+      "blueprint-line": {
+        "role": "neutral",
+        "displayName": "Blueprint Line",
+        "canonical": "oklch(86% 0.02 220)",
+        "tonalRamp": ["oklch(15% 0.012 220)", "oklch(27% 0.018 220)", "oklch(40% 0.022 220)", "oklch(54% 0.024 220)", "oklch(68% 0.024 220)", "oklch(78% 0.022 220)", "oklch(86% 0.02 220)", "oklch(95% 0.01 220)"]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "oklch(98% 0.008 190)",
+        "tonalRamp": ["oklch(15% 0.01 190)", "oklch(28% 0.013 190)", "oklch(42% 0.014 190)", "oklch(56% 0.014 190)", "oklch(70% 0.013 190)", "oklch(82% 0.011 190)", "oklch(92% 0.009 190)", "oklch(98% 0.008 190)"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(57% 0.16 235)",
+        "tonalRamp": ["oklch(15% 0.045 235)", "oklch(25% 0.085 235)", "oklch(37% 0.125 235)", "oklch(49% 0.15 235)", "oklch(57% 0.16 235)", "oklch(70% 0.12 235)", "oklch(84% 0.07 235)", "oklch(95% 0.025 235)"]
+      },
+      "refusal-red": {
+        "role": "semantic",
+        "displayName": "Refusal Red",
+        "canonical": "oklch(42% 0.14 25)",
+        "tonalRamp": ["oklch(15% 0.05 25)", "oklch(24% 0.085 25)", "oklch(33% 0.115 25)", "oklch(42% 0.14 25)", "oklch(56% 0.13 25)", "oklch(70% 0.095 25)", "oklch(84% 0.05 25)", "oklch(95% 0.02 25)"]
+      },
+      "refusal-surface": {
+        "role": "semantic",
+        "displayName": "Refusal Surface",
+        "canonical": "oklch(95% 0.025 25)",
+        "tonalRamp": ["oklch(15% 0.025 25)", "oklch(28% 0.034 25)", "oklch(42% 0.04 25)", "oklch(56% 0.043 25)", "oklch(70% 0.04 25)", "oklch(82% 0.034 25)", "oklch(90% 0.029 25)", "oklch(95% 0.025 25)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Entry-surface statements only." },
+      "headline": { "displayName": "Headline", "purpose": "Page purpose and workspace context." },
+      "body": { "displayName": "Body", "purpose": "Instructions and readable product copy." },
+      "label": { "displayName": "Label", "purpose": "Controls, fields, metadata, and statuses." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "fast", "value": "160ms", "purpose": "Immediate state changes." },
+      { "name": "ease-out", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Decisive feedback without bounce." }
+    ],
+    "breakpoints": [
+      { "name": "split-layout", "value": "48rem" },
+      { "name": "wide-layout", "value": "75rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single strongest action on a task surface.",
+      "html": "<button class=\"ds-btn-primary\">Sign in</button>",
+      "css": ".ds-btn-primary { min-height: 48px; border: 1px solid transparent; border-radius: 8px; padding: 12px 24px; color: var(--color-on-accent); background: var(--color-mineral-teal); font: 650 14px/1.45 \"Segoe UI\", system-ui, sans-serif; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-primary:hover { background: var(--color-mineral-teal-hover); } .ds-btn-primary:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; } .ds-btn-primary:active { background: var(--color-mineral-teal-active); transform: translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A persistent label with a calm, high-contrast field.",
+      "html": "<label class=\"ds-field\">Email address<input type=\"email\" autocomplete=\"email\"></label>",
+      "css": ".ds-field { display: grid; gap: 8px; color: var(--color-ink-navy); font: 650 14px/1.45 \"Segoe UI\", system-ui, sans-serif; } .ds-field input { min-height: 48px; border: 1px solid var(--color-blueprint-line); border-radius: 8px; padding: 0 16px; color: var(--color-ink-navy); background: var(--color-atlas-paper); font: 400 16px/1.6 \"Segoe UI\", system-ui, sans-serif; } .ds-field input:hover { border-color: var(--color-muted-slate); } .ds-field input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; border-color: var(--color-mineral-teal); }"
+    },
+    {
+      "name": "Form Error",
+      "kind": "custom",
+      "refersTo": "form-error",
+      "description": "A form-level failure that never identifies which credential was wrong.",
+      "html": "<div class=\"ds-form-error\" role=\"alert\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v6M12 17h.01\"/></svg><span>We couldn't sign you in with those credentials. Check your details and try again.</span></div>",
+      "css": ".ds-form-error { display: grid; grid-template-columns: 20px 1fr; gap: 12px; align-items: start; border: 1px solid var(--color-refusal-red); border-radius: 8px; padding: 12px 16px; color: var(--color-refusal-red); background: var(--color-refusal-surface); font: 400 14px/1.45 \"Segoe UI\", system-ui, sans-serif; } .ds-form-error svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }"
+    },
+    {
+      "name": "Product Identity",
+      "kind": "custom",
+      "description": "Compact product identification for entry and shell surfaces.",
+      "html": "<div class=\"ds-brand\"><svg viewBox=\"0 0 32 32\" aria-hidden=\"true\"><path d=\"M7 8.5 16 3l9 5.5v10L16 24l-9-5.5z\"/><path d=\"m7 18.5 9 5.5 9-5.5V24l-9 5-9-5z\"/><circle cx=\"16\" cy=\"13.5\" r=\"2.25\"/></svg><span>ConnectSphere</span></div>",
+      "css": ".ds-brand { display: inline-flex; align-items: center; gap: 12px; color: var(--color-ink-navy); font: 700 18px/1.2 \"Segoe UI\", system-ui, sans-serif; letter-spacing: -0.025em; } .ds-brand svg { width: 32px; height: 32px; fill: none; stroke: var(--color-mineral-teal); stroke-width: 1.8; } .ds-brand circle { fill: var(--color-mineral-teal); stroke: none; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Operations Atlas",
+    "overview": "ConnectSphere feels like a well-made operational map: composed at first glance, precise under inspection, and useful while several people coordinate time-sensitive work. The interface is light, flat, and orderly at rest. Structure comes from a self-adjusting grid, semantic spacing, tonal surfaces, and fine dividers.",
+    "keyCharacteristics": ["Light, calm, and operational", "Restrained mineral-teal emphasis", "Ink-like typography and precise alignment", "Clear roles, statuses, ownership, and next actions", "Dense when useful, spacious when comprehension needs it", "Familiar controls with complete accessible states"],
+    "rules": [
+      { "name": "The Ten Percent Rule", "body": "Mineral Teal occupies no more than ten percent of an operational screen. Its rarity preserves meaning.", "section": "colors" },
+      { "name": "The Status Needs Two Signals Rule", "body": "Status is always communicated by text or icon as well as colour.", "section": "colors" },
+      { "name": "The Tinted Canvas Rule", "body": "Pure black and pure white are prohibited. Every neutral belongs to the Atlas family.", "section": "colors" },
+      { "name": "The One Working Voice Rule", "body": "One sans family carries the product. Display faces, decorative italics, and monospace styling are prohibited in ordinary interface copy.", "section": "typography" },
+      { "name": "The Hierarchy Before Colour Rule", "body": "Size, weight, and spacing establish reading order before accent colour is introduced.", "section": "typography" },
+      { "name": "The Atlas Lies Flat Rule", "body": "Permanent page regions do not float. If every surface casts a shadow, the hierarchy has failed.", "section": "elevation" },
+      { "name": "The State Motion Rule", "body": "State transitions use the 160ms ease-out token. Reduced-motion preferences collapse them to effectively immediate feedback.", "section": "elevation" }
+    ],
+    "dos": ["Do make the active role, owner, state, and next action visible wherever they affect a decision.", "Do use the documented 4px spacing scale and the 8px standard control radius.", "Do maintain WCAG 2.2 Level AA contrast and the three-pixel visible keyboard focus treatment.", "Do use status text or icons alongside semantic colour.", "Do let spacing, tonal surfaces, and fine full dividers organise dense information.", "Do use the approved Operations Atlas background only as decorative imagery; keep interface copy and meaningful controls as semantic HTML."],
+    "donts": ["Don't use a colourful festival or ticket-sales aesthetic for internal operations.", "Don't imitate Jira's configuration overload, visual clutter, or deeply nested settings.", "Don't inherit the dense legacy-enterprise character associated with large event-management suites.", "Don't use generic purple SaaS gradients, glassmorphism, neon decoration, confetti, or stock event photography as product identity.", "Don't make the entire application resemble a dark developer tool or depend on keyboard-first interaction.", "Don't add decorative dashboards, cards, charts, or motion that do not help a user complete a task.", "Don't use coloured side-stripe borders, gradient text, nested cards, or modals as a first response to layout problems."]
+  }
+}

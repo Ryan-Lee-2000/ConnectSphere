@@ -1,15 +1,134 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import type { AuthGateway, AuthSession } from './auth';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-it('shows confirmed connectivity from the API', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'ok' }) }));
-  render(<App />);
-  expect(await screen.findByText('API and database connected.')).toBeTruthy();
+const session = {
+  access_token: 'verified-token',
+  user: { id: 'user-1', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
+} as AuthSession;
+
+function gateway(overrides: Partial<AuthGateway> = {}): AuthGateway {
+  return {
+    getSession: vi.fn().mockResolvedValue({ session: null }),
+    signInWithPassword: vi.fn().mockResolvedValue({ session, error: null }),
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  window.history.replaceState({}, '', '/');
 });
-it('does not report success when the API is unavailable', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
-  render(<App />);
-  expect(await screen.findByText(/Connection unavailable/)).toBeTruthy();
+
+describe('sign in', () => {
+  it('shows the credential form when there is no session', async () => {
+    render(<App authGateway={gateway()} />);
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy();
+    expect(screen.getByLabelText('Email address')).toBeTruthy();
+    expect(screen.getByLabelText('Password')).toBeTruthy();
+  });
+
+  it('establishes and verifies a session before entering the workspace', async () => {
+    const auth = gateway();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    render(<App authGateway={auth} />);
+    fireEvent.change(await screen.findByLabelText('Email address'), {
+      target: { value: 'organiser@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'fixture-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({
+      email: 'organiser@example.test',
+      password: 'fixture-password',
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/session', {
+      headers: { Authorization: 'Bearer verified-token' },
+    });
+  });
+
+  it('uses one generic message for invalid credentials', async () => {
+    const auth = gateway({
+      signInWithPassword: vi.fn().mockResolvedValue({
+        session: null,
+        error: new Error('email not found'),
+      }),
+    });
+    render(<App authGateway={auth} />);
+    fireEvent.change(await screen.findByLabelText('Email address'), {
+      target: { value: 'missing@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe(
+      "We couldn't sign you in with those credentials. Check your details and try again.",
+    );
+    expect(alert.textContent).not.toContain('missing@example.test');
+    expect(alert.textContent).not.toContain('wrong-password');
+    expect(alert.textContent).not.toContain('email not found');
+  });
+
+  it.each([
+    'Event Organiser',
+    'Event Operations Manager',
+    'Event Coordinator',
+    'Venue Staff',
+    'Technical Support Staff',
+    'Attendee',
+  ])('uses the shared sign-in mechanism for the %s role', async role => {
+    const roleSession = {
+      ...session,
+      user: { ...session.user, user_metadata: { role } },
+    } as AuthSession;
+    const auth = gateway({
+      signInWithPassword: vi.fn().mockResolvedValue({ session: roleSession, error: null }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    render(<App authGateway={auth} />);
+    fireEvent.change(await screen.findByLabelText('Email address'), {
+      target: { value: 'account@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'fixture-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('protected access', () => {
+  it('restores a stored session only after the server verifies it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+  });
+
+  it('does not reveal the workspace without a session', async () => {
+    window.history.replaceState({}, '', '/workspace');
+    render(<App authGateway={gateway()} />);
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy();
+    expect(screen.queryByText('Workspace access confirmed')).toBeNull();
+  });
+
+  it('does not reveal the workspace when the server rejects a stored session', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy();
+    expect(screen.queryByText('Workspace access confirmed')).toBeNull();
+  });
+
+  it('shows a service message when server verification cannot complete after sign-in', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    render(<App authGateway={gateway()} />);
+    fireEvent.change(await screen.findByLabelText('Email address'), {
+      target: { value: 'account@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'fixture-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain("couldn't reach the sign-in service");
+    });
+  });
 });
