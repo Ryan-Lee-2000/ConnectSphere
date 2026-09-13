@@ -14,9 +14,32 @@ Native Windows and macOS use npm commands. Make and WSL are optional.
 - /api/session validates a Bearer token using Supabase /auth/v1/user and returns its verified ID.
   It is an infrastructure probe, not a user profile or business authorisation implementation.
 - Missing/invalid tokens fail with 401; Auth outages fail closed with 503.
-- Application metadata has no domain tables. The sprint0_base migration establishes only the
-  Alembic revision ledger. Add reviewed models/migrations when product stories require them.
-- One local-only Auth fixture supports real authentication smoke tests. It has no business role.
+- The `sprint0_base` migration establishes only the Alembic revision ledger. Approved product
+  migrations now add the minimal account-role authorization model described below.
+- One local-only Auth fixture supports real authentication and role smoke tests. Its application
+  account holds Event Organiser and Attendee roles so multi-role evaluation is reproducible.
+
+## Account-role authorization
+
+CS-E01-S2 adds the smallest trusted application model needed for reusable role authorization:
+
+- `accounts.id` is the verified Supabase Auth user UUID; client-submitted account identifiers never
+  select the current account.
+- `account_roles` uses `(account_id, role)` as its key, allowing one account to hold multiple roles
+  while limiting stored values to the six confirmed Release 1 roles.
+- Every authenticated API request loads role assignments from the application database into the
+  request context after Supabase identity verification.
+- API operations must explicitly opt into authenticated-only access or declare one or more permitted
+  roles. An operation with no policy is refused before its handler executes.
+- A role-protected operation succeeds when the trusted account holds at least one declared role.
+  Refused requests return only a generic error and cannot execute the protected handler.
+- `GET /api/account/roles` returns only the signed-in account's trusted roles. It has no account-ID
+  selector and ignores client claims as authorization evidence.
+- Product tables have PostgreSQL row-level security enabled and browser roles receive no table
+  privileges. React continues to obtain business data only through Flask.
+
+Later functional stories own their actual role-to-function mappings and record-level rules. S2 does
+not define organisation isolation, ownership, coordinator assignment or a role-switching interface.
 
 ## Boundaries for future stories
 
@@ -25,8 +48,9 @@ The server must derive identity, roles and organisation access from trusted reco
 session is not sufficient authorisation for an operation. Never trust submitted role/organisation IDs.
 
 When adding application tables, enable RLS and revoke browser-role access through Alembic.
-Add permission, organisation-isolation and Data API denial tests with those tables. Sprint 0
-has no product tables to protect; it does not claim that Release 1 authorisation is implemented.
+Add permission, organisation-isolation and Data API denial tests with those tables. The original
+Sprint 0 baseline had no product tables; S2 now establishes role authorization, while later stories
+remain responsible for their own function and record-level rules.
 Alembic alone owns application migrations. Never rewrite a merged migration.
 
 Understand the full requirements before choosing domain relationships, including multiple roles

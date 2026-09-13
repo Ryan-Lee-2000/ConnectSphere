@@ -3,6 +3,7 @@
 import httpx
 import pytest
 from app import create_app
+from app.models import Base
 
 
 @pytest.fixture
@@ -15,6 +16,7 @@ def client(tmp_path):
             "SUPABASE_PUBLISHABLE_KEY": "fixture-key",
         }
     )
+    Base.metadata.create_all(app.extensions["engine"])
     yield app.test_client()
     app.extensions["engine"].dispose()
 
@@ -85,4 +87,5 @@ def test_infrastructure_routes_remain_available(client):
         "/<path:path>",
         "/api/health",
         "/api/session",
+        "/api/account/roles",
     } <= {rule.rule for rule in client.application.url_map.iter_rules()}

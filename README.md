@@ -1,21 +1,20 @@
-# ConnectSphere project foundation
+# ConnectSphere
 
-Sprint 0 infrastructure for Team T3. This skeleton provides a common local environment,
-automated checks and contribution conventions for native Windows and macOS.
-No Release 1 product story is implemented or estimated by this foundation.
+Team T3's ConnectSphere monorepo provides the shared local environment, automated checks and
+contribution conventions for native Windows and macOS, together with team-approved Release 1 work.
 
 ## Included
 
 - React/TypeScript/Vite shell with an API/database connectivity check
 - Flask application factory, health endpoint and fail-closed Supabase token validation
-- SQLAlchemy metadata and an empty Alembic baseline, ready for approved domain migrations
-- Local Supabase PostgreSQL/Auth and one role-free Auth fixture for infrastructure tests
+- SQLAlchemy/Alembic application data with the approved account-role authorization foundation
+- Local Supabase PostgreSQL/Auth and one multi-role Auth fixture for authentication/authorization tests
 - Backend, frontend, PostgreSQL migration and browser/Auth smoke tests
 - Common agent instructions, PR guidance, working CI and verified shared deployment
 
-There are no event screens, event endpoints, product-domain tables, business-role fixtures or
-sample stories to copy into the backlog. Role/organisation authorisation must be implemented
-and tested with the approved product stories; a valid token alone grants no business permissions.
+There are no event screens, event endpoints or speculative business workflows. CS-E01-S2 adds only
+the approved account-role authorization foundation; a valid token alone grants no business
+permissions, and later stories still own their function-specific and record-specific rules.
 
 ## First setup (Windows and macOS)
 
@@ -44,14 +43,16 @@ npm start
 No separate Python, pnpm, Corepack, Make, or global Supabase installation is required.
 uv supplies Python 3.13 when needed; npm fetches pnpm 10.15.1 into its cache.
 Setup checks prerequisites, installs locked dependencies, starts local Supabase, writes ignored
-local environment files, applies Alembic migrations and creates one local Auth test fixture. First startup
+local environment files, applies Alembic migrations and creates one local Auth test fixture with
+Event Organiser and Attendee roles. First startup
 needs internet access and time to download Python, packages and container images.
 Rerunning setup is supported and preserves existing local data.
 
 Open http://127.0.0.1:5173. The foundation screen should report API/database connectivity.
 There is no product login screen yet. The browser smoke test uses `developer@example.test` /
-`LocalDemo123!` to verify real Auth and server-side token validation. This local-only fixture
-has no application profile, organisation or role.
+`LocalDemo123!` to verify real Auth and server-side token validation. This local-only fixture has an
+application account with Event Organiser and Attendee roles; it has no client organisation or
+production data.
 
 Use Ctrl+C to stop Flask and React. Run `npm run stop` to stop this project's local Supabase
 containers when finished; this preserves their data. Other Docker projects are left alone.
@@ -139,24 +140,24 @@ Supabase's port 54322. Infrastructure smoke tests create no business records.
 - `AGENTS.md`: binding shared instructions for all coding agents
 - `CLAUDE.md`: forwards Claude to the shared instructions
 
-## Handoff and remaining work
+## Handoff and ongoing work
 
-Read `docs/development/workflow.md` for the team/agent contribution process. The first product
-story and any 1-point estimation reference are decisions for the team, not part of this skeleton.
+Read `docs/development/workflow.md` for the team/agent contribution process. Implement only
+team-approved Jira stories and use their current acceptance criteria rather than this README.
 Use [the Wednesday onboarding checklist](docs/onboarding/checklist.md) to record each teammate's setup.
 
 - Native Windows and macOS clean-clone acceptance must be recorded in `docs/infrastructure/verification.md`.
-- The full authoritative requirements baseline and team backlog must be supplied before product work.
+- The maintained requirement boundary is in `docs/requirements.md`; Jira holds the active backlog.
 - Shared demo: https://connectsphere-mmay.onrender.com. Hosted Auth, baseline and automated deployment passed.
 - GitHub Actions paid budget was verified at $0 with Stop usage enabled. Run `npm run budget`
   for the dated snapshot; it expires after 24 hours and does not retrieve live usage.
 - CI and Dependabot configuration are prepared; follow [repository setup](docs/infrastructure/repository-setup.md)
   for the personal GitHub Free account. PR checks and the main deployment workflow have passed.
 
-The local Supabase project ID is `connectsphere-foundation`. It has an empty product schema;
-only Alembic's revision table is created. Old local databases are not migrated or reset by this
-skeleton. Stop any other stack using the same ports before setup. Do not point this baseline at
-an existing application database. Once the baseline is merged, evolve it with new migrations.
+The local Supabase project ID is `connectsphere-foundation`. Alembic owns its application schema,
+including the account-role authorization tables. Setup upgrades existing local databases without
+resetting them. Stop any other stack using the same ports before setup, and never point local setup
+at an existing hosted or unrelated application database.
 
 Share source through the team repository, not a copy of your working directory. Do not include
 `.env`, `.venv`, `node_modules`, build output, test reports or database volumes. See `.gitignore`.
