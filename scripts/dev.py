@@ -116,6 +116,9 @@ def local_env():
     target.chmod(0o600)
     (ROOT / "frontend/.env.local").write_text(
         f"VITE_SUPABASE_URL={api}\nVITE_SUPABASE_PUBLISHABLE_KEY={public}\n"
+        "VITE_LOCAL_DEMO_PASSWORD=LocalDemo123!\n"
+        "VITE_LOCAL_DEMO_VENUE_STAFF_EMAIL=venue.staff@example.test\n"
+        "VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL=event.coordinator@example.test\n"
     )
     return {
         **os.environ,
@@ -145,7 +148,9 @@ def main():
     elif cmd == "verify":
         run("uv", "run", "--frozen", "ruff", "check", "backend", "scripts")
         run("uv", "run", "--frozen", "ruff", "format", "--check", "backend", "scripts")
-        run("uv", "run", "--frozen", "pytest", "-q")
+        # Windows can deny access to the account-level pytest temp directory.
+        # Keep disposable test files inside this ignored project-local directory instead.
+        run("uv", "run", "--frozen", "pytest", "-q", "--basetemp", ".pytest-run")
         run("pnpm", "typecheck")
         run("pnpm", "test")
         run("pnpm", "build")

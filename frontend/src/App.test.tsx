@@ -17,6 +17,14 @@ function gateway(overrides: Partial<AuthGateway> = {}): AuthGateway {
   };
 }
 
+function verifiedSessionFetch(input: RequestInfo | URL) {
+  if (String(input) === '/api/session') return Promise.resolve({ ok: true });
+  return Promise.resolve({
+    ok: false,
+    json: async () => ({ error: 'The venue catalogue is unavailable for this account.' }),
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -33,7 +41,7 @@ describe('sign in', () => {
 
   it('establishes and verifies a session before entering the workspace', async () => {
     const auth = gateway();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
     fireEvent.change(await screen.findByLabelText('Email address'), {
       target: { value: 'organiser@example.test' },
@@ -87,7 +95,7 @@ describe('sign in', () => {
     const auth = gateway({
       signInWithPassword: vi.fn().mockResolvedValue({ session: roleSession, error: null }),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
     fireEvent.change(await screen.findByLabelText('Email address'), {
       target: { value: 'account@example.test' },
@@ -101,7 +109,7 @@ describe('sign in', () => {
 
 describe('protected access', () => {
   it('restores a stored session only after the server verifies it', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
   });
@@ -142,7 +150,7 @@ describe('sign out', () => {
         .mockResolvedValueOnce({ session })
         .mockResolvedValue({ session: null }),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
@@ -165,14 +173,12 @@ describe('sign out', () => {
       getSession: vi.fn().mockResolvedValue({ session }),
       signOut: vi.fn().mockResolvedValue({ error: new Error('provider unavailable') }),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
 
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      "We couldn't sign you out. Please try again.",
-    );
+    expect(await screen.findByText("We couldn't sign you out. Please try again.")).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(
       false,

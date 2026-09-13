@@ -2,8 +2,17 @@
 
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Uuid
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -47,3 +56,37 @@ class AccountRole(Base):
         primary_key=True,
     )
     role: Mapped[str] = mapped_column(String(40), primary_key=True)
+
+
+class Venue(Base):
+    """A venue catalogue record managed by authorised Venue Staff."""
+
+    __tablename__ = "venues"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    location: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    accessibility_features: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    operating_slots: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    setup_buffer_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    turnaround_buffer_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    layouts: Mapped[list["VenueLayout"]] = relationship(
+        back_populates="venue", cascade="all, delete-orphan", order_by="VenueLayout.id"
+    )
+
+
+class VenueLayout(Base):
+    """One supported layout and its stated capacity for a venue."""
+
+    __tablename__ = "venue_layouts"
+    __table_args__ = (UniqueConstraint("venue_id", "layout", name="uq_venue_layouts_venue_layout"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    venue_id: Mapped[int] = mapped_column(
+        ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
+    )
+    layout: Mapped[str] = mapped_column(Text, nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    venue: Mapped[Venue] = relationship(back_populates="layouts")

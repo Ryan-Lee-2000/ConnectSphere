@@ -3,7 +3,8 @@
 import httpx
 import pytest
 from app import create_app
-from app.models import Base
+from app.models import Account, AccountRole, Base, Role
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture
@@ -89,3 +90,29 @@ def test_infrastructure_routes_remain_available(client):
         "/api/session",
         "/api/account/roles",
     } <= {rule.rule for rule in client.application.url_map.iter_rules()}
+
+
+def test_venue_permissions_come_from_a_verified_fixture_id(tmp_path):
+    fixture_id = "00000000-0000-0000-0000-000000000015"
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE_URL": f"sqlite:///{tmp_path}/test.db",
+            "SUPABASE_URL": "http://127.0.0.1:54321",
+            "SUPABASE_PUBLISHABLE_KEY": "fixture-key",
+            "IDENTITY_VERIFIER": lambda _token: fixture_id,
+        }
+    )
+    Base.metadata.create_all(app.extensions["engine"])
+    try:
+        with Session(app.extensions["engine"]) as session:
+            session.add(Account(id=fixture_id))
+            session.add(AccountRole(account_id=fixture_id, role=Role.VENUE_STAFF.value))
+            session.commit()
+        response = app.test_client().get(
+            "/api/venues", headers={"Authorization": "Bearer a-real-verified-token"}
+        )
+        assert response.status_code == 200
+        assert response.json["capabilities"] == {"can_manage": True}
+    finally:
+        app.extensions["engine"].dispose()

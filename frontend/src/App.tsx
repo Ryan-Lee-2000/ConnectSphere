@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createAuthGateway, type AuthGateway, type AuthSession } from './auth';
+import { VenueCatalogue } from './VenueCatalogue';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -73,7 +74,7 @@ function SignIn({
   onAuthenticated,
 }: {
   authGateway: AuthGateway;
-  onAuthenticated: () => void;
+  onAuthenticated: (session: AuthSession) => void;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,7 +98,7 @@ function SignIn({
         return;
       }
       window.history.replaceState({}, '', '/workspace');
-      onAuthenticated();
+      onAuthenticated(result.session);
     } catch {
       setError(SERVICE_UNAVAILABLE_MESSAGE);
     } finally {
@@ -166,9 +167,11 @@ function SignIn({
 
 function Workspace({
   authGateway,
+  session,
   onSignedOut,
 }: {
   authGateway: AuthGateway;
+  session: AuthSession;
   onSignedOut: () => void;
 }) {
   const [signingOut, setSigningOut] = useState(false);
@@ -209,7 +212,8 @@ function Workspace({
       <section className="workspace__content" aria-labelledby="workspace-title">
         <p className="eyebrow">Secure session</p>
         <h1 id="workspace-title">Workspace access confirmed</h1>
-        <p>Your session has been verified. Role-specific tools will appear here as they are delivered.</p>
+        <p>Your session has been verified. Venue capabilities are determined by trusted server-side roles.</p>
+        <VenueCatalogue accessToken={session.access_token} />
         {error && (
           <div className="form-message form-message--error workspace__message" role="alert">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -226,6 +230,7 @@ function Workspace({
 
 export function App({ authGateway = defaultAuthGateway }: AppProps) {
   const [view, setView] = useState<View>('checking');
+  const [session, setSession] = useState<AuthSession | null>(null);
 
   useEffect(() => {
     document.title = view === 'workspace' ? 'Workspace | ConnectSphere' : 'Sign in | ConnectSphere';
@@ -238,7 +243,10 @@ export function App({ authGateway = defaultAuthGateway }: AppProps) {
       try {
         const { session } = await authGateway.getSession();
         const verified = session ? await verifySession(session) : false;
-        if (active) setView(verified ? 'workspace' : 'sign-in');
+        if (active) {
+          setSession(verified ? session : null);
+          setView(verified ? 'workspace' : 'sign-in');
+        }
       } catch {
         if (active) setView('sign-in');
       }
@@ -257,8 +265,14 @@ export function App({ authGateway = defaultAuthGateway }: AppProps) {
   }, [authGateway]);
 
   if (view === 'checking') return <SessionCheck />;
-  if (view === 'workspace') {
-    return <Workspace authGateway={authGateway} onSignedOut={() => setView('sign-in')} />;
+  if (view === 'workspace' && session) {
+    return <Workspace authGateway={authGateway} session={session} onSignedOut={() => {
+      setSession(null);
+      setView('sign-in');
+    }} />;
   }
-  return <SignIn authGateway={authGateway} onAuthenticated={() => setView('workspace')} />;
+  return <SignIn authGateway={authGateway} onAuthenticated={nextSession => {
+    setSession(nextSession);
+    setView('workspace');
+  }} />;
 }
