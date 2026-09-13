@@ -27,6 +27,8 @@ def upgrade():
         sa.Column("turnaround_buffer_slots", sa.Integer(), nullable=False),
     )
     op.execute("ALTER TABLE venues ENABLE ROW LEVEL SECURITY")
+    op.execute("REVOKE ALL ON TABLE venues FROM PUBLIC")
+    op.execute("REVOKE ALL ON SEQUENCE venues_id_seq FROM PUBLIC")
     op.execute(
         """
         DO $$

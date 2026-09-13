@@ -28,6 +28,8 @@ def upgrade():
         sa.UniqueConstraint("venue_id", "layout", name="uq_venue_layouts_venue_layout"),
     )
     op.execute("ALTER TABLE venue_layouts ENABLE ROW LEVEL SECURITY")
+    op.execute("REVOKE ALL ON TABLE venue_layouts FROM PUBLIC")
+    op.execute("REVOKE ALL ON SEQUENCE venue_layouts_id_seq FROM PUBLIC")
     op.execute(
         """
         DO $$
