@@ -169,25 +169,35 @@ button { touch-action: manipulation; }
 
 .workspace { min-height: 100vh; background: var(--color-atlas-paper); }
 .workspace__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-6); border-bottom: 1px solid var(--color-blueprint-line); background: var(--color-raised-surface); }
-.workspace__content { max-width: 47rem; padding: var(--space-16) var(--space-6); }
+.workspace__content { width: min(100%, 92rem); margin-inline: auto; padding: var(--space-16) clamp(var(--space-6), 5vw, var(--space-16)); }
 .workspace__content > p:last-child { max-width: 58ch; color: var(--color-muted-slate); font-size: 1.0625rem; line-height: 1.6; }
 .workspace__message { max-width: 32rem; margin-top: var(--space-6); }
 
 /* Sprint 1 venue catalogue */
-.catalogue { margin-top: var(--space-12); }
+.catalogue { margin-top: var(--space-12); padding-bottom: var(--space-12); }
 .catalogue-header, .catalogue-intro, .detail-heading { display: flex; justify-content: space-between; gap: var(--space-4); align-items: flex-start; }
 .catalogue-subtitle, .catalogue-scope, .form-intro, .hint { color: var(--color-muted-slate); }
-.catalogue-intro { margin: var(--space-8) 0 var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-blueprint-line); }
+.catalogue-header > div { max-width: 42rem; }
+.catalogue-header h2 { max-width: 22ch; margin: 0; font-size: clamp(1.75rem, 3.2vw, 2.5rem); line-height: 1.08; letter-spacing: -0.045em; }
+.catalogue-subtitle { max-width: 52ch; margin: var(--space-3) 0 0; line-height: 1.6; }
+.catalogue-intro { margin: var(--space-8) 0 var(--space-6); padding: var(--space-4) 0; border-top: 1px solid var(--color-blueprint-line); border-bottom: 1px solid var(--color-blueprint-line); }
+.catalogue-intro p { margin: var(--space-1) 0 0; font-size: 0.9375rem; font-weight: 650; }
 .catalogue-kicker, .venue-card-label { color: var(--color-mineral-teal); font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-.venue-marketplace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
-.venue-card { display: flex; min-width: 0; overflow: hidden; padding: 0; text-align: left; }
-.venue-card-art { display: grid; position: relative; place-items: center; flex: 0 0 32%; min-height: 10rem; color: var(--color-on-accent); background: var(--color-ink-navy); }
+.venue-marketplace { display: grid; grid-template-columns: repeat(2, minmax(18rem, 1fr)); align-items: start; gap: var(--space-4); }
+.venue-card { display: flex; min-width: 0; min-height: 11.5rem; overflow: hidden; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); padding: 0; color: var(--color-ink-navy); text-align: left; cursor: pointer; background: var(--color-raised-surface); transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
+.venue-card:hover, .venue-card:focus-visible, .venue-card.selected { border-color: var(--color-mineral-teal); background: color-mix(in oklch, var(--color-raised-surface) 94%, var(--color-mineral-teal)); }
+.venue-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.venue-card-art { display: grid; position: relative; place-items: center; flex: 0 0 34%; min-height: 11.5rem; overflow: hidden; color: var(--color-on-accent); background: var(--color-ink-navy); }
+.venue-card-art::before { position: absolute; inset: 1rem; border: 1px solid color-mix(in oklch, var(--color-on-accent) 28%, transparent); content: ''; }
+.venue-card-art .venue-card-grid { position: absolute; width: 3.5rem; height: 3.5rem; border: 1px solid color-mix(in oklch, var(--color-on-accent) 42%, transparent); transform: rotate(45deg); }
+.palette-1 .venue-card-art { background: oklch(34% 0.06 215); }
+.palette-2 .venue-card-art { background: oklch(35% 0.065 180); }
 .venue-card-index { position: absolute; top: var(--space-3); left: var(--space-3); font-size: .72rem; font-weight: 700; }
-.venue-card-body { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: var(--space-4); }
-.venue-card strong { margin-top: var(--space-2); font-size: 1.05rem; }
+.venue-card-body { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: var(--space-4) var(--space-6); }
+.venue-card strong { margin-top: var(--space-2); font-size: 1.125rem; line-height: 1.25; }
 .venue-card-location, .venue-card-action, .location { display: flex; align-items: center; gap: var(--space-1); margin-top: var(--space-2); color: var(--color-muted-slate); font-size: .85rem; }
 .venue-card-action { margin-top: auto; color: var(--color-mineral-teal); font-weight: 700; }
-.venue-card-details, .venue-workspace > .venue-form { grid-column: 1 / -1; margin-top: var(--space-2); padding: var(--space-6); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
+.venue-card-details, .venue-workspace > .venue-form { grid-column: 1 / -1; margin-top: var(--space-2); padding: clamp(var(--space-6), 3vw, var(--space-8)); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
 .catalogue-empty { display: grid; justify-items: center; margin-top: var(--space-6); padding: var(--space-12); border: 1px dashed var(--color-blueprint-line); border-radius: var(--radius-lg); text-align: center; }
 .detail-grid, .buffer-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-6) 0; }
 .detail-grid section, .buffer-section { padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
@@ -233,11 +243,15 @@ button { touch-action: manipulation; }
 @media (min-width: 75rem) {
   .atlas { padding: var(--space-12); }
   .atlas__legend { bottom: var(--space-12); left: var(--space-12); }
+  .venue-marketplace { gap: var(--space-6); }
 }
 
 @media (max-width: 42rem) {
+  .workspace__content { padding: var(--space-12) var(--space-4); }
   .venue-marketplace, .detail-grid, .buffer-fields, .layout-editor-row { grid-template-columns: 1fr; }
   .catalogue-header, .catalogue-intro, .detail-heading { flex-direction: column; }
+  .catalogue-header > .icon-button { width: 100%; justify-content: center; }
+  .venue-card-art { flex-basis: 30%; min-height: 10rem; }
   .venue-card-details, .venue-workspace > .venue-form { grid-column: auto; }
 }
 

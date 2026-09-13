@@ -167,7 +167,7 @@ export function VenueCatalogue({ accessToken, request }: { accessToken: string |
 
 function VenueCard({ venue, index, selected, onSelect, order }: { venue: VenueSummary; index: number; selected: boolean; onSelect: () => void; order: number }) {
   const palette = index % 3;
-  return <m.button type="button" className={`venue-card palette-${palette}${selected ? ' selected' : ''}`} style={{ order }} onClick={onSelect} aria-pressed={selected} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 24, delay: Math.min(index * .06, .3) }} whileHover={{ y: -6 }} whileTap={{ scale: .985 }}>
+  return <m.button type="button" className={`venue-card palette-${palette}${selected ? ' selected' : ''}`} style={{ order }} onClick={onSelect} aria-expanded={selected} aria-pressed={selected} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .16, ease: 'easeOut', delay: Math.min(index * .04, .16) }} whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
     <span className="venue-card-art" aria-hidden="true"><span className="venue-card-index">{String(index + 1).padStart(2, '0')}</span><Building2 size={32} /><span className="venue-card-grid" /></span>
     <span className="venue-card-body"><span className="venue-card-label">Venue profile</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-card-action">Open profile <ArrowUpRight size={16} /></span></span>
   </m.button>;
