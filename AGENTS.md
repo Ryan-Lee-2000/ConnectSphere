@@ -3,6 +3,8 @@
 Read README.md, docs/architecture.md, the selected task and docs/requirements.md.
 Use the active task's acceptance criteria. Sprint 0 contains no product features. Implement only team-approved product tasks.
 
+For frontend work, also read PRODUCT.md and DESIGN.md. Treat the tokens in DESIGN.md as the shared visual source of truth; DESIGN.json is its machine-readable extension.
+
 ## Commands
 - npm run doctor / npm run setup / npm start (native Windows and macOS; WSL/Make optional).
 - npm run verify: lint, format check, backend unit/API tests, frontend tests, typecheck and build.

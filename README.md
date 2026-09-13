@@ -128,6 +128,9 @@ Supabase's port 54322. Infrastructure smoke tests create no business records.
 - `frontend/`: React UI and component tests
 - `backend/app/`: Flask API and SQLAlchemy models
 - `backend/migrations/`: forward-reviewed Alembic migrations
+- `PRODUCT.md`: product users, purpose, personality and design principles
+- `DESIGN.md` / `DESIGN.json`: shared visual rules, tokens and component guidance
+- `docs/design/moodboard/`: selected Operations Atlas direction and visual probes
 - `scripts/`: setup, seed, deployment and budget utilities
 - `docs/`: architecture, requirements, CI budget and deployment handoff
 - `docs/onboarding/`: teammate setup checklist
