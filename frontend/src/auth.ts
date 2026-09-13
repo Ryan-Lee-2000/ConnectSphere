@@ -8,6 +8,7 @@ export interface AuthGateway {
     email: string;
     password: string;
   }) => Promise<{ session: AuthSession | null; error: Error | null }>;
+  signOut: () => Promise<{ error: Error | null }>;
 }
 
 export function createAuthGateway(): AuthGateway {
@@ -19,6 +20,7 @@ export function createAuthGateway(): AuthGateway {
     return {
       getSession: () => Promise.reject(configurationError),
       signInWithPassword: () => Promise.reject(configurationError),
+      signOut: () => Promise.reject(configurationError),
     };
   }
 
@@ -32,6 +34,9 @@ export function createAuthGateway(): AuthGateway {
     async signInWithPassword(credentials) {
       const { data, error } = await client.auth.signInWithPassword(credentials);
       return { session: data.session, error };
+    },
+    async signOut() {
+      return client.auth.signOut({ scope: 'local' });
     },
   };
 }
