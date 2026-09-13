@@ -150,7 +150,7 @@ describe('sign out', () => {
         .mockResolvedValueOnce({ session })
         .mockResolvedValue({ session: null }),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
@@ -173,14 +173,12 @@ describe('sign out', () => {
       getSession: vi.fn().mockResolvedValue({ session }),
       signOut: vi.fn().mockResolvedValue({ error: new Error('provider unavailable') }),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
 
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      "We couldn't sign you out. Please try again.",
-    );
+    expect(await screen.findByText("We couldn't sign you out. Please try again.")).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(
       false,

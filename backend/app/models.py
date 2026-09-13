@@ -2,7 +2,16 @@
 
 from enum import StrEnum
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, Integer, String, Text, Uuid, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 

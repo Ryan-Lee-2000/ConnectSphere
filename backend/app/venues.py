@@ -105,6 +105,7 @@ def register_venue_routes(app: Flask) -> None:
             session.commit()
         return "", 204
 
+
 def _request_json() -> dict[str, Any]:
     data = request.get_json(silent=True)
     if not isinstance(data, dict):

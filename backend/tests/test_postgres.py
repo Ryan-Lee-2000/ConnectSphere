@@ -57,7 +57,8 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(
                     text(
                         "select relname from pg_class "
-                        "where relname in ('accounts', 'account_roles', 'venues', 'venue_layouts') and relrowsecurity"
+                        "where relname in ('accounts', 'account_roles', 'venues', 'venue_layouts') "
+                        "and relrowsecurity"
                     )
                 ).scalars()
             )
