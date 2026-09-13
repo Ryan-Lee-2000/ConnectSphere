@@ -5,6 +5,7 @@ const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
 const SERVICE_UNAVAILABLE_MESSAGE =
   "We couldn't reach the sign-in service. Check your connection and try again.";
+const SIGN_OUT_FAILURE_MESSAGE = "We couldn't sign you out. Please try again.";
 
 type View = 'checking' | 'sign-in' | 'workspace';
 
@@ -163,14 +164,61 @@ function SignIn({
   );
 }
 
-function Workspace() {
+function Workspace({
+  authGateway,
+  onSignedOut,
+}: {
+  authGateway: AuthGateway;
+  onSignedOut: () => void;
+}) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSignOut() {
+    setError(null);
+    setSigningOut(true);
+
+    try {
+      const result = await authGateway.signOut();
+      if (result.error) {
+        setError(SIGN_OUT_FAILURE_MESSAGE);
+        return;
+      }
+      window.history.replaceState({}, '', '/');
+      onSignedOut();
+    } catch {
+      setError(SIGN_OUT_FAILURE_MESSAGE);
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <main className="workspace">
-      <header className="workspace__header"><Brand /></header>
+      <header className="workspace__header">
+        <Brand />
+        <button
+          className="button button--secondary"
+          disabled={signingOut}
+          onClick={() => void handleSignOut()}
+          type="button"
+        >
+          {signingOut ? 'Signing out…' : 'Sign out'}
+        </button>
+      </header>
       <section className="workspace__content" aria-labelledby="workspace-title">
         <p className="eyebrow">Secure session</p>
         <h1 id="workspace-title">Workspace access confirmed</h1>
         <p>Your session has been verified. Role-specific tools will appear here as they are delivered.</p>
+        {error && (
+          <div className="form-message form-message--error workspace__message" role="alert">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v6M12 17h.01" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
       </section>
     </main>
   );
@@ -209,6 +257,8 @@ export function App({ authGateway = defaultAuthGateway }: AppProps) {
   }, [authGateway]);
 
   if (view === 'checking') return <SessionCheck />;
-  if (view === 'workspace') return <Workspace />;
+  if (view === 'workspace') {
+    return <Workspace authGateway={authGateway} onSignedOut={() => setView('sign-in')} />;
+  }
   return <SignIn authGateway={authGateway} onAuthenticated={() => setView('workspace')} />;
 }

@@ -130,3 +130,45 @@ test('TC-CS-E01-S1A-07 session-verification outage fails closed after authentica
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
   await expect(page.getByText('Your session has been verified.')).toHaveCount(0);
 });
+
+test('TC-CS-E01-S1B-01 sign-out ends the browser session and protects direct access', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await signIn(page, validAccount.email, validAccount.password);
+  await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
+
+  const signOutButton = page.getByRole('button', { name: 'Sign out' });
+  await page.keyboard.press('Tab');
+  await expect(signOutButton).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
+
+  const apiResult = await page.evaluate(async () => {
+    const response = await fetch('/api/session');
+    return { status: response.status, body: await response.json() };
+  });
+  expect(apiResult).toEqual({ status: 401, body: { error: 'Sign in to continue.' } });
+
+  await page.goto('/workspace');
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
+});
+
+test('TC-CS-E01-S1B-02 browser history cannot reveal the ended session', async ({ page }) => {
+  await page.goto('/');
+  await signIn(page, validAccount.email, validAccount.password);
+  await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
+
+  await page.evaluate(() => window.history.pushState({}, '', '/workspace?view=details'));
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+
+  await page.goBack();
+
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
+});

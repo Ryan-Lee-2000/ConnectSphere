@@ -12,6 +12,7 @@ function gateway(overrides: Partial<AuthGateway> = {}): AuthGateway {
   return {
     getSession: vi.fn().mockResolvedValue({ session: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ session, error: null }),
+    signOut: vi.fn().mockResolvedValue({ error: null }),
     ...overrides,
   };
 }
@@ -130,5 +131,51 @@ describe('protected access', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain("couldn't reach the sign-in service");
     });
+  });
+});
+
+describe('sign out', () => {
+  it('ends the browser session and returns to sign in', async () => {
+    const auth = gateway({
+      getSession: vi
+        .fn()
+        .mockResolvedValueOnce({ session })
+        .mockResolvedValue({ session: null }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    render(<App authGateway={auth} />);
+
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy();
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe('/');
+    expect(screen.queryByText('Workspace access confirmed')).toBeNull();
+
+    window.history.pushState({}, '', '/workspace');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => expect(auth.getSession).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeTruthy();
+    expect(screen.queryByText('Workspace access confirmed')).toBeNull();
+  });
+
+  it('keeps the protected view and reports a failed sign-out attempt', async () => {
+    const auth = gateway({
+      getSession: vi.fn().mockResolvedValue({ session }),
+      signOut: vi.fn().mockResolvedValue({ error: new Error('provider unavailable') }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    render(<App authGateway={auth} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      "We couldn't sign you out. Please try again.",
+    );
+    expect(screen.getByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
   });
 });
