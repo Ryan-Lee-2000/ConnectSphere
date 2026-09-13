@@ -130,3 +130,31 @@ test('TC-CS-E01-S1A-07 session-verification outage fails closed after authentica
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
   await expect(page.getByText('Your session has been verified.')).toHaveCount(0);
 });
+
+test('TC-CS-E01-S2-01 current-account roles come from trusted application data', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const verificationRequest = page.waitForRequest(
+    request =>
+      request.url().endsWith('/api/session') &&
+      request.headers().authorization?.startsWith('Bearer ') === true,
+  );
+
+  await signIn(page, validAccount.email, validAccount.password);
+  const authorization = (await verificationRequest).headers().authorization;
+  expect(authorization).toBeTruthy();
+
+  const response = await page.request.get(
+    '/api/account/roles?account_id=00000000-0000-0000-0000-000000000000&role=venue_staff',
+    {
+      headers: {
+        Authorization: authorization!,
+        'X-Account-Role': 'venue_staff',
+      },
+    },
+  );
+
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ roles: ['attendee', 'event_organiser'] });
+});

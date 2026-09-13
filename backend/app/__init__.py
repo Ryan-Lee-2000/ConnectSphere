@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from flask import Flask, abort, g, jsonify, request, send_from_directory
 from sqlalchemy import create_engine, text
 
+from .authorization import associate_account_roles, authenticated_only
+
 
 def create_app(test_config=None):
     load_dotenv()
@@ -53,6 +55,7 @@ def create_app(test_config=None):
             g.user_id = response.json().get("id")
         if not g.user_id:
             abort(401)
+        associate_account_roles(engine, app.view_functions.get(request.endpoint))
 
     @app.errorhandler(400)
     @app.errorhandler(401)
@@ -76,9 +79,15 @@ def create_app(test_config=None):
         )
 
     @app.get("/api/session")
+    @authenticated_only
     def session_identity():
         # Infrastructure probe only: authentication does not grant business permissions.
         return jsonify(user_id=g.user_id)
+
+    @app.get("/api/account/roles")
+    @authenticated_only
+    def current_account_roles():
+        return jsonify(roles=sorted(g.account_roles))
 
     @app.get("/")
     @app.get("/<path:path>")

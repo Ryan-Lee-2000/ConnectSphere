@@ -42,9 +42,33 @@ def test_empty_baseline_migration_is_rerunnable():
             )
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         assert len(heads) == 1, "Resolve competing migration heads before merging"
+        assert set(inspect(engine).get_table_names()) == {
+            "accounts",
+            "account_roles",
+            "alembic_version",
+        }
         with engine.connect() as conn:
             assert set(
                 conn.execute(text("select version_num from alembic_version")).scalars()
             ) == set(heads)
+            rls_tables = set(
+                conn.execute(
+                    text(
+                        "select relname from pg_class "
+                        "where relname in ('accounts', 'account_roles') and relrowsecurity"
+                    )
+                ).scalars()
+            )
+            assert rls_tables == {"accounts", "account_roles"}
+            browser_grants = conn.execute(
+                text(
+                    "select grantee, table_name, privilege_type "
+                    "from information_schema.table_privileges "
+                    "where table_schema = 'public' "
+                    "and table_name in ('accounts', 'account_roles') "
+                    "and grantee in ('PUBLIC', 'anon', 'authenticated')"
+                )
+            ).all()
+            assert browser_grants == []
     finally:
         engine.dispose()
