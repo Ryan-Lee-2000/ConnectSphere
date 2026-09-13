@@ -8,13 +8,14 @@ contribution conventions for native Windows and macOS, together with team-approv
 - React/TypeScript/Vite shell with an API/database connectivity check
 - Flask application factory, health endpoint and fail-closed Supabase token validation
 - SQLAlchemy/Alembic application data with the approved account-role authorization foundation
-- Local Supabase PostgreSQL/Auth and one multi-role Auth fixture for authentication/authorization tests
+- Local Supabase PostgreSQL/Auth and role-specific Auth fixtures for authentication/authorization tests
 - Backend, frontend, PostgreSQL migration and browser/Auth smoke tests
 - Common agent instructions, PR guidance, working CI and verified shared deployment
 
-There are no event screens, event endpoints or speculative business workflows. CS-E01-S2 adds only
-the approved account-role authorization foundation; a valid token alone grants no business
-permissions, and later stories still own their function-specific and record-specific rules.
+CS-E01-S2 adds the approved account-role authorization foundation; a valid token alone grants no
+business permissions. Sprint 1 adds the venue catalogue: authorised Venue Staff can create and
+maintain venue profiles and room layouts, while Event Coordinators can browse them. Booking,
+availability and organisation isolation remain later, separately approved work.
 
 ## First setup (Windows and macOS)
 
@@ -43,16 +44,15 @@ npm start
 No separate Python, pnpm, Corepack, Make, or global Supabase installation is required.
 uv supplies Python 3.13 when needed; npm fetches pnpm 10.15.1 into its cache.
 Setup checks prerequisites, installs locked dependencies, starts local Supabase, writes ignored
-local environment files, applies Alembic migrations and creates one local Auth test fixture with
-Event Organiser and Attendee roles. First startup
+local environment files, applies Alembic migrations and creates local Auth fixtures for Event
+Organiser/Attendee, Venue Staff, and Event Coordinator roles. First startup
 needs internet access and time to download Python, packages and container images.
 Rerunning setup is supported and preserves existing local data.
 
-Open http://127.0.0.1:5173. The foundation screen should report API/database connectivity.
-There is no product login screen yet. The browser smoke test uses `developer@example.test` /
-`LocalDemo123!` to verify real Auth and server-side token validation. This local-only fixture has an
-application account with Event Organiser and Attendee roles; it has no client organisation or
-production data.
+Open http://127.0.0.1:5173 and sign in with a local fixture. The browser checks use
+`venue.staff@example.test` / `LocalDemo123!` and `event.coordinator@example.test` /
+`LocalDemo123!` to verify real Auth, server-side role lookup and catalogue permissions. Fixtures
+are local-only and contain no production data.
 
 Use Ctrl+C to stop Flask and React. Run `npm run stop` to stop this project's local Supabase
 containers when finished; this preserves their data. Other Docker projects are left alone.

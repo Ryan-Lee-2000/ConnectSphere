@@ -6,9 +6,21 @@ node_modules/
 frontend/dist/
 __pycache__/
 .pytest_cache/
+.pytest-run/
+.pytest-*/
 .ruff_cache/
 supabase/.temp/
 supabase/.branches/
 test-results/
 playwright-report/
 artifacts/
+
+# Local course material and generated QA/DevOps evidence are not source files.
+Project Specifications/
+.devops-spl*/
+.qa-evidence*/
+.qa-spl-*/
+.tmp/
+.pnpm-store/
+debug.log
+*.db

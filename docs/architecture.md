@@ -38,8 +38,11 @@ CS-E01-S2 adds the smallest trusted application model needed for reusable role a
 - Product tables have PostgreSQL row-level security enabled and browser roles receive no table
   privileges. React continues to obtain business data only through Flask.
 
-Later functional stories own their actual role-to-function mappings and record-level rules. S2 does
-not define organisation isolation, ownership, coordinator assignment or a role-switching interface.
+Sprint 1 maps venue catalogue functions onto that trusted foundation: Venue Staff may create and
+maintain venue profiles and room layouts; Event Coordinators may browse the catalogue and details.
+The browser does not submit a role, user ID or organisation ID to choose this access. Sprint 1 does
+not define organisation isolation, ownership, coordinator assignment, booking availability or a
+role-switching interface.
 
 ## Boundaries for future stories
 

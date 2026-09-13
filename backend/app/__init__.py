@@ -7,6 +7,7 @@ from flask import Flask, abort, g, jsonify, request, send_from_directory
 from sqlalchemy import create_engine, text
 
 from .authorization import associate_account_roles, authenticated_only
+from .venues import register_venue_routes
 
 
 def create_app(test_config=None):
@@ -88,6 +89,8 @@ def create_app(test_config=None):
     @authenticated_only
     def current_account_roles():
         return jsonify(roles=sorted(g.account_roles))
+
+    register_venue_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")

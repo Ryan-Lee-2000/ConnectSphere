@@ -89,3 +89,25 @@ def test_infrastructure_routes_remain_available(client):
         "/api/session",
         "/api/account/roles",
     } <= {rule.rule for rule in client.application.url_map.iter_rules()}
+
+
+def test_loopback_demo_role_comes_from_a_verified_fixture_id(tmp_path):
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE_URL": f"sqlite:///{tmp_path}/test.db",
+            "SUPABASE_URL": "http://127.0.0.1:54321",
+            "SUPABASE_PUBLISHABLE_KEY": "fixture-key",
+            "LOCAL_DEMO_VENUE_STAFF_USER_ID": "local-venue-user",
+            "IDENTITY_VERIFIER": lambda _token: "local-venue-user",
+        }
+    )
+    Base.metadata.create_all(app.extensions["engine"])
+    try:
+        response = app.test_client().get(
+            "/api/venues", headers={"Authorization": "Bearer a-real-verified-token"}
+        )
+        assert response.status_code == 200
+        assert response.json["capabilities"] == {"can_manage": True}
+    finally:
+        app.extensions["engine"].dispose()
