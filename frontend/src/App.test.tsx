@@ -194,3 +194,39 @@ describe('sign out', () => {
     );
   });
 });
+
+describe('coordinator assignment', () => {
+  function managerFetch(input: RequestInfo | URL) {
+    const path = String(input);
+    if (path === '/api/session') return Promise.resolve({ ok: true });
+    if (path === '/api/account/roles') return Promise.resolve({
+      ok: true,
+      json: async () => ({ roles: ['event_operations_manager'] }),
+    });
+    if (path === '/api/event-requests/awaiting-assignment') return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ events: [], count: 0 }),
+    });
+    return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: 'Not found.' }) });
+  }
+
+  it('gives an Event Operations Manager a way into the assignment queue', async () => {
+    vi.stubGlobal('fetch', vi.fn(managerFetch));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Coordinator assignment' }));
+
+    expect(await screen.findByRole('heading', { name: 'Events awaiting a coordinator' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/workspace/assignments');
+  });
+
+  it('keeps the assignment queue out of other roles’ workspaces', async () => {
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Coordinator assignment' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Events awaiting a coordinator' })).toBeNull();
+  });
+});

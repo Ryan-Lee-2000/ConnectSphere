@@ -47,11 +47,34 @@ unavailable.
 ## Dependencies (blocking full implementation)
 
 - **SPL-60** — must exist first; an event needs a coordinator before it can
-  be reassigned.
-- **SPL-44** (Ryan, *In Progress*) — role-authorization mechanism (AC9).
+  be reassigned. Built on the same branch.
+- **SPL-44** (Ryan, *Done*, PR #14) — role-authorization mechanism (AC9).
 - Coordinator edit-permission model (referenced by AC5) — not yet confirmed
   as in scope for R1; see open questions above.
-- No `Event`/`Role` domain model in the codebase yet.
+- **SPL-51** (Ranveer, *In Progress*) — the real event entity; `events` is
+  provisional until then.
+
+## Implementation status (branch `clive`, not merged)
+
+Shared design notes: [architecture](../architecture.md#coordinator-assignment-provisional).
+
+- `PUT /api/event-requests/<id>/coordinator` — reassigns in any status except
+  Completed, Cancelled, Rejected or Withdrawn, never changes status, and
+  records previous/new coordinator, who and when (AC1–4, AC7–9). The update
+  applies only while the coordinator is unchanged **and** the request is still
+  reassignable, both in one statement, proved with interleaved PostgreSQL
+  transactions.
+- `GET /api/event-requests/<id>/coordinator-options` excludes the current coordinator
+  and explains when no other is active (AC3, AC4).
+- AC5: `is_assigned_coordinator()` is the single check future event-edit
+  routes must use; after reassignment it is true only for the new coordinator.
+  No event edit route exists yet.
+- **AC6 is met:** after reassignment the organiser's own request view shows the new coordinator
+  in place of the previous one.
+- **No reassignment UI yet** — there is no assigned-events screen to launch
+  it from (SPL-62 is Daniel's). Backend and tests only.
+- TC-61-05 (Confirmed events) is currently allowed but deliberately not
+  tested as final.
 
 ## Test cases
 

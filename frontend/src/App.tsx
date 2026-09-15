@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createAuthGateway, type AuthGateway, type AuthSession } from './auth';
+import { CoordinatorAssignmentQueue } from './CoordinatorAssignmentQueue';
 import {
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
@@ -44,6 +45,7 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
+  if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -353,6 +355,10 @@ function Workspace({
   const safePath = roleCanAccessPath(activeRole, path) ? path : '/workspace';
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
   const organiserRole = activeRole === 'event_organiser';
+  const managerRole = activeRole === 'event_operations_manager';
+  const contentLabel = safePath === '/workspace/venues'
+    ? 'Venue catalogue workspace'
+    : safePath === '/workspace/assignments' ? 'Coordinator assignment workspace' : undefined;
 
   return (
     <main className="workspace">
@@ -392,6 +398,11 @@ function Workspace({
           href="/workspace"
           onClick={event => { event.preventDefault(); navigate('/workspace'); }}
         >Overview</a>
+        {managerRole && <a
+          aria-current={safePath === '/workspace/assignments' ? 'page' : undefined}
+          href="/workspace/assignments"
+          onClick={event => { event.preventDefault(); navigate('/workspace/assignments'); }}
+        >Coordinator assignment</a>}
         {venueRole && <a
           aria-current={safePath === '/workspace/venues' ? 'page' : undefined}
           href="/workspace/venues"
@@ -425,7 +436,7 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : undefined}
+        aria-label={contentLabel}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
@@ -446,12 +457,18 @@ function Workspace({
             key={`${activeRole}:venues`}
             onUnsavedChanges={setHasUnsavedChanges}
           />
+        ) : safePath === '/workspace/assignments' ? (
+          <CoordinatorAssignmentQueue
+            accessToken={session.access_token}
+            key={`${activeRole}:assignments`}
+          />
         ) : (
           <>
             <p className="eyebrow">{ROLE_LABELS[activeRole]}</p>
             <h1 id="workspace-title">Workspace access confirmed</h1>
             <p>{ROLE_DESCRIPTIONS[activeRole]}</p>
             {venueRole && <p className="workspace__next-step">Use the venue catalogue to {activeRole === 'venue_staff' ? 'maintain venue information' : 'review available spaces'}.</p>}
+            {managerRole && <p className="workspace__next-step">Use coordinator assignment to give submitted events an Event Coordinator.</p>}
           </>
         )}
         {error && (

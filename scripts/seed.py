@@ -14,9 +14,13 @@ if urlparse(api).hostname not in ("localhost", "127.0.0.1"):
 secret = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 headers = {"apikey": secret, "Authorization": f"Bearer {secret}"}
 fixtures = {
-    "developer@example.test": ("event_organiser", "attendee"),
-    "venue.staff@example.test": ("venue_staff",),
-    "event.coordinator@example.test": ("event_coordinator",),
+    "developer@example.test": ("Local Developer", ("event_organiser", "attendee")),
+    "venue.staff@example.test": ("Local Venue Staff", ("venue_staff",)),
+    "event.coordinator@example.test": ("Local Event Coordinator", ("event_coordinator",)),
+    "operations.manager@example.test": (
+        "Local Operations Manager",
+        ("event_operations_manager",),
+    ),
 }
 with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
     page = 1
@@ -43,11 +47,15 @@ with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
 engine = create_engine(os.environ["DATABASE_URL"])
 try:
     with engine.begin() as connection:
-        for email, roles in fixtures.items():
+        for email, (display_name, roles) in fixtures.items():
             user_id = users_by_email[email]["id"]
             connection.execute(
-                text("INSERT INTO accounts (id) VALUES (:id) ON CONFLICT (id) DO NOTHING"),
-                {"id": user_id},
+                text(
+                    "INSERT INTO accounts (id, display_name) VALUES (:id, :name) "
+                    "ON CONFLICT (id) DO UPDATE "
+                    "SET display_name = COALESCE(accounts.display_name, EXCLUDED.display_name)"
+                ),
+                {"id": user_id, "name": display_name},
             )
             for role in roles:
                 connection.execute(
@@ -60,4 +68,7 @@ try:
 finally:
     engine.dispose()
 
-print("Local Auth fixtures ready for organiser, venue staff and event coordinator roles.")
+print(
+    "Local Auth fixtures ready for organiser, venue staff, event coordinator and "
+    "operations manager roles."
+)

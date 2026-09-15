@@ -11,6 +11,8 @@ type EventRequestStatusRow = {
   status_label: string;
   status_explanation: string;
   status_changed_at: string | null;
+  // CS-E05-S2 AC6 and CS-E05-S3 AC6: who is responsible, once a coordinator has been assigned.
+  coordinator: { id: string; name: string } | null;
 };
 
 function formatChangedAt(value: string | null) {
@@ -94,6 +96,7 @@ export function EventRequestStatus({ accessToken }: { accessToken: string }) {
             <tr>
               <th scope="col">Event</th>
               <th scope="col">Status</th>
+              <th scope="col">Event Coordinator</th>
               <th scope="col">As of</th>
             </tr>
           </thead>
@@ -111,6 +114,7 @@ export function EventRequestStatus({ accessToken }: { accessToken: string }) {
                     {request.status_explanation}
                   </span>
                 </td>
+                <td>{request.coordinator ? request.coordinator.name : 'Not assigned yet'}</td>
                 <td>{formatChangedAt(request.status_changed_at)}</td>
               </tr>
             ))}

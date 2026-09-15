@@ -39,12 +39,36 @@ submitted event so that I can hand it to someone accountable for planning it.
 
 ## Dependencies (blocking full implementation)
 
-- **SPL-44** (Ryan, *In Progress*) — reusable role-authorization mechanism
+- **SPL-44** (Ryan, *Done*, PR #14) — reusable role-authorization mechanism
   (AC9).
 - **SPL-59** (this epic, priority 1) — the queue this action is launched
-  from.
+  from; built on the same branch.
+- **SPL-51** (Ranveer, *In Progress*) — the real event entity; `events` is
+  provisional until then.
 - **SPL-55** (lin wang, *To Do*) — Submitted events must exist first.
-- No `Event`/`Role` domain model in the codebase yet.
+
+## Implementation status (branch `clive`, not merged)
+
+Shared design notes: [architecture](../architecture.md#coordinator-assignment).
+
+- `GET /api/event-requests/<id>/coordinator-options` — active Event Coordinators, or
+  `unavailable_reason` when none exist (AC1, AC8).
+- `POST /api/event-requests/<id>/coordinator` — assigns immediately and moves the
+  request from Submitted to Under Review (AC2–5, AC9). The one-row-per-request key
+  plus a conditional status update make the first of two concurrent
+  assignments win (TC-60-04, proved on PostgreSQL).
+- `GET /api/event-requests/<id>/coordinator-history` — who assigned whom and when (AC7).
+- Workspace queue has an inline assignment panel (no modal).
+- **AC6 is met.** The organiser's own request view (CS-E07-S1) now names the coordinator
+  responsible, or says none is assigned yet. Reads there are already scoped to the organiser's
+  own requests, so nothing is disclosed across organisations.
+- **Status vocabulary:** CS-E07-S1 owns it in `app.event_statuses`; this story reads that module
+  and stamps `status_changed_at` when it moves a request to Under Review.
+- **Not done — AC6** (Organiser sees the coordinator name): there is no
+  organiser event view yet (SPL-51/SPL-63) and no organisation isolation
+  (SPL-45) to scope it safely.
+- **Needs team agreement:** "active" is a new `accounts.is_active` flag and
+  names come from a new `accounts.display_name`; no story manages either yet.
 
 ## Test cases
 

@@ -34,14 +34,31 @@ Event Coordinator so that I can assign one promptly.
 
 ## Dependencies (blocking full implementation)
 
-- **SPL-44** (Ryan, *In Progress*) — reusable role-authorization mechanism.
-  AC7 needs it; do not build a bespoke auth check.
+- **SPL-44** (Ryan, *Done*, PR #14) — reusable role-authorization mechanism.
+  AC7 uses `require_roles(Role.EVENT_OPERATIONS_MANAGER)`; no bespoke check.
+- **SPL-51** (Ranveer, *In Progress*) — creates the real event request
+  entity. Until it lands, `events` is a provisional stand-in.
 - **SPL-55** (lin wang, *To Do*) — "Submit an event request." No Submitted
   events exist until this ships; its own AC says the submitted request
   "appears in the Event Operations Manager's list of events awaiting
   assignment" (i.e. this screen).
-- No `Event` or `Role` domain model exists in the codebase yet (only the
-  empty `sprint0_base` migration).
+
+## Implementation status (branch `clive`, not merged)
+
+Shared design notes: [architecture](../architecture.md#coordinator-assignment).
+
+- Rebased onto SPL-51 (merged). The provisional `events` table and its migration are gone; the
+  queue reads `event_requests`.
+- `GET /api/event-requests/awaiting-assignment` returns `{events, count}` (AC1, AC4, AC7). The
+  Workspace shows it to Event Operations Managers only, as a navigation destination, with an
+  empty state (AC6).
+- AC5 follows from the assignment record (TC-59-05).
+- **AC2 and AC3 are met** now that CS-E03-S5 records `submitted_at`: the queue is ordered oldest
+  submission first, with request id as the tie-break (TC-59-10). Requests stored before that
+  story have no submission time and sort last.
+- **AC2 partial:** the client organisation is `organisation_id`, which stays null until SPL-45,
+  so the queue shows "Not recorded yet".
+- TC-59-13 passes for a multi-role account, and SPL-46 role switching is merged.
 
 ## Test cases
 

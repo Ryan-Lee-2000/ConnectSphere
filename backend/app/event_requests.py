@@ -98,7 +98,10 @@ def register_event_request_routes(app: Flask) -> None:
     def list_event_requests():
         statement = (
             select(EventRequest)
-            .options(selectinload(EventRequest.equipment_requirements))
+            .options(
+                selectinload(EventRequest.equipment_requirements),
+                selectinload(EventRequest.coordinator_assignment),
+            )
             .order_by(EventRequest.proposed_date, EventRequest.start_time, EventRequest.id)
         )
         if Role.EVENT_COORDINATOR.value not in g.account_roles:
@@ -271,7 +274,10 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
     event = session.scalar(
         select(EventRequest)
         .where(EventRequest.id == event_request_id)
-        .options(selectinload(EventRequest.equipment_requirements))
+        .options(
+            selectinload(EventRequest.equipment_requirements),
+            selectinload(EventRequest.coordinator_assignment),
+        )
     )
     if event is None:
         abort(404, "Event request not found.")
@@ -313,6 +319,16 @@ def _status_changed_at(event: EventRequest) -> str | None:
     return _submitted_at(event.status_changed_at or event.submitted_at)
 
 
+def _coordinator(event: EventRequest) -> dict[str, Any] | None:
+    """The Event Coordinator responsible for this request, if one has been assigned."""
+
+    assignment = event.coordinator_assignment
+    if assignment is None:
+        return None
+    coordinator = assignment.coordinator
+    return {"id": coordinator.id, "name": coordinator.display_name or "Unnamed account"}
+
+
 def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -333,6 +349,10 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "status_explanation": status_explanation(event.status),
         "status_changed_at": _status_changed_at(event),
         "submitted_at": _submitted_at(event.submitted_at),
+        # CS-E05-S2 AC6 and CS-E05-S3 AC6. Whoever is responsible right now, or null while the
+        # request is still waiting to be assigned. Reads are already scoped to the organiser's
+        # own requests, so this discloses nothing beyond their own event.
+        "coordinator": _coordinator(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

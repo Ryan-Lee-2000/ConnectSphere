@@ -28,6 +28,19 @@ function respondWith(event_requests: unknown[]) {
   );
 }
 
+// CS-E05-S2 AC6 and CS-E05-S3 AC6
+it('names the Event Coordinator once one is responsible, and says so when none is', async () => {
+  respondWith([
+    row({ id: 1, name: 'Assigned', coordinator: { id: 'alice', name: 'Alice Tan' } }),
+    row({ id: 2, name: 'Waiting', coordinator: null }),
+  ]);
+
+  render(<EventRequestStatus accessToken="token-123" />);
+
+  await waitFor(() => expect(screen.getByText('Alice Tan')).toBeTruthy());
+  expect(screen.getByText('Not assigned yet')).toBeTruthy();
+});
+
 // TC-CS-E07-S1-04
 it('lists every one of the organiser requests with its status', async () => {
   respondWith([
