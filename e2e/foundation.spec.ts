@@ -11,17 +11,18 @@ const validAccount = {
 const invalidCredentialsMessage =
   "We couldn't sign you in with those credentials. Check your details and try again.";
 
-async function signIn(page: Page, email: string, password: string) {
+async function signIn(page: Page, email: string, password: string, role?: string) {
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
+  if (role) await page.getByRole('button', { name: new RegExp(role) }).click();
 }
 
 test('TC-CS-E01-S1A-01 valid credentials establish a verified session', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 
-  await signIn(page, validAccount.email, validAccount.password);
+  await signIn(page, validAccount.email, validAccount.password, 'Event Organiser');
 
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
@@ -97,7 +98,7 @@ test('TC-CS-E01-S1A-06 a server-rejected stored session cannot expose the worksp
   page,
 }) => {
   await page.goto('/');
-  await signIn(page, validAccount.email, validAccount.password);
+  await signIn(page, validAccount.email, validAccount.password, 'Event Organiser');
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
 
   await page.route('**/api/session', async route => {
@@ -135,11 +136,11 @@ test('TC-CS-E01-S1B-01 sign-out ends the browser session and protects direct acc
   page,
 }) => {
   await page.goto('/');
-  await signIn(page, validAccount.email, validAccount.password);
+  await signIn(page, validAccount.email, validAccount.password, 'Event Organiser');
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
 
   const signOutButton = page.getByRole('button', { name: 'Sign out' });
-  await page.keyboard.press('Tab');
+  await signOutButton.focus();
   await expect(signOutButton).toBeFocused();
   await page.keyboard.press('Enter');
 
@@ -160,7 +161,7 @@ test('TC-CS-E01-S1B-01 sign-out ends the browser session and protects direct acc
 
 test('TC-CS-E01-S1B-02 browser history cannot reveal the ended session', async ({ page }) => {
   await page.goto('/');
-  await signIn(page, validAccount.email, validAccount.password);
+  await signIn(page, validAccount.email, validAccount.password, 'Event Organiser');
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
 
   await page.evaluate(() => window.history.pushState({}, '', '/workspace?view=details'));

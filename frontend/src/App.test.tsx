@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { AuthGateway, AuthSession } from './auth';
+import { activeRoleStorageKey } from './roles';
 
 const session = {
   access_token: 'verified-token',
@@ -19,6 +20,10 @@ function gateway(overrides: Partial<AuthGateway> = {}): AuthGateway {
 
 function verifiedSessionFetch(input: RequestInfo | URL) {
   if (String(input) === '/api/session') return Promise.resolve({ ok: true });
+  if (String(input) === '/api/account/roles') return Promise.resolve({
+    ok: true,
+    json: async () => ({ roles: ['event_organiser'] }),
+  });
   return Promise.resolve({
     ok: false,
     json: async () => ({ error: 'The venue catalogue is unavailable for this account.' }),
@@ -28,6 +33,7 @@ function verifiedSessionFetch(input: RequestInfo | URL) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.sessionStorage.clear();
   window.history.replaceState({}, '', '/');
 });
 
@@ -150,6 +156,7 @@ describe('sign out', () => {
         .mockResolvedValueOnce({ session })
         .mockResolvedValue({ session: null }),
     });
+    window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'event_organiser');
     vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
@@ -158,6 +165,7 @@ describe('sign out', () => {
 
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy();
     expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem(activeRoleStorageKey(session.user.id))).toBeNull();
     expect(window.location.pathname).toBe('/');
     expect(screen.queryByText('Workspace access confirmed')).toBeNull();
 
@@ -176,7 +184,8 @@ describe('sign out', () => {
     vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={auth} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
 
     expect(await screen.findByText("We couldn't sign you out. Please try again.")).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
