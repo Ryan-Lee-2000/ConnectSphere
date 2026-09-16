@@ -15,6 +15,8 @@ async function signIn(page: Page, email: string) {
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/workspace$/);
+  await page.getByRole('link', { name: 'Venue catalogue' }).click();
+  await expect(page).toHaveURL(/\/workspace\/venues$/);
 }
 
 test.describe('venue catalogue journeys', () => {

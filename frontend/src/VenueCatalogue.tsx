@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
+import type { AccountRole } from './roles';
 
 export type VenueLayout = { id: number; layout: string; capacity: number };
 type LayoutDraft = { id?: number; layout: string; customLayout: string; capacity: string };
@@ -69,11 +70,21 @@ function layoutName(layout: LayoutDraft) {
   return layout.layout === 'other' ? layout.customLayout : layout.layout;
 }
 
-export function VenueCatalogue({ accessToken, request }: { accessToken: string | null; request?: ApiRequest }) {
+export function VenueCatalogue({
+  accessToken,
+  activeRole = 'venue_staff',
+  onUnsavedChanges,
+  request,
+}: {
+  accessToken: string | null;
+  activeRole?: AccountRole;
+  onUnsavedChanges?: (hasUnsavedChanges: boolean) => void;
+  request?: ApiRequest;
+}) {
   const api = request || (accessToken ? defaultRequest(accessToken) : undefined);
   const [venues, setVenues] = useState<VenueSummary[]>([]);
   const [selected, setSelected] = useState<Venue | null>(null);
-  const [canManage, setCanManage] = useState(false);
+  const [serverCanManage, setServerCanManage] = useState(false);
   const [loading, setLoading] = useState(Boolean(accessToken));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -92,7 +103,7 @@ export function VenueCatalogue({ accessToken, request }: { accessToken: string |
     }
     const body = await response.json() as { venues: VenueSummary[]; capabilities: { can_manage: boolean } };
     setVenues(body.venues);
-    setCanManage(body.capabilities.can_manage);
+    setServerCanManage(body.capabilities.can_manage);
     const nextId = selectId ?? selected?.id;
     if (nextId && body.venues.some(venue => venue.id === nextId)) {
       await selectVenue(nextId, keepEditor);
@@ -111,7 +122,7 @@ export function VenueCatalogue({ accessToken, request }: { accessToken: string |
     }
     const body = await response.json() as { venue: Venue; capabilities: { can_manage: boolean } };
     setSelected(body.venue);
-    setCanManage(body.capabilities.can_manage);
+    setServerCanManage(body.capabilities.can_manage);
   };
 
   const toggleVenue = (venueId: number) => {
@@ -133,6 +144,7 @@ export function VenueCatalogue({ accessToken, request }: { accessToken: string |
   }, [accessToken]);
 
   const selectedIndex = selected ? venues.findIndex(venue => venue.id === selected.id) : -1;
+  const canManage = serverCanManage && activeRole === 'venue_staff';
   const detailOrder = selectedIndex < 0
     ? 0
     : (selectedIndex % 2 === 0 && selectedIndex < venues.length - 1 ? selectedIndex + 1 : selectedIndex) * 2 + 1;
@@ -159,8 +171,8 @@ export function VenueCatalogue({ accessToken, request }: { accessToken: string |
         </AnimatePresence>
       </div>}
       {!editor && venues.length === 0 && <div className="catalogue-empty"><Building2 size={28} /><h3>No venues to browse yet</h3><p>{canManage ? 'Build the catalogue by creating the first venue profile.' : 'Venue profiles will appear here when Venue Staff add them.'}</p>{canManage && <button type="button" className="primary icon-button" onClick={() => setEditor('create')}><Plus size={18} />Create first venue</button>}</div>}
-      {editor === 'create' && api && <div className="venue-workspace"><VenueEditor api={api} onSaved={(venue, message) => { setNotice(message); setEditor(null); void loadCatalogue(venue.id); }} onCancel={() => setEditor(null)} /></div>}
-      {editor === 'edit' && editingVenue && api && <div className="venue-workspace"><VenueEditor venue={editingVenue} api={api} onSaved={(venue, message) => { setNotice(message); setEditingVenue(null); setEditor(null); void loadCatalogue(venue.id); }} onCancel={() => { setEditingVenue(null); setEditor(null); }} /></div>}
+      {editor === 'create' && api && <div className="venue-workspace"><VenueEditor api={api} onUnsavedChanges={onUnsavedChanges} onSaved={(venue, message) => { setNotice(message); setEditor(null); void loadCatalogue(venue.id); }} onCancel={() => setEditor(null)} /></div>}
+      {editor === 'edit' && editingVenue && api && <div className="venue-workspace"><VenueEditor venue={editingVenue} api={api} onUnsavedChanges={onUnsavedChanges} onSaved={(venue, message) => { setNotice(message); setEditingVenue(null); setEditor(null); void loadCatalogue(venue.id); }} onCancel={() => { setEditingVenue(null); setEditor(null); }} /></div>}
     </>}
   </section>;
 }
@@ -191,7 +203,7 @@ function DetailList({ title, icon, values }: { title: string; icon: ReactNode; v
   return <section><h4>{icon}{title}</h4>{values.length ? <ul className="chips">{values.map(value => <li key={value}>{value}</li>)}</ul> : <p>None recorded</p>}</section>;
 }
 
-function VenueEditor({ venue, api, onSaved, onCancel }: { venue?: Venue; api: ApiRequest; onSaved: (venue: Venue, message: string) => void; onCancel: () => void }) {
+function VenueEditor({ venue, api, onSaved, onCancel, onUnsavedChanges }: { venue?: Venue; api: ApiRequest; onSaved: (venue: Venue, message: string) => void; onCancel: () => void; onUnsavedChanges?: (hasUnsavedChanges: boolean) => void }) {
   const [name, setName] = useState(venue?.name || '');
   const [location, setLocation] = useState(venue?.location || '');
   const [description, setDescription] = useState(venue?.description || '');
@@ -203,12 +215,38 @@ function VenueEditor({ venue, api, onSaved, onCancel }: { venue?: Venue; api: Ap
   const [layouts, setLayouts] = useState<LayoutDraft[]>(() => venue?.layouts.map(layoutDraft) || []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const initialDraft = JSON.stringify({
+    name: venue?.name || '',
+    location: venue?.location || '',
+    description: venue?.description || '',
+    facilities: venue?.facilities.join(', ') || '',
+    accessibility: venue?.accessibility_features.join(', ') || '',
+    operatingSlots: venue?.operating_slots || [],
+    setup: String(venue?.setup_buffer_slots ?? 0),
+    turnaround: String(venue?.turnaround_buffer_slots ?? 1),
+    layouts: venue?.layouts.map(layoutDraft) || [],
+  });
   const layoutsAreValid = layouts.every(layout => {
     const capacity = Number(layout.capacity);
     return Number.isInteger(capacity) && capacity > 0
       && (layout.layout !== 'other' || Boolean(layout.customLayout.trim()));
   });
   const canSave = Boolean(name.trim()) && operatingSlots.length > 0 && layoutsAreValid;
+
+  useEffect(() => {
+    const currentDraft = JSON.stringify({
+      name,
+      location,
+      description,
+      facilities,
+      accessibility,
+      operatingSlots,
+      setup,
+      turnaround,
+      layouts,
+    });
+    onUnsavedChanges?.(currentDraft !== initialDraft);
+  }, [accessibility, description, facilities, initialDraft, layouts, location, name, onUnsavedChanges, operatingSlots, setup, turnaround]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -218,6 +256,7 @@ function VenueEditor({ venue, api, onSaved, onCancel }: { venue?: Venue; api: Ap
     setSaving(false);
     if (!response.ok) { setError(await responseError(response)); return; }
     const body = await response.json() as { venue: Venue };
+    onUnsavedChanges?.(false);
     onSaved(body.venue, venue ? 'Venue profile and room layouts updated.' : 'Venue and its room layouts created.');
   };
 
@@ -232,7 +271,7 @@ function VenueEditor({ venue, api, onSaved, onCancel }: { venue?: Venue; api: Ap
     <fieldset><legend><Clock3 size={18} />Operating slots</legend><p className="hint">The same selected AM, PM and Night slots apply every day in Release 1. Select at least one slot.</p><div className="slot-options">{slots.map(([value, label]) => <label key={value}><input type="checkbox" checked={operatingSlots.includes(value)} onChange={() => setOperatingSlots(current => current.includes(value) ? current.filter(slot => slot !== value) : [...current, value])} />{label}</label>)}</div></fieldset>
     <section className="buffer-section"><div><h4><CalendarClock size={18} />Preparation buffer policy</h4><p className="hint">Use whole AM/PM/Night slots. One turnaround slot after a PM booking will make the Night slot unavailable when the later booking and availability workflow is implemented.</p></div><div className="buffer-fields"><label>Setup slots before event<input type="number" min="0" step="1" value={setup} onChange={event => setSetup(event.target.value)} required /></label><label>Turnaround slots after event<input type="number" min="0" step="1" value={turnaround} onChange={event => setTurnaround(event.target.value)} required /></label></div></section>
     <LayoutManager layouts={layouts} onChange={setLayouts} />
-    <div className="form-actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save venue'}</button></div>
+    <div className="form-actions"><button type="button" onClick={() => { onUnsavedChanges?.(false); onCancel(); }}>Cancel</button><button className="primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save venue'}</button></div>
   </form>;
 }
 
