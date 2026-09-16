@@ -119,7 +119,26 @@ describe('SPL-46 role context', () => {
     expect(request).not.toHaveBeenCalledWith('/api/venues');
   });
 
-  it('protects unsaved information until the user confirms a role switch', async () => {
+  it('leaves a clean page that is unavailable to the newly selected role', async () => {
+    window.history.replaceState({}, '', '/workspace/venues');
+    window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
+    vi.stubGlobal('fetch', appFetch(['venue_staff', 'attendee']));
+    render(<App authGateway={gateway()} />);
+
+    expect(await screen.findByRole('heading', { name: 'No venues to browse yet' })).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Active role' }), {
+      target: { value: 'attendee' },
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/workspace');
+    expect(screen.queryByRole('heading', { name: 'No venues to browse yet' })).toBeNull();
+    expect((screen.getByRole('combobox', { name: 'Active role' }) as HTMLSelectElement).value).toBe(
+      'attendee',
+    );
+  });
+
+  it('keeps the active role, current page, and unsaved information when a switch is cancelled', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
     vi.stubGlobal('fetch', appFetch(['venue_staff', 'attendee']));
@@ -134,7 +153,18 @@ describe('SPL-46 role context', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stay here' }));
     expect(screen.getByDisplayValue('Atlas Hall')).toBeTruthy();
     expect((screen.getByRole('combobox', { name: 'Active role' }) as HTMLSelectElement).value).toBe('venue_staff');
+    expect(window.location.pathname).toBe('/workspace/venues');
+  });
 
+  it('discards unsaved information and completes a confirmed role switch', async () => {
+    window.history.replaceState({}, '', '/workspace/venues');
+    window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
+    vi.stubGlobal('fetch', appFetch(['venue_staff', 'attendee']));
+    render(<App authGateway={gateway()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create first venue' }));
+    fireEvent.change(screen.getByLabelText('Venue name'), { target: { value: 'Atlas Hall' } });
+    const switcher = screen.getByRole('combobox', { name: 'Active role' });
     fireEvent.change(switcher, { target: { value: 'attendee' } });
     fireEvent.click(screen.getByRole('button', { name: 'Discard and switch' }));
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
