@@ -78,6 +78,7 @@ it('lets venue staff create a complete venue profile with all slots and preparat
   fireEvent.click(screen.getByLabelText(/Setup required/));
   fireEvent.click(screen.getByLabelText(/Turnaround required/));
   fireEvent.click(screen.getByRole('button', { name: 'Add layout' }));
+  expect(screen.getByText('Stated capacity (guests)')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Stated capacity 1'), { target: { value: '60' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save venue' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues', expect.objectContaining({ method: 'POST' })));

@@ -245,19 +245,23 @@ button { touch-action: manipulation; }
 .venue-form { display: grid; gap: var(--space-4); }
 .venue-form > label, .layout-editor-row label { display: grid; gap: var(--space-2); font-weight: 700; }
 .venue-form input, .venue-form textarea, .venue-form select { width: 100%; padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
+.venue-form fieldset { min-width: 0; margin: 0; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
+.venue-form legend { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); color: var(--color-ink-navy); font-weight: 700; }
+.venue-form legend svg { flex: 0 0 auto; }
 .slot-options label { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
 .slot-options input { width: auto; }
-.preparation-requirements { padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
 .preparation-requirements > .hint { margin: 0; }
 .preparation-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
 .preparation-option { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-raised-surface); cursor: pointer; }
 .preparation-option input { width: auto; margin-top: .25rem; }
 .preparation-option span { display: grid; gap: var(--space-1); }
 .preparation-option small { color: var(--color-muted-slate); font-size: .875rem; line-height: 1.45; }
-.layout-editor-row { display: grid; grid-template-columns: 2rem 1fr 1fr auto; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); }
-.layout-row-index { color: var(--color-muted-slate); font-weight: 700; }
-.error { padding: var(--space-3); border-left: 4px solid var(--color-refusal-red); color: var(--color-refusal-red); background: var(--color-refusal-surface); }
-.notice { padding: var(--space-3); border-left: 4px solid var(--color-mineral-teal); }
+.layout-editor-row { display: grid; grid-template-columns: 2rem minmax(0, 1.2fr) minmax(0, .8fr) auto; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
+.layout-row-index { align-self: center; color: var(--color-muted-slate); font-size: .875rem; font-weight: 700; }
+.layout-remove { display: inline-grid; width: 2.75rem; min-height: 2.75rem; place-items: center; padding: 0; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-raised-surface); color: var(--color-refusal-red); }
+.error, .notice { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
+.error { color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.notice { background: var(--color-mist-surface); }
 
 @keyframes pulse { from { opacity: 0.55; } to { opacity: 1; } }
 
