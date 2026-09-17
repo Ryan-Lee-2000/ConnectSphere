@@ -238,7 +238,7 @@ button { touch-action: manipulation; }
 .venue-card-action { margin-top: auto; color: var(--color-mineral-teal); font-weight: 700; }
 .venue-card-details, .venue-workspace > .venue-form { grid-column: 1 / -1; margin-top: var(--space-2); padding: clamp(var(--space-6), 3vw, var(--space-8)); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
 .catalogue-empty { display: grid; justify-items: center; margin-top: var(--space-6); padding: var(--space-12); border: 1px dashed var(--color-blueprint-line); border-radius: var(--radius-lg); text-align: center; }
-.detail-grid, .buffer-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-6) 0; }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-6) 0; }
 .detail-grid section, .buffer-section { padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
 .chips, .slot-options, .form-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; list-style: none; }
 .chips li { padding: .25rem .5rem; border: 1px solid var(--color-blueprint-line); border-radius: 999px; font-size: .8rem; }
@@ -247,6 +247,13 @@ button { touch-action: manipulation; }
 .venue-form input, .venue-form textarea, .venue-form select { width: 100%; padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
 .slot-options label { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
 .slot-options input { width: auto; }
+.preparation-requirements { padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
+.preparation-requirements > .hint { margin: 0; }
+.preparation-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+.preparation-option { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-raised-surface); cursor: pointer; }
+.preparation-option input { width: auto; margin-top: .25rem; }
+.preparation-option span { display: grid; gap: var(--space-1); }
+.preparation-option small { color: var(--color-muted-slate); font-size: .875rem; line-height: 1.45; }
 .layout-editor-row { display: grid; grid-template-columns: 2rem 1fr 1fr auto; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); }
 .layout-row-index { color: var(--color-muted-slate); font-weight: 700; }
 .error { padding: var(--space-3); border-left: 4px solid var(--color-refusal-red); color: var(--color-refusal-red); background: var(--color-refusal-surface); }
@@ -292,7 +299,7 @@ button { touch-action: manipulation; }
   .workspace__nav { overflow-x: auto; }
   .role-switch-warning__actions { flex-direction: column-reverse; }
   .workspace__content { padding: var(--space-12) var(--space-4); }
-  .venue-marketplace, .detail-grid, .buffer-fields, .layout-editor-row { grid-template-columns: 1fr; }
+  .venue-marketplace, .detail-grid, .preparation-options, .layout-editor-row { grid-template-columns: 1fr; }
   .catalogue-header, .catalogue-intro, .detail-heading { flex-direction: column; }
   .catalogue-header > .icon-button { width: 100%; justify-content: center; }
   .venue-card-art { flex-basis: 30%; min-height: 10rem; }

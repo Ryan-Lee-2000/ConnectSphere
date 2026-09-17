@@ -34,8 +34,8 @@ test.describe('venue catalogue journeys', () => {
     await page.getByLabel('AM · 7am–12pm').check();
     await page.getByLabel('PM · 1pm–6pm').check();
     await page.getByLabel('Night · 7pm–12am').check();
-    await page.getByLabel('Require one setup slot immediately before an event').check();
-    await page.getByLabel('Require one turnaround slot immediately after an event').check();
+    await page.getByLabel(/Setup required/).check();
+    await page.getByLabel(/Turnaround required/).check();
     await page.getByRole('button', { name: 'Save venue' }).click();
     await expect(page.locator('.notice')).toContainText('Venue and its room layouts created.');
     await expect(page.getByRole('button', { name: new RegExp(venueName) })).toBeVisible();

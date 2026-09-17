@@ -75,8 +75,8 @@ it('lets venue staff create a complete venue profile with all slots and preparat
   fireEvent.click(screen.getByLabelText('AM · 7am–12pm'));
   fireEvent.click(screen.getByLabelText('PM · 1pm–6pm'));
   fireEvent.click(screen.getByLabelText('Night · 7pm–12am'));
-  fireEvent.click(screen.getByLabelText('Require one setup slot immediately before an event'));
-  fireEvent.click(screen.getByLabelText('Require one turnaround slot immediately after an event'));
+  fireEvent.click(screen.getByLabelText(/Setup required/));
+  fireEvent.click(screen.getByLabelText(/Turnaround required/));
   fireEvent.click(screen.getByRole('button', { name: 'Add layout' }));
   fireEvent.change(screen.getByLabelText('Stated capacity 1'), { target: { value: '60' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save venue' }));
@@ -120,8 +120,8 @@ it('sends not-required preparation values when neither requirement is selected',
   fireEvent.change(screen.getByLabelText('Venue name'), { target: { value: 'Orchid Room' } });
   fireEvent.click(screen.getByLabelText('AM · 7am–12pm'));
   expect(screen.queryByLabelText('Setup slots before event')).toBeNull();
-  expect(screen.getByLabelText('Require one setup slot immediately before an event')).toHaveProperty('checked', false);
-  expect(screen.getByLabelText('Require one turnaround slot immediately after an event')).toHaveProperty('checked', false);
+  expect(screen.getByLabelText(/Setup required/)).toHaveProperty('checked', false);
+  expect(screen.getByLabelText(/Turnaround required/)).toHaveProperty('checked', false);
   fireEvent.click(screen.getByRole('button', { name: 'Save venue' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues', expect.objectContaining({ method: 'POST' })));
   const createCall = request.mock.calls.find(([path, init]) => path === '/api/venues' && init?.method === 'POST');
@@ -199,7 +199,7 @@ it('sends every editable venue attribute when Venue Staff save an update', async
   fireEvent.click(screen.getByLabelText('PM · 1pm–6pm'));
   fireEvent.click(screen.getByLabelText('Night · 7pm–12am'));
   fireEvent.click(screen.getByLabelText('Night · 7pm–12am'));
-  fireEvent.click(screen.getByLabelText('Require one setup slot immediately before an event'));
+  fireEvent.click(screen.getByLabelText(/Setup required/));
   fireEvent.click(screen.getByRole('button', { name: 'Save venue' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues/1', expect.objectContaining({ method: 'PATCH' })));
   const updateCall = request.mock.calls.find(([path, init]) => path === '/api/venues/1' && init?.method === 'PATCH');
