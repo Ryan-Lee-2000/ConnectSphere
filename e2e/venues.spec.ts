@@ -32,8 +32,10 @@ test.describe('venue catalogue journeys', () => {
     await page.getByLabel(/^Facilities/).fill('Projector, PA system');
     await page.getByLabel(/^Accessibility features/).fill('Step-free access, Accessible restroom');
     await page.getByLabel('AM · 7am–12pm').check();
-    await page.getByLabel('Setup slots before event').fill('1');
-    await page.getByLabel('Turnaround slots after event').fill('1');
+    await page.getByLabel('PM · 1pm–6pm').check();
+    await page.getByLabel('Night · 7pm–12am').check();
+    await page.getByLabel(/Setup required/).check();
+    await page.getByLabel(/Turnaround required/).check();
     await page.getByRole('button', { name: 'Save venue' }).click();
     await expect(page.locator('.notice')).toContainText('Venue and its room layouts created.');
     await expect(page.getByRole('button', { name: new RegExp(venueName) })).toBeVisible();
@@ -45,6 +47,11 @@ test.describe('venue catalogue journeys', () => {
     await expect(page.getByRole('article').getByText('E2E Test Location')).toBeVisible();
     await expect(page.getByRole('article').getByText('Projector')).toBeVisible();
     await expect(page.getByRole('article').getByText('Step-free access')).toBeVisible();
+    await expect(page.getByRole('article').getByText('AM · 7am–12pm')).toBeVisible();
+    await expect(page.getByRole('article').getByText('PM · 1pm–6pm')).toBeVisible();
+    await expect(page.getByRole('article').getByText('Night · 7pm–12am')).toBeVisible();
+    await expect(page.getByRole('article').getByText('Yes — one full slot immediately before an event')).toBeVisible();
+    await expect(page.getByRole('article').getByText('Yes — one full slot immediately after an event')).toBeVisible();
   });
 
   test('Venue Staff edits a venue profile and layout', async ({ page }) => {
