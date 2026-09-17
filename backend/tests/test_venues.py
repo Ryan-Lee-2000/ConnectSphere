@@ -47,7 +47,7 @@ def venue_payload(**overrides):
         "description": "A flexible event space.",
         "facilities": ["Projector", "PA system"],
         "accessibility_features": ["Step-free access", "Accessible restroom"],
-        "operating_slots": ["AM", "PM"],
+        "operating_slots": ["AM", "PM", "NIGHT"],
         "setup_buffer_slots": 1,
         "turnaround_buffer_slots": 1,
     }
@@ -65,19 +65,38 @@ def create_venue(client):
     return response.json["venue"]
 
 
-def test_venue_staff_can_create_update_and_retrieve_a_venue(client):
+def test_venue_staff_can_create_update_and_retrieve_a_complete_venue_profile(client):
     created = create_venue(client)
     assert created == {"id": 1, **venue_payload(), "layouts": []}
 
     updated = client.patch(
         "/api/venues/1",
-        json={"name": "Harbour Grand Hall"},
+        json={
+            "name": "Harbour Grand Hall",
+            "location": "Level 4, Marina Centre",
+            "description": "An updated flexible event space.",
+            "facilities": ["Projector", "Hearing loop"],
+            "accessibility_features": ["Step-free access"],
+            "operating_slots": ["NIGHT"],
+            "setup_buffer_slots": 0,
+            "turnaround_buffer_slots": 1,
+            "layouts": [{"layout": "boardroom", "capacity": 1}],
+        },
         headers=request_headers(),
     )
     assert updated.status_code == 200
-    assert updated.json["venue"]["name"] == "Harbour Grand Hall"
-    assert updated.json["venue"]["setup_buffer_slots"] == venue_payload()["setup_buffer_slots"]
-    assert updated.json["venue"]["location"] == venue_payload()["location"]
+    assert updated.json["venue"] == {
+        "id": 1,
+        "name": "Harbour Grand Hall",
+        "location": "Level 4, Marina Centre",
+        "description": "An updated flexible event space.",
+        "facilities": ["Projector", "Hearing loop"],
+        "accessibility_features": ["Step-free access"],
+        "operating_slots": ["NIGHT"],
+        "setup_buffer_slots": 0,
+        "turnaround_buffer_slots": 1,
+        "layouts": [{"id": 1, "layout": "boardroom", "capacity": 1}],
+    }
 
     retrieved = client.get("/api/venues/1", headers=request_headers())
     assert retrieved.status_code == 200
@@ -85,15 +104,47 @@ def test_venue_staff_can_create_update_and_retrieve_a_venue(client):
     assert retrieved.json["capabilities"] == {"can_manage": True}
 
 
-def test_zero_slot_buffers_are_accepted(client):
+@pytest.mark.parametrize(
+    ("setup_buffer_slots", "turnaround_buffer_slots"),
+    [(0, 0), (0, 1), (1, 0), (1, 1)],
+)
+def test_each_supported_setup_and_turnaround_requirement_is_accepted(
+    client, setup_buffer_slots, turnaround_buffer_slots
+):
     response = client.post(
         "/api/venues",
-        json=venue_payload(setup_buffer_slots=0, turnaround_buffer_slots=0),
+        json=venue_payload(
+            setup_buffer_slots=setup_buffer_slots,
+            turnaround_buffer_slots=turnaround_buffer_slots,
+        ),
         headers=request_headers(),
     )
     assert response.status_code == 201
-    assert response.json["venue"]["setup_buffer_slots"] == 0
-    assert response.json["venue"]["turnaround_buffer_slots"] == 0
+    assert response.json["venue"]["setup_buffer_slots"] == setup_buffer_slots
+    assert response.json["venue"]["turnaround_buffer_slots"] == turnaround_buffer_slots
+
+
+@pytest.mark.parametrize(
+    ("setup_buffer_slots", "turnaround_buffer_slots"),
+    [(0, 0), (0, 1), (1, 0), (1, 1)],
+)
+def test_each_supported_setup_and_turnaround_requirement_is_retained_on_update(
+    client, setup_buffer_slots, turnaround_buffer_slots
+):
+    venue = create_venue(client)
+
+    response = client.patch(
+        f"/api/venues/{venue['id']}",
+        json={
+            "setup_buffer_slots": setup_buffer_slots,
+            "turnaround_buffer_slots": turnaround_buffer_slots,
+        },
+        headers=request_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["venue"]["setup_buffer_slots"] == setup_buffer_slots
+    assert response.json["venue"]["turnaround_buffer_slots"] == turnaround_buffer_slots
 
 
 def test_venue_staff_can_add_update_and_remove_layouts_for_selected_venue(client):
@@ -130,8 +181,12 @@ def test_save_venue_creates_and_replaces_its_complete_layout_list(client):
         "/api/venues",
         json=venue_payload(
             layouts=[
-                {"layout": "theatre", "capacity": 180},
                 {"layout": "classroom", "capacity": 120},
+                {"layout": "theatre", "capacity": 180},
+                {"layout": "boardroom", "capacity": 30},
+                {"layout": "banquet", "capacity": 96},
+                {"layout": "exhibition", "capacity": 250},
+                {"layout": "Cabaret", "capacity": 90},
             ]
         ),
         headers=request_headers(),
@@ -141,8 +196,12 @@ def test_save_venue_creates_and_replaces_its_complete_layout_list(client):
         (layout["layout"], layout["capacity"]) for layout in created.json["venue"]["layouts"]
     ]
     assert created_layouts == [
-        ("theatre", 180),
         ("classroom", 120),
+        ("theatre", 180),
+        ("boardroom", 30),
+        ("banquet", 96),
+        ("exhibition", 250),
+        ("cabaret", 90),
     ]
 
     updated = client.patch(
@@ -205,7 +264,10 @@ def test_coordinator_can_browse_list_and_details_but_cannot_change_catalogue(cli
     }
     detail = client.get(f"/api/venues/{venue['id']}", headers=request_headers("coordinator-user"))
     assert detail.status_code == 200
-    assert detail.json["venue"]["layouts"] == [{"id": 1, "layout": "classroom", "capacity": 80}]
+    assert detail.json == {
+        "venue": {**venue, "layouts": [{"id": 1, "layout": "classroom", "capacity": 80}]},
+        "capabilities": {"can_manage": False},
+    }
 
     for method, path, body in [
         ("patch", f"/api/venues/{venue['id']}", {"name": "Forged update"}),
@@ -232,11 +294,19 @@ def test_coordinator_can_browse_list_and_details_but_cannot_change_catalogue(cli
         (venue_payload(operating_slots=[]), "Select at least one operating slot."),
         (
             venue_payload(setup_buffer_slots=-1),
-            "Setup buffer must be a non-negative whole number of slots.",
+            "Setup buffer must be either 0 (not required) or 1 (one required slot).",
         ),
         (
             venue_payload(turnaround_buffer_slots=1.5),
-            "Turnaround buffer must be a non-negative whole number of slots.",
+            "Turnaround buffer must be either 0 (not required) or 1 (one required slot).",
+        ),
+        (
+            venue_payload(setup_buffer_slots=2),
+            "Setup buffer must be either 0 (not required) or 1 (one required slot).",
+        ),
+        (
+            venue_payload(turnaround_buffer_slots=True),
+            "Turnaround buffer must be either 0 (not required) or 1 (one required slot).",
         ),
         (
             venue_payload(facilities=[" "]),
@@ -257,8 +327,10 @@ def test_invalid_venue_attributes_are_rejected(client, payload, expected):
             {"layout": "other", "capacity": 20},
             "A custom room layout name is required when Other is selected.",
         ),
+        ({"layout": "theatre", "capacity": -1}, "Capacity must be a positive whole number."),
         ({"layout": "theatre", "capacity": 0}, "Capacity must be a positive whole number."),
         ({"layout": "theatre", "capacity": 22.5}, "Capacity must be a positive whole number."),
+        ({"layout": "theatre", "capacity": True}, "Capacity must be a positive whole number."),
     ],
 )
 def test_invalid_layout_attributes_are_rejected(client, payload, expected):
@@ -268,6 +340,43 @@ def test_invalid_layout_attributes_are_rejected(client, payload, expected):
     )
     assert response.status_code == 400
     assert response.json == {"error": expected}
+
+
+def test_lowest_supported_layout_capacity_is_accepted(client):
+    venue = create_venue(client)
+    response = client.post(
+        f"/api/venues/{venue['id']}/layouts",
+        json={"layout": "boardroom", "capacity": 1},
+        headers=request_headers(),
+    )
+    assert response.status_code == 201
+    assert response.json["layout"]["capacity"] == 1
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"name": " "},
+        {"operating_slots": ["AFTERNOON"]},
+        {"operating_slots": ["AM", "AM"]},
+        {"operating_slots": []},
+        {"setup_buffer_slots": 2},
+        {"turnaround_buffer_slots": -1},
+        {"layouts": [{"layout": "theatre", "capacity": 0}]},
+        {
+            "layouts": [
+                {"layout": "theatre", "capacity": 100},
+                {"layout": "theatre", "capacity": 120},
+            ]
+        },
+    ],
+)
+def test_update_rejects_invalid_venue_data_without_changing_the_stored_profile(client, patch):
+    venue = create_venue(client)
+    response = client.patch(f"/api/venues/{venue['id']}", json=patch, headers=request_headers())
+    assert response.status_code == 400
+    stored = client.get(f"/api/venues/{venue['id']}", headers=request_headers())
+    assert stored.json["venue"] == venue
 
 
 def test_duplicate_layout_is_rejected_for_the_same_selected_venue(client):

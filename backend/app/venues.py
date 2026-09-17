@@ -155,11 +155,11 @@ def _venue_attributes(data: dict[str, Any], *, partial: bool) -> dict[str, Any]:
             abort(400, "Select at least one operating slot.")
         attributes["operating_slots"] = operating_slots
     if not partial or "setup_buffer_slots" in data:
-        attributes["setup_buffer_slots"] = _whole_slots(
+        attributes["setup_buffer_slots"] = _single_adjacent_slot(
             data.get("setup_buffer_slots", 0), "Setup buffer"
         )
     if not partial or "turnaround_buffer_slots" in data:
-        attributes["turnaround_buffer_slots"] = _whole_slots(
+        attributes["turnaround_buffer_slots"] = _single_adjacent_slot(
             data.get("turnaround_buffer_slots", 0), "Turnaround buffer"
         )
     return attributes
@@ -212,9 +212,9 @@ def _string_list(value: Any, label: str) -> list[str]:
     return [item.strip() for item in value]
 
 
-def _whole_slots(value: Any, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        abort(400, f"{label} must be a non-negative whole number of slots.")
+def _single_adjacent_slot(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value not in (0, 1):
+        abort(400, f"{label} must be either 0 (not required) or 1 (one required slot).")
     return value
 
 
