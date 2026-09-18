@@ -48,6 +48,8 @@ def test_empty_baseline_migration_is_rerunnable():
             "alembic_version",
             "venues",
             "venue_layouts",
+            "event_requests",
+            "equipment_requirements",
         }
         with engine.connect() as conn:
             assert set(
@@ -57,18 +59,27 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(
                     text(
                         "select relname from pg_class "
-                        "where relname in ('accounts', 'account_roles', 'venues', 'venue_layouts') "
+                        "where relname in ('accounts', 'account_roles', 'venues', 'venue_layouts', "
+                        "'event_requests', 'equipment_requirements') "
                         "and relrowsecurity"
                     )
                 ).scalars()
             )
-            assert rls_tables == {"accounts", "account_roles", "venues", "venue_layouts"}
+            assert rls_tables == {
+                "accounts",
+                "account_roles",
+                "venues",
+                "venue_layouts",
+                "event_requests",
+                "equipment_requirements",
+            }
             browser_grants = conn.execute(
                 text(
                     "select grantee, table_name, privilege_type "
                     "from information_schema.table_privileges "
                     "where table_schema = 'public' "
-                    "and table_name in ('accounts', 'account_roles', 'venues', 'venue_layouts') "
+                    "and table_name in ('accounts', 'account_roles', 'venues', 'venue_layouts', "
+                    "'event_requests', 'equipment_requirements') "
                     "and grantee in ('PUBLIC', 'anon', 'authenticated')"
                 )
             ).all()
