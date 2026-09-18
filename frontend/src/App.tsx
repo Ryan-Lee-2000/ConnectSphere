@@ -11,6 +11,8 @@ import {
   type AccountRole,
 } from './roles';
 import { VenueCatalogue } from './VenueCatalogue';
+import { EventRequestCreate } from './EventRequestCreate';
+import { EventRequestDrafts } from './EventRequestDrafts';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -38,6 +40,8 @@ async function verifySession(session: AuthSession): Promise<boolean> {
 
 function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace') return true;
+  if (requestedPath === '/workspace/event-requests/new') return role === 'event_organiser';
+  if (requestedPath === '/workspace/event-requests') return role === 'event_organiser';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -390,11 +394,21 @@ function Workspace({
           href="/workspace/venues"
           onClick={event => { event.preventDefault(); navigate('/workspace/venues'); }}
         >Venue catalogue</a>}
+        {activeRole === 'event_organiser' && <a
+          aria-current={safePath === '/workspace/event-requests/new' ? 'page' : undefined}
+          href="/workspace/event-requests/new"
+          onClick={event => { event.preventDefault(); navigate('/workspace/event-requests/new'); }}
+        >New event request</a>}
+        {activeRole === 'event_organiser' && <a
+          aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
+          href="/workspace/event-requests"
+          onClick={event => { event.preventDefault(); navigate('/workspace/event-requests'); }}
+        >My event requests</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
           <div>
-            <h2 id="role-switch-warning-title">Discard unsaved venue changes?</h2>
+            <h2 id="role-switch-warning-title">Discard unsaved changes?</h2>
             <p>Switching to {ROLE_LABELS[pendingRole]} will leave this page without saving your changes.</p>
           </div>
           <div className="role-switch-warning__actions">
@@ -408,10 +422,22 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : undefined}
+        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : safePath.startsWith('/workspace/event-requests') ? 'Event request workspace' : undefined}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
-        {safePath === '/workspace/venues' ? (
+        {safePath === '/workspace/event-requests/new' ? (
+          <EventRequestCreate
+            accessToken={session.access_token}
+            key={`${activeRole}:new-event-request`}
+            onUnsavedChanges={setHasUnsavedChanges}
+          />
+        ) : safePath === '/workspace/event-requests' ? (
+          <EventRequestDrafts
+            accessToken={session.access_token}
+            key={`${activeRole}:event-requests`}
+            onUnsavedChanges={setHasUnsavedChanges}
+          />
+        ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
             accessToken={session.access_token}
             activeRole={activeRole}
