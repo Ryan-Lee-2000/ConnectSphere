@@ -9,13 +9,15 @@ contribution conventions for native Windows and macOS, together with team-approv
 - Flask application factory, health endpoint and fail-closed Supabase token validation
 - SQLAlchemy/Alembic application data with the approved account-role authorization foundation
 - Local Supabase PostgreSQL/Auth and role-specific Auth fixtures for authentication/authorization tests
+- Shared event-request and equipment-line backend contract for approved Sprint 1 work
 - Backend, frontend, PostgreSQL migration and browser/Auth smoke tests
 - Common agent instructions, PR guidance, working CI and verified shared deployment
 
 CS-E01-S2 adds the approved account-role authorization foundation; a valid token alone grants no
-business permissions. Sprint 1 adds the venue catalogue: authorised Venue Staff can create and
-maintain venue profiles and room layouts, while Event Coordinators can browse them. Booking,
-availability and organisation isolation remain later, separately approved work.
+business permissions. Sprint 1 adds the venue catalogue and the approved event-request backend:
+authorised Event Organisers can submit a request and read their own, while Event Coordinators can
+read all requests. There is no event-request screen yet. Drafts, booking, availability and
+organisation isolation remain later, separately approved work.
 
 ## First setup (Windows and macOS)
 

@@ -44,6 +44,21 @@ The browser does not submit a role, user ID or organisation ID to choose this ac
 not define organisation isolation, ownership, coordinator assignment, booking availability or a
 role-switching interface.
 
+## Event-request submission foundation
+
+SPL-51 adds an additive `event_requests` aggregate with zero or more child
+`equipment_requirements`. Flask derives the organiser account from the verified session, creates
+the aggregate transactionally, and applies record-level read scoping: Event Organisers see their
+own requests and Event Coordinators see all submitted requests. Client-submitted account,
+organisation and status identifiers are rejected.
+
+The aggregate carries nullable venue, facilities, accessibility, equipment and registration
+preferences so adjacent Sprint 1 stories can share one migration chain. Those columns are a data
+contract only; they do not implement bookings, reservations, registration, drafts or workflow
+transitions. `organisation_id` is deliberately nullable and remains `NULL` until an approved
+organisation model can derive it server-side. Both tables use RLS with no browser-role grants;
+business access remains exclusively through Flask.
+
 ## Boundaries for future stories
 
 React may call Supabase directly only for authentication. All business operations go through Flask.
