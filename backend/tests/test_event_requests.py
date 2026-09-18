@@ -167,11 +167,13 @@ def test_event_request_routes_enforce_declared_roles(client):
     assert unauthenticated.status_code == 401
 
 
+# Missing mandatory information no longer produces a single per-field message. CS-E03-S5
+# refuses the whole submission and names every missing field at once, so those two cases moved
+# to test_event_request_submission.py (TC-CS-E03-S5-04, -05 and -06). The per-field messages
+# below still apply to values that are present but invalid.
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"name": " "}, "Event name is required."),
-        ({"purpose": None}, "Purpose is required."),
         (
             {"proposed_date": (date.today() - timedelta(days=1)).isoformat()},
             "Proposed date cannot be in the past.",
