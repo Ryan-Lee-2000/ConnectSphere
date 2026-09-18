@@ -43,11 +43,13 @@ test('TC-CS-E03-S5-10 an organiser submits from the interface and sees a confirm
   await page.getByLabel('Expected attendance').fill('120');
   await page.getByRole('button', { name: 'Submit request' }).click();
 
-  const confirmation = page.getByRole('status');
-  await expect(confirmation).toContainText('Request submitted.');
-  await expect(confirmation).toContainText(name);
-  await expect(confirmation).toContainText('submitted');
-  await expect(confirmation).toContainText('EVT-');
+  // CS-E07-S1 AC7 takes the organiser to their requests once the submission succeeds, so the
+  // confirmation is now the request appearing there rather than a panel on this page.
+  await expect(page).toHaveURL(/\/workspace\/my-requests$/);
+  const row = page.getByRole('row').nth(1);
+  await expect(row).toContainText(name);
+  await expect(row).toContainText('Submitted');
+  await expect(row).toContainText('EVT-');
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -106,6 +108,8 @@ test('TC-CS-E03-S5-12 a refused submission names every missing field, and TC-13 
   await page.getByLabel('Expected attendance').fill('120');
   await page.getByRole('button', { name: 'Submit request' }).click();
 
-  await expect(page.getByRole('status')).toContainText('Request submitted.');
+  // The earlier error is gone, and the corrected submission lands on My requests (CS-E07-S1).
+  await expect(page).toHaveURL(/\/workspace\/my-requests$/);
+  await expect(page.getByRole('row').nth(1)).toContainText(name);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
