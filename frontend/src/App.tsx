@@ -10,6 +10,7 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
+import { EventRequestStatus } from './EventRequestStatus';
 import { EventRequestSubmit } from './EventRequestSubmit';
 import { VenueCatalogue } from './VenueCatalogue';
 
@@ -40,6 +41,9 @@ async function verifySession(session: AuthSession): Promise<boolean> {
 function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace') return true;
   if (requestedPath === '/workspace/event-requests') return role === 'event_organiser';
+  // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
+  // coordinator, who reads requests through their own story rather than this view.
+  if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -398,6 +402,11 @@ function Workspace({
           href="/workspace/event-requests"
           onClick={event => { event.preventDefault(); navigate('/workspace/event-requests'); }}
         >Event requests</a>}
+        {organiserRole && <a
+          aria-current={safePath === '/workspace/my-requests' ? 'page' : undefined}
+          href="/workspace/my-requests"
+          onClick={event => { event.preventDefault(); navigate('/workspace/my-requests'); }}
+        >My requests</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
@@ -423,6 +432,12 @@ function Workspace({
           <EventRequestSubmit
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
+            onSubmitted={() => navigate('/workspace/my-requests')}
+          />
+        ) : safePath === '/workspace/my-requests' ? (
+          <EventRequestStatus
+            accessToken={session.access_token}
+            key={`${activeRole}:my-requests`}
           />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
