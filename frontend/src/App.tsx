@@ -10,7 +10,7 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
-import { EventRequestSubmit } from './EventRequestSubmit';
+import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
 
 const INVALID_CREDENTIALS_MESSAGE =
@@ -420,7 +420,7 @@ function Workspace({
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
-          <EventRequestSubmit
+          <EventRequestForm
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
           />
