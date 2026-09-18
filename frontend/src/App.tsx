@@ -10,6 +10,7 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
+import { EventRequestSubmit } from './EventRequestSubmit';
 import { VenueCatalogue } from './VenueCatalogue';
 
 const INVALID_CREDENTIALS_MESSAGE =
@@ -38,6 +39,7 @@ async function verifySession(session: AuthSession): Promise<boolean> {
 
 function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace') return true;
+  if (requestedPath === '/workspace/event-requests') return role === 'event_organiser';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -346,6 +348,7 @@ function Workspace({
 
   const safePath = roleCanAccessPath(activeRole, path) ? path : '/workspace';
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
+  const organiserRole = activeRole === 'event_organiser';
 
   return (
     <main className="workspace">
@@ -390,6 +393,11 @@ function Workspace({
           href="/workspace/venues"
           onClick={event => { event.preventDefault(); navigate('/workspace/venues'); }}
         >Venue catalogue</a>}
+        {organiserRole && <a
+          aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
+          href="/workspace/event-requests"
+          onClick={event => { event.preventDefault(); navigate('/workspace/event-requests'); }}
+        >Event requests</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
@@ -411,7 +419,12 @@ function Workspace({
         aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : undefined}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
-        {safePath === '/workspace/venues' ? (
+        {safePath === '/workspace/event-requests' ? (
+          <EventRequestSubmit
+            accessToken={session.access_token}
+            key={`${activeRole}:event-requests`}
+          />
+        ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
             accessToken={session.access_token}
             activeRole={activeRole}

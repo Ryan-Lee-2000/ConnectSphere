@@ -1,6 +1,6 @@
 """Shared SQLAlchemy metadata for approved ConnectSphere product stories."""
 
-from datetime import date, time
+from datetime import date, datetime, time
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -121,6 +122,8 @@ class EventRequest(Base):
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
     expected_attendance: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="submitted")
+    # CS-E03-S5. Nullable so requests stored before that story remain readable.
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_room_layout: Mapped[str | None] = mapped_column(Text)
     required_facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     facilities_notes: Mapped[str | None] = mapped_column(Text)
