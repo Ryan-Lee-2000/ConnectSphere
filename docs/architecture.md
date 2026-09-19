@@ -41,8 +41,34 @@ CS-E01-S2 adds the smallest trusted application model needed for reusable role a
 Sprint 1 maps venue catalogue functions onto that trusted foundation: Venue Staff may create and
 maintain venue profiles and room layouts; Event Coordinators may browse the catalogue and details.
 The browser does not submit a role, user ID or organisation ID to choose this access. Sprint 1 does
-not define organisation isolation, ownership, coordinator assignment, booking availability or a
-role-switching interface.
+not define coordinator assignment or booking availability.
+
+## Event-request submission foundation
+
+SPL-51 adds an additive `event_requests` aggregate with zero or more child
+`equipment_requirements`. Flask derives the organiser account from the verified session, creates
+the aggregate transactionally, and applies record-level read scoping: Event Organisers see their
+own requests and Event Coordinators see all submitted requests. Client-submitted account,
+organisation and status identifiers are rejected.
+
+The aggregate carries nullable venue, facilities, accessibility, equipment and registration
+preferences so adjacent Sprint 1 stories can share one migration chain. Those columns are a data
+contract only; they do not implement bookings, reservations, registration, drafts or workflow
+transitions. Both tables use RLS with no browser-role grants; business access remains exclusively
+through Flask.
+
+## Client-organisation event isolation
+
+SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:
+
+- `organisations` identifies a client and is protected by RLS with no browser-role grants.
+- An Event Organiser's `accounts.organisation_id` is application-owned membership data.
+- Every event request stores the organisation derived from its authenticated organiser's account;
+  callers cannot select or override that organisation.
+- Dedicated organisation-event list and detail operations include non-draft events for the trusted
+  organisation. A cross-client identifier and a draft identifier both produce the same generic
+  not-found response.
+- The existing own-request API retains its narrower draft-management contract.
 
 ## Boundaries for future stories
 
