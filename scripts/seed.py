@@ -14,9 +14,21 @@ if urlparse(api).hostname not in ("localhost", "127.0.0.1"):
 secret = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 headers = {"apikey": secret, "Authorization": f"Bearer {secret}"}
 fixtures = {
-    "developer@example.test": ("event_organiser", "attendee"),
-    "venue.staff@example.test": ("venue_staff",),
-    "event.coordinator@example.test": ("event_coordinator",),
+    "developer@example.test": {
+        "display_name": "Devon Lee",
+        "organisation": "Northstar Community Partners",
+        "roles": ("event_organiser", "attendee"),
+    },
+    "venue.staff@example.test": {
+        "display_name": "Valerie Tan",
+        "organisation": None,
+        "roles": ("venue_staff",),
+    },
+    "event.coordinator@example.test": {
+        "display_name": "Casey Lim",
+        "organisation": None,
+        "roles": ("event_coordinator",),
+    },
 }
 with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
     page = 1
@@ -43,13 +55,31 @@ with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
 engine = create_engine(os.environ["DATABASE_URL"])
 try:
     with engine.begin() as connection:
-        for email, roles in fixtures.items():
+        for email, fixture in fixtures.items():
             user_id = users_by_email[email]["id"]
+            organisation_id = None
+            if fixture["organisation"]:
+                organisation_id = connection.execute(
+                    text(
+                        "INSERT INTO organisations (name) VALUES (:name) "
+                        "ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+                    ),
+                    {"name": fixture["organisation"]},
+                ).scalar_one()
             connection.execute(
-                text("INSERT INTO accounts (id) VALUES (:id) ON CONFLICT (id) DO NOTHING"),
-                {"id": user_id},
+                text(
+                    "INSERT INTO accounts (id, display_name, organisation_id) "
+                    "VALUES (:id, :display_name, :organisation_id) "
+                    "ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, "
+                    "organisation_id = EXCLUDED.organisation_id"
+                ),
+                {
+                    "id": user_id,
+                    "display_name": fixture["display_name"],
+                    "organisation_id": organisation_id,
+                },
             )
-            for role in roles:
+            for role in fixture["roles"]:
                 connection.execute(
                     text(
                         "INSERT INTO account_roles (account_id, role) VALUES (:id, :role) "
