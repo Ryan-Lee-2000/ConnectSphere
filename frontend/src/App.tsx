@@ -10,9 +10,9 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
-import { EventRequestStatus } from './EventRequestStatus';
-import { EventRequestSubmit } from './EventRequestSubmit';
 import { VenueCatalogue } from './VenueCatalogue';
+import { EventRequestCreate } from './EventRequestCreate';
+import { EventRequestDrafts } from './EventRequestDrafts';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -411,7 +411,7 @@ function Workspace({
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
           <div>
-            <h2 id="role-switch-warning-title">Discard unsaved venue changes?</h2>
+            <h2 id="role-switch-warning-title">Discard unsaved changes?</h2>
             <p>Switching to {ROLE_LABELS[pendingRole]} will leave this page without saving your changes.</p>
           </div>
           <div className="role-switch-warning__actions">
@@ -425,19 +425,21 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : undefined}
+        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests' ? 'Event request workspace' : undefined}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
-          <EventRequestSubmit
+          <EventRequestCreate
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
+            onUnsavedChanges={setHasUnsavedChanges}
             onSubmitted={() => navigate('/workspace/my-requests')}
           />
         ) : safePath === '/workspace/my-requests' ? (
-          <EventRequestStatus
+          <EventRequestDrafts
             accessToken={session.access_token}
             key={`${activeRole}:my-requests`}
+            onUnsavedChanges={setHasUnsavedChanges}
           />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue

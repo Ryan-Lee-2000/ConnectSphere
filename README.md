@@ -9,15 +9,15 @@ contribution conventions for native Windows and macOS, together with team-approv
 - Flask application factory, health endpoint and fail-closed Supabase token validation
 - SQLAlchemy/Alembic application data with the approved account-role authorization foundation
 - Local Supabase PostgreSQL/Auth and role-specific Auth fixtures for authentication/authorization tests
-- Shared event-request and equipment-line backend contract for approved Sprint 1 work
+- Event Organiser request creation, draft lifecycle, and equipment-line backend contract for approved Sprint 1 work
 - Backend, frontend, PostgreSQL migration and browser/Auth smoke tests
 - Common agent instructions, PR guidance, working CI and verified shared deployment
 
 CS-E01-S2 adds the approved account-role authorization foundation; a valid token alone grants no
-business permissions. Sprint 1 adds the venue catalogue and the approved event-request backend:
-authorised Event Organisers can submit a request and read their own, while Event Coordinators can
-read all requests. There is no event-request screen yet. Drafts, booking, availability and
-organisation isolation remain later, separately approved work.
+business permissions. Sprint 1 adds the venue catalogue and the approved event-request flow:
+authorised Event Organisers can submit requests, save and reopen their own drafts, and delete drafts
+after confirmation. Event Coordinators can read submitted requests, but drafts are visible only to
+their creator. Booking, availability and organisation isolation remain later, separately approved work.
 
 ## First setup (Windows and macOS)
 
@@ -125,6 +125,20 @@ INTEGRATION_DATABASE_URL='postgresql+psycopg://USER:PASSWORD@127.0.0.1:PORT/EMPT
 
 The URL is a placeholder; provide a real disposable database. Do not start another database on
 Supabase's port 54322. Infrastructure smoke tests create no business records.
+
+### Event request and draft checks
+
+After setup, run `npm start` and sign in with a local Event Organiser fixture. Open **New event
+request** to submit a complete request or save a draft with only an event name. Open **My event
+requests** to see drafts separately from submitted requests, reopen and resave a draft, submit it,
+or delete it after confirmation. A submitted request cannot be deleted through the draft action.
+
+Run `npm run verify` for lint, formatting, backend API tests, frontend tests, typecheck and build.
+Run `npm run integration` using the empty disposable PostgreSQL database described above to check
+the Alembic migration. With the local stack and browser fixture available, run `npm run check:e2e`;
+the draft flow also needs a manual browser walkthrough until dedicated draft browser checks exist.
+The story-specific behavior and test evidence are in `docs/development/SPL-56.md`,
+`docs/development/SPL-57.md` and `docs/development/SPL-58.md`.
 
 ## Repository map
 
