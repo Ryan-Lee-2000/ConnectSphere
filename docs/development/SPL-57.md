@@ -23,7 +23,7 @@ Owner: Daniel Seow. Source: Jira acceptance criteria supplied by the assignee.
 
 - API tests cover resave, last-saved timestamp, failed incomplete submission and successful submission.
 - Frontend tests cover draft reopen, resave and submission.
-- `npm run verify` passed: 99 backend tests (one PostgreSQL skip in the quick suite),
-  43 frontend tests, lint, format, typecheck and build.
+- After integration with SPL-55 and SPL-63, `npm run verify` passed: 131 backend tests
+  (one PostgreSQL skip in the quick suite), 58 frontend tests, lint, format, typecheck and build.
 - `npm run integration` passed: one test against an empty disposable PostgreSQL database.
-- Browser draft-submission checks remain to be completed and recorded.
+- The integrated browser reopen, resave and submission flow must be rerun before final QA sign-off.

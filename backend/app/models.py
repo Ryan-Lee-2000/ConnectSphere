@@ -1,6 +1,6 @@
 """Shared SQLAlchemy metadata for approved ConnectSphere product stories."""
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -18,6 +18,8 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from app.event_statuses import INITIAL_STATUS, status_check_constraint
 
 
 class Base(DeclarativeBase):
@@ -103,12 +105,21 @@ class EventRequest(Base):
 
     __tablename__ = "event_requests"
     __table_args__ = (
-        CheckConstraint("status in ('draft', 'submitted')", name="ck_event_requests_known_status"),
+        CheckConstraint("end_time > start_time", name="ck_event_requests_time_order"),
         CheckConstraint(
-            "status <> 'submitted' or (purpose is not null and proposed_date is not null "
-            "and start_time is not null and end_time is not null "
-            "and expected_attendance is not null and end_time > start_time "
-            "and expected_attendance > 0)",
+            "expected_attendance > 0",
+            name="ck_event_requests_positive_attendance",
+        ),
+        CheckConstraint(
+            status_check_constraint(),
+            name="ck_event_requests_known_status",
+        ),
+        CheckConstraint(
+            "status <> 'submitted' or (purpose is not null "
+            "and proposed_date is not null "
+            "and start_time is not null "
+            "and end_time is not null "
+            "and expected_attendance is not null)",
             name="ck_event_requests_submitted_fields",
         ),
     )
@@ -126,10 +137,14 @@ class EventRequest(Base):
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
     expected_attendance: Mapped[int | None] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default="submitted")
-    last_saved_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    status: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default=INITIAL_STATUS,
     )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_room_layout: Mapped[str | None] = mapped_column(Text)
     required_facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     facilities_notes: Mapped[str | None] = mapped_column(Text)

@@ -40,8 +40,10 @@ async function verifySession(session: AuthSession): Promise<boolean> {
 
 function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace') return true;
-  if (requestedPath === '/workspace/event-requests/new') return role === 'event_organiser';
   if (requestedPath === '/workspace/event-requests') return role === 'event_organiser';
+  // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
+  // coordinator, who reads requests through their own story rather than this view.
+  if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -350,6 +352,7 @@ function Workspace({
 
   const safePath = roleCanAccessPath(activeRole, path) ? path : '/workspace';
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
+  const organiserRole = activeRole === 'event_organiser';
 
   return (
     <main className="workspace">
@@ -394,16 +397,16 @@ function Workspace({
           href="/workspace/venues"
           onClick={event => { event.preventDefault(); navigate('/workspace/venues'); }}
         >Venue catalogue</a>}
-        {activeRole === 'event_organiser' && <a
-          aria-current={safePath === '/workspace/event-requests/new' ? 'page' : undefined}
-          href="/workspace/event-requests/new"
-          onClick={event => { event.preventDefault(); navigate('/workspace/event-requests/new'); }}
-        >New event request</a>}
-        {activeRole === 'event_organiser' && <a
+        {organiserRole && <a
           aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
           href="/workspace/event-requests"
           onClick={event => { event.preventDefault(); navigate('/workspace/event-requests'); }}
-        >My event requests</a>}
+        >Event requests</a>}
+        {organiserRole && <a
+          aria-current={safePath === '/workspace/my-requests' ? 'page' : undefined}
+          href="/workspace/my-requests"
+          onClick={event => { event.preventDefault(); navigate('/workspace/my-requests'); }}
+        >My requests</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
@@ -422,19 +425,20 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : safePath.startsWith('/workspace/event-requests') ? 'Event request workspace' : undefined}
+        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests' ? 'Event request workspace' : undefined}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
-        {safePath === '/workspace/event-requests/new' ? (
+        {safePath === '/workspace/event-requests' ? (
           <EventRequestCreate
             accessToken={session.access_token}
-            key={`${activeRole}:new-event-request`}
+            key={`${activeRole}:event-requests`}
             onUnsavedChanges={setHasUnsavedChanges}
+            onSubmitted={() => navigate('/workspace/my-requests')}
           />
-        ) : safePath === '/workspace/event-requests' ? (
+        ) : safePath === '/workspace/my-requests' ? (
           <EventRequestDrafts
             accessToken={session.access_token}
-            key={`${activeRole}:event-requests`}
+            key={`${activeRole}:my-requests`}
             onUnsavedChanges={setHasUnsavedChanges}
           />
         ) : safePath === '/workspace/venues' ? (

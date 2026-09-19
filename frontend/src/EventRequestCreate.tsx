@@ -26,6 +26,7 @@ type CreatedRequest = {
   id: number;
   name: string;
   status: string;
+  submitted_at?: string | null;
   mapped_slots: string[];
   last_saved_at?: string;
   purpose?: string | null;
@@ -94,22 +95,33 @@ async function responseError(response: Response): Promise<string> {
   return body.error || 'The event request could not be submitted. Please try again.';
 }
 
+async function submissionError(response: Response): Promise<{ message: string; missing: string[] }> {
+  const body = await response.json().catch(() => ({}));
+  return {
+    message: body.error || 'The event request could not be submitted. Please try again.',
+    missing: Array.isArray(body.missing_field_labels) ? body.missing_field_labels : [],
+  };
+}
+
 export function EventRequestCreate({
   accessToken,
   draftId,
   onReturn,
+  onSubmitted,
   onUnsavedChanges,
   request,
 }: {
   accessToken: string;
   draftId?: number;
   onReturn?: () => void;
+  onSubmitted?: () => void;
   onUnsavedChanges?: (hasUnsavedChanges: boolean) => void;
   request?: EventRequestApi;
 }) {
   const [values, setValues] = useState<FormValues>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
   const [created, setCreated] = useState<CreatedRequest | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<number | undefined>(draftId);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -192,6 +204,7 @@ export function EventRequestCreate({
     event.preventDefault();
     if (saving) return;
     setError(null);
+    setMissing([]);
     setSaving(true);
     try {
       const response = await api(activeDraftId ? `/api/event-requests/drafts/${activeDraftId}/submit` : '/api/event-requests', {
@@ -199,12 +212,15 @@ export function EventRequestCreate({
         body: JSON.stringify(payload(false)),
       });
       if (!response.ok) {
-        setError(await responseError(response));
+        const failure = await submissionError(response);
+        setError(failure.message);
+        setMissing(failure.missing);
         return;
       }
       const body = await response.json() as { event_request: CreatedRequest };
       setCreated(body.event_request);
       onUnsavedChanges?.(false);
+      onSubmitted?.();
     } catch {
       setError('The event request could not be submitted. Check your connection and try again.');
     } finally {
@@ -234,12 +250,12 @@ export function EventRequestCreate({
 
   return <section className="request-workspace" aria-labelledby="request-heading">
     <p className="eyebrow">Event Organiser</p>
-    <h2 id="request-heading">{activeDraftId ? 'Edit event request draft' : 'Create an event request'}</h2>
+    <h2 id="request-heading">{activeDraftId ? 'Edit event request draft' : 'Submit an event request'}</h2>
     <p className="request-intro">Only the event name is needed to save a draft. Complete the fields labelled “required to submit” before submitting. Submitting does not reserve a venue.</p>
     {lastSavedAt && <p role="status">Draft saved. Last saved: {new Date(lastSavedAt).toLocaleString()}.</p>}
     {onReturn && <button className="button button--secondary" type="button" onClick={onReturn}>Back to requests</button>}
-    <form className="request-form" onSubmit={event => void submit(event)}>
-      {error && <p className="error" role="alert">{error}</p>}
+    <form className="request-form" noValidate onSubmit={event => void submit(event)}>
+      {error && <div className="error" role="alert"><p>{error}</p>{missing.length > 0 && <ul>{missing.map(label => <li key={label}>{label}</li>)}</ul>}</div>}
       <div className="field">
         <label data-required htmlFor="request-name">Event name</label>
         <input id="request-name" value={values.name} onChange={event => update('name', event.target.value)} required />

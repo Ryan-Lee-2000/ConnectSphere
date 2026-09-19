@@ -19,7 +19,7 @@ Owner: Daniel Seow. Source: Jira acceptance criteria supplied by the assignee.
 
 - API tests cover creator-only deletion, submitted guard and absence after deletion.
 - Frontend test covers confirmation before delete and immediate removal from the list.
-- `npm run verify` passed: 99 backend tests (one PostgreSQL skip in the quick suite),
-  43 frontend tests, lint, format, typecheck and build.
+- After integration with SPL-55 and SPL-63, `npm run verify` passed: 131 backend tests
+  (one PostgreSQL skip in the quick suite), 58 frontend tests, lint, format, typecheck and build.
 - `npm run integration` passed: one test against an empty disposable PostgreSQL database.
-- Browser deletion and ownership checks remain to be completed and recorded.
+- The integrated browser deletion flow must be rerun before final QA sign-off.

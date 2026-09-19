@@ -31,9 +31,10 @@ As an Event Organiser, I want to save an incomplete event request as a draft so 
 - The create route sets owner and draft status from the authenticated session and does not call a notification service.
 - Drafts remain visible only to their creator, including when an account also has the Coordinator role.
 - Focused API and frontend tests cover name-only creation, ownership and status.
-- `npm run verify`: 99 backend tests passed (one PostgreSQL test skipped in the quick suite),
-  43 frontend tests passed, and lint, format, typecheck and build passed.
+- After integration with SPL-55 and SPL-63, `npm run verify`: 131 backend tests passed
+  (one PostgreSQL test skipped in the quick suite), 58 frontend tests passed, and lint,
+  format, typecheck and build passed.
 - `npm run integration`: one PostgreSQL migration test passed against an empty disposable database.
-- Browser draft-flow checks remain to be completed and recorded.
+- The integrated browser draft flow must be rerun before final QA sign-off.
 
 Sources: SPL-56 Jira acceptance criteria supplied by the assignee; SPL-51 backend handoff in `docs/development/SPL-51.md`.

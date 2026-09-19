@@ -1,6 +1,6 @@
 """Event-request creation and read routes for Sprint 1."""
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from flask import Flask, abort, g, jsonify, request
@@ -8,12 +8,28 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
+from app.event_statuses import status_explanation, status_label
 from app.models import EquipmentRequirement, EventRequest, Role
 
 SLOT_WINDOWS = (
     ("AM", 7 * 60, 12 * 60),
     ("PM", 13 * 60, 18 * 60),
     ("NIGHT", 19 * 60, 24 * 60),
+)
+
+# CS-E03-S5. Every ConnectSphere venue is in Singapore (Q36), so submissions are stamped in
+# a single zone. A fixed offset avoids depending on the platform time-zone database.
+SINGAPORE = timezone(timedelta(hours=8))
+
+# CS-E03-S5. The information a request must carry before it can be submitted for review.
+# [PROPOSE] Q72 left the mandatory set to the team.
+MANDATORY_FIELDS = (
+    ("name", "Event name"),
+    ("purpose", "Purpose"),
+    ("proposed_date", "Proposed date"),
+    ("start_time", "Start time"),
+    ("end_time", "End time"),
+    ("expected_attendance", "Expected attendance"),
 )
 
 _OPTIONAL_TEXT_FIELDS = (
@@ -48,7 +64,11 @@ def register_event_request_routes(app: Flask) -> None:
         if "name" not in attributes:
             abort(400, "Event name is required.")
         event = EventRequest(
-            organiser_account_id=g.user_id, organisation_id=None, status="draft", **attributes
+            organiser_account_id=g.user_id,
+            organisation_id=None,
+            status="draft",
+            last_saved_at=datetime.now(timezone.utc),
+            **attributes,
         )
         event.equipment_requirements = [
             EquipmentRequirement(**line) for line in equipment_lines or []
@@ -86,6 +106,16 @@ def register_event_request_routes(app: Flask) -> None:
             event = _own_draft(session, event_request_id)
             merged = _editable_data(event)
             merged.update(data)
+            missing = _missing_mandatory_fields(merged)
+            if missing:
+                return (
+                    jsonify(
+                        error="Complete the required fields before submitting.",
+                        missing_fields=[field for field, _ in missing],
+                        missing_field_labels=[label for _, label in missing],
+                    ),
+                    400,
+                )
             attributes, equipment_lines = _event_request_attributes(merged)
             for field, value in attributes.items():
                 setattr(event, field, value)
@@ -94,6 +124,8 @@ def register_event_request_routes(app: Flask) -> None:
             ]
             event.status = "submitted"
             event.last_saved_at = datetime.now(timezone.utc)
+            event.submitted_at = datetime.now(SINGAPORE)
+            event.status_changed_at = event.submitted_at
             session.commit()
             return jsonify(
                 event_request=_serialize_event_request(_find_event_request(session, event.id))
@@ -111,11 +143,26 @@ def register_event_request_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_ORGANISER)
     def create_event_request():
         data = _request_json()
+
+        # CS-E03-S5: report every missing mandatory field in one refusal so the organiser can
+        # correct the whole form at once, rather than resubmitting for each field in turn.
+        missing = _missing_mandatory_fields(data)
+        if missing:
+            return (
+                jsonify(
+                    error="Complete the required fields before submitting.",
+                    missing_fields=[field for field, _ in missing],
+                    missing_field_labels=[label for _, label in missing],
+                ),
+                400,
+            )
+
         attributes, equipment_lines = _event_request_attributes(data)
         event_request = EventRequest(
             organiser_account_id=g.user_id,
             organisation_id=None,
             status="submitted",
+            submitted_at=datetime.now(SINGAPORE),
             **attributes,
         )
         event_request.equipment_requirements = [
@@ -159,6 +206,21 @@ def register_event_request_routes(app: Flask) -> None:
             ):
                 abort(404, "Event request not found.")
             return jsonify(event_request=_serialize_event_request(event))
+
+
+def _missing_mandatory_fields(data: dict[str, Any]) -> list[tuple[str, str]]:
+    """Name every mandatory field the submission has not supplied.
+
+    A value present but blank counts as missing, so whitespace cannot pass for an answer.
+    """
+
+    return [(field, label) for field, label in MANDATORY_FIELDS if _is_blank(data.get(field))]
+
+
+def _is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
 
 
 def _request_json() -> dict[str, Any]:
@@ -382,6 +444,31 @@ def _mapped_slots(start: time, end: time) -> list[str]:
     ]
 
 
+def _submitted_at(value: datetime | None) -> str | None:
+    """Return the submission time with its offset, whatever the database preserved.
+
+    PostgreSQL returns an aware value; SQLite drops the offset. Stamping the known zone back
+    on keeps one unambiguous representation in the API rather than one shape per backend.
+    """
+
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=SINGAPORE)
+    return value.isoformat()
+
+
+def _status_changed_at(event: EventRequest) -> str | None:
+    """When the status last moved, falling back to submission (CS-E07-S1).
+
+    A request that has not changed since it was submitted has never had a status change to
+    record, so the submission time is the honest answer to "as of when?". Both are empty for
+    requests stored before CS-E03-S5, and the interface says so rather than inventing a date.
+    """
+
+    return _submitted_at(event.status_changed_at or event.submitted_at)
+
+
 def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -407,6 +494,12 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
             if event.last_saved_at
             else None
         ),
+        # CS-E07-S1. The wording travels with the record so one vocabulary serves every
+        # client, and the interface never has to interpret the stored value itself.
+        "status_label": status_label(event.status),
+        "status_explanation": status_explanation(event.status),
+        "status_changed_at": _status_changed_at(event),
+        "submitted_at": _submitted_at(event.submitted_at),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

@@ -118,16 +118,16 @@ describe('protected access', () => {
     vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
 
-    const link = await screen.findByRole('link', { name: 'New event request' });
+    const link = await screen.findByRole('link', { name: 'Event requests' });
     fireEvent.click(link);
 
-    expect(window.location.pathname).toBe('/workspace/event-requests/new');
-    expect(screen.getByRole('heading', { name: 'Create an event request' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/workspace/event-requests');
+    expect(screen.getByRole('heading', { name: 'Submit an event request' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Submit request' })).toBeTruthy();
   });
 
   it('does not open the organiser form for an account without that role', async () => {
-    window.history.replaceState({}, '', '/workspace/event-requests/new');
+    window.history.replaceState({}, '', '/workspace/event-requests');
     vi.stubGlobal('fetch', vi.fn(input => {
       if (String(input) === '/api/session') return Promise.resolve({ ok: true });
       return Promise.resolve({ ok: true, json: async () => ({ roles: ['attendee'] }) });
@@ -136,7 +136,7 @@ describe('protected access', () => {
 
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
     expect(window.location.pathname).toBe('/workspace');
-    expect(screen.queryByRole('heading', { name: 'Create an event request' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Submit an event request' })).toBeNull();
   });
 
   it('restores a stored session only after the server verifies it', async () => {
