@@ -36,10 +36,9 @@ access through the existing trusted-role boundary.
 
 ## Explicit limitations and follow-up
 
-- The current account model has no client-organisation relationship. `organisation_id` is a
-  nullable, untrusted-input-resistant compatibility field and is always `NULL` in this batch.
-  Therefore the organisation-linking acceptance criterion is **not complete** and SPL-51 must not
-  be marked Done until the team approves and supplies that relationship.
+- At the time SPL-51 was delivered, the account model had no client-organisation relationship and
+  `organisation_id` remained `NULL`. SPL-45 now supersedes that temporary boundary by deriving a
+  required organisation from trusted account membership; request input is still never trusted.
 - The only current state is `submitted`. Adding draft or workflow states requires an additive
   migration to extend the database check; this migration must never be rewritten after merge.
 - The slot calculation is display-only and does not create or imply a venue booking.
@@ -63,10 +62,15 @@ Owner: Ranveer.
   submission with equipment failed with a 400. Both sides now agree on `equipment_requirements`.
 - QA redone end-to-end under the `QA-SPL-51-0XX` naming convention (13 test cases across all 6
   ACs, ≥2 per AC, each citing an exact automated test): see `QA-SPL-51` in the QA SPACE. AC1–AC5
-  pass with no defects. AC6 (automatic organisation link) is still blocked — there is no
-  `Organisation` entity or `Account`→`Organisation` relationship in the system yet, and it also
-  depends on SPL-45 (view events in my client organisation), which is not built. Not a defect;
-  raised separately as a candidate for its own ticket.
+  pass with no defects.
+- AC6 (automatic organisation link) was blocked pending SPL-45 (view events in my client
+  organisation), which added the `Organisation` entity and `Account`→`Organisation` relationship.
+  SPL-45 merged to `main` at `deaf97f` (2026-09-19) and has now been merged into this branch.
+  Re-verified end to end: `backend/tests/test_event_requests.py` asserts a created event's
+  `organisation_id` is a server-derived, non-null integer (never accepted from request input),
+  and `backend/tests/test_organisation_events.py` covers organisation scoping, draft exclusion and
+  cross-organisation refusal. Full `npm run verify` passes (164 backend tests, 53 frontend tests,
+  typecheck, build). AC6 now passes; no defects found.
 - One test case, `QA-SPL-51-002`, is reserved for a manual full browser walkthrough recording,
   still pending.
 

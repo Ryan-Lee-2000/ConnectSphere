@@ -38,12 +38,28 @@ class Role(StrEnum):
 ROLE_VALUES = tuple(role.value for role in Role)
 
 
+class Organisation(Base):
+    """A client organisation whose event information is isolated from other clients."""
+
+    __tablename__ = "organisations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    accounts: Mapped[list["Account"]] = relationship(back_populates="organisation")
+    event_requests: Mapped[list["EventRequest"]] = relationship(back_populates="organisation")
+
+
 class Account(Base):
     """Application account keyed by the verified Supabase Auth user identifier."""
 
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False, default="Unnamed account")
+    organisation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organisations.id"), nullable=True, index=True
+    )
+    organisation: Mapped[Organisation | None] = relationship(back_populates="accounts")
     event_requests: Mapped[list["EventRequest"]] = relationship(back_populates="organiser")
 
 
@@ -128,8 +144,9 @@ class EventRequest(Base):
     organiser_account_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
-    # Temporary compatibility field only. No organisation entity exists yet.
-    organisation_id: Mapped[int | None] = mapped_column(Integer)
+    organisation_id: Mapped[int] = mapped_column(
+        ForeignKey("organisations.id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     purpose: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
@@ -158,6 +175,7 @@ class EventRequest(Base):
     registration_notes: Mapped[str | None] = mapped_column(Text)
     organiser: Mapped[Account] = relationship(back_populates="event_requests")
     venue: Mapped["Venue | None"] = relationship()
+    organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(
         back_populates="event_request",
         cascade="all, delete-orphan",

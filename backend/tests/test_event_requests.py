@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, EventRequest, Role, Venue
+from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role, Venue
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +31,19 @@ def event_app(tmp_path):
     engine = app.extensions["engine"]
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add_all(Account(id=account_id) for account_id in identities.values())
+        organisation = Organisation(name="Community Partners")
+        session.add(organisation)
+        session.flush()
+        session.add_all(
+            Account(
+                id=account_id,
+                display_name=f"Test account {index}",
+                organisation_id=(
+                    organisation.id if account_id in {ORGANISER_ONE, ORGANISER_TWO} else None
+                ),
+            )
+            for index, account_id in enumerate(identities.values(), start=1)
+        )
         session.add_all(
             [
                 AccountRole(account_id=ORGANISER_ONE, role=Role.EVENT_ORGANISER.value),
@@ -95,7 +107,7 @@ def test_organiser_creates_complete_request_with_server_owned_identity_and_equip
 
     assert created["id"] == 1
     assert created["organiser_account_id"] == ORGANISER_ONE
-    assert created["organisation_id"] is None
+    assert isinstance(created["organisation_id"], int)
     assert created["status"] == "submitted"
     assert created["mapped_slots"] == ["AM", "PM"]
     assert created["registration_required"] is True
@@ -114,7 +126,7 @@ def test_organiser_creates_complete_request_with_server_owned_identity_and_equip
         stored = session.scalar(select(EventRequest))
         assert stored is not None
         assert stored.organiser_account_id == ORGANISER_ONE
-        assert stored.organisation_id is None
+        assert stored.organisation_id == created["organisation_id"]
 
 
 @pytest.mark.parametrize("field", ["organiser_account_id", "organisation_id", "status"])
@@ -160,6 +172,7 @@ def test_drafts_are_visible_only_to_their_creator_even_with_a_coordinator_role(c
     with Session(event_app.extensions["engine"]) as session:
         draft = EventRequest(
             organiser_account_id=ORGANISER_TWO,
+            organisation_id=submitted["organisation_id"],
             name="Private draft",
             status="draft",
         )
@@ -191,13 +204,23 @@ def test_drafts_are_visible_only_to_their_creator_even_with_a_coordinator_role(c
 def test_database_allows_name_only_draft_but_not_incomplete_submitted_request(event_app):
     with Session(event_app.extensions["engine"]) as session:
         session.add(
-            EventRequest(organiser_account_id=ORGANISER_ONE, name="Early idea", status="draft")
+            EventRequest(
+                organiser_account_id=ORGANISER_ONE,
+                organisation_id=1,
+                name="Early idea",
+                status="draft",
+            )
         )
         session.commit()
 
     with Session(event_app.extensions["engine"]) as session:
         session.add(
-            EventRequest(organiser_account_id=ORGANISER_ONE, name="Incomplete", status="submitted")
+            EventRequest(
+                organiser_account_id=ORGANISER_ONE,
+                organisation_id=1,
+                name="Incomplete",
+                status="submitted",
+            )
         )
         with pytest.raises(IntegrityError):
             session.commit()

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
-from app.models import EquipmentRequirement, EventRequest, Role, Venue
+from app.models import Account, EquipmentRequirement, EventRequest, Role, Venue
 from app.slots import slots_for_range
 
 # CS-E03-S5. Every ConnectSphere venue is in Singapore (Q36), so submissions are stamped in
@@ -58,17 +58,18 @@ def register_event_request_routes(app: Flask) -> None:
         attributes, equipment_lines = _draft_attributes(_request_json())
         if "name" not in attributes:
             abort(400, "Event name is required.")
-        event = EventRequest(
-            organiser_account_id=g.user_id,
-            organisation_id=None,
-            status="draft",
-            last_saved_at=datetime.now(timezone.utc),
-            **attributes,
-        )
-        event.equipment_requirements = [
-            EquipmentRequirement(**line) for line in equipment_lines or []
-        ]
         with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event = EventRequest(
+                organiser_account_id=account.id,
+                organisation_id=account.organisation_id,
+                status="draft",
+                last_saved_at=datetime.now(timezone.utc),
+                **attributes,
+            )
+            event.equipment_requirements = [
+                EquipmentRequirement(**line) for line in equipment_lines or []
+            ]
             session.add(event)
             session.commit()
             return jsonify(
@@ -118,6 +119,7 @@ def register_event_request_routes(app: Flask) -> None:
                 EquipmentRequirement(**line) for line in equipment_lines
             ]
             event.status = "submitted"
+            event.organisation_id = _current_organiser_account(session).organisation_id
             event.last_saved_at = datetime.now(timezone.utc)
             event.submitted_at = datetime.now(SINGAPORE)
             event.status_changed_at = event.submitted_at
@@ -153,10 +155,11 @@ def register_event_request_routes(app: Flask) -> None:
             )
 
         with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
             attributes, equipment_lines = _event_request_attributes(data, session)
             event_request = EventRequest(
-                organiser_account_id=g.user_id,
-                organisation_id=None,
+                organiser_account_id=account.id,
+                organisation_id=account.organisation_id,
                 status="submitted",
                 submitted_at=datetime.now(SINGAPORE),
                 **attributes,
@@ -201,6 +204,46 @@ def register_event_request_routes(app: Flask) -> None:
             ):
                 abort(404, "Event request not found.")
             return jsonify(event_request=_serialize_event_request(event))
+
+    @app.get("/api/organisation/events")
+    @require_roles(Role.EVENT_ORGANISER)
+    def list_organisation_events():
+        """List submitted events for the caller's trusted client organisation."""
+
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            events = session.scalars(
+                select(EventRequest)
+                .where(
+                    EventRequest.organisation_id == account.organisation_id,
+                    EventRequest.status != "draft",
+                )
+                .options(selectinload(EventRequest.organiser))
+                .order_by(EventRequest.proposed_date, EventRequest.start_time, EventRequest.id)
+            ).all()
+            return jsonify(
+                events=[_serialize_organisation_event_summary(event) for event in events]
+            )
+
+    @app.get("/api/organisation/events/<int:event_request_id>")
+    @require_roles(Role.EVENT_ORGANISER)
+    def get_organisation_event(event_request_id: int):
+        """Return read-only details without revealing whether another client's event exists."""
+
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event = session.scalar(
+                select(EventRequest)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventRequest.organisation_id == account.organisation_id,
+                    EventRequest.status != "draft",
+                )
+                .options(selectinload(EventRequest.organiser))
+            )
+            if event is None:
+                abort(404, "Event not found.")
+            return jsonify(event=_serialize_organisation_event_detail(event))
 
 
 def _missing_mandatory_fields(data: dict[str, Any]) -> list[tuple[str, str]]:
@@ -455,6 +498,39 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
     if event is None:
         abort(404, "Event request not found.")
     return event
+
+
+def _current_organiser_account(session: Session) -> Account:
+    """Load organisation membership from trusted application data, never request input."""
+
+    account = session.get(Account, g.user_id)
+    if account is None or account.organisation_id is None:
+        abort(403, "Access denied.")
+    return account
+
+
+def _organiser_name(event: EventRequest) -> str:
+    return event.organiser.display_name
+
+
+def _serialize_organisation_event_summary(event: EventRequest) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "name": event.name,
+        "proposed_date": event.proposed_date.isoformat() if event.proposed_date else None,
+        "responsible_organiser": _organiser_name(event),
+    }
+
+
+def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
+    return {
+        **_serialize_organisation_event_summary(event),
+        "purpose": event.purpose,
+        "description": event.description,
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "expected_attendance": event.expected_attendance,
+    }
 
 
 def _submitted_at(value: datetime | None) -> str | None:

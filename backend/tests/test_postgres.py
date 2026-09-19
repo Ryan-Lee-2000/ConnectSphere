@@ -47,6 +47,7 @@ def test_empty_baseline_migration_is_rerunnable():
             "accounts",
             "account_roles",
             "alembic_version",
+            "organisations",
             "venues",
             "venue_layouts",
             "event_requests",
@@ -60,7 +61,8 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(
                     text(
                         "select relname from pg_class "
-                        "where relname in ('accounts', 'account_roles', 'venues', 'venue_layouts', "
+                        "where relname in ('accounts', 'account_roles', 'organisations', "
+                        "'venues', 'venue_layouts', "
                         "'event_requests', 'equipment_requirements') "
                         "and relrowsecurity"
                     )
@@ -69,6 +71,7 @@ def test_empty_baseline_migration_is_rerunnable():
             assert rls_tables == {
                 "accounts",
                 "account_roles",
+                "organisations",
                 "venues",
                 "venue_layouts",
                 "event_requests",
@@ -79,7 +82,8 @@ def test_empty_baseline_migration_is_rerunnable():
                     "select grantee, table_name, privilege_type "
                     "from information_schema.table_privileges "
                     "where table_schema = 'public' "
-                    "and table_name in ('accounts', 'account_roles', 'venues', 'venue_layouts', "
+                    "and table_name in ('accounts', 'account_roles', 'organisations', "
+                    "'venues', 'venue_layouts', "
                     "'event_requests', 'equipment_requirements') "
                     "and grantee in ('PUBLIC', 'anon', 'authenticated')"
                 )
@@ -87,21 +91,31 @@ def test_empty_baseline_migration_is_rerunnable():
             assert browser_grants == []
         with engine.begin() as conn:
             conn.execute(
-                text("insert into accounts (id) values (:account_id)"),
+                text(
+                    "insert into accounts (id, display_name, organisation_id) "
+                    "values (:account_id, 'Migration test organiser', "
+                    "(select id from organisations where name = 'Existing client organisation'))"
+                ),
                 {"account_id": "00000000-0000-0000-0000-000000000099"},
             )
             conn.execute(
                 text(
-                    "insert into event_requests (organiser_account_id, name, status) "
-                    "values (:account_id, 'An early idea', 'draft')"
+                    "insert into event_requests "
+                    "(organiser_account_id, organisation_id, name, status) "
+                    "values (:account_id, "
+                    "(select id from organisations where name = 'Existing client organisation'), "
+                    "'An early idea', 'draft')"
                 ),
                 {"account_id": "00000000-0000-0000-0000-000000000099"},
             )
         with pytest.raises(IntegrityError), engine.begin() as conn:
             conn.execute(
                 text(
-                    "insert into event_requests (organiser_account_id, name, status) "
-                    "values (:account_id, 'Incomplete submission', 'submitted')"
+                    "insert into event_requests "
+                    "(organiser_account_id, organisation_id, name, status) "
+                    "values (:account_id, "
+                    "(select id from organisations where name = 'Existing client organisation'), "
+                    "'Incomplete submission', 'submitted')"
                 ),
                 {"account_id": "00000000-0000-0000-0000-000000000099"},
             )
