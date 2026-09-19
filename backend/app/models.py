@@ -19,6 +19,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.event_statuses import INITIAL_STATUS, status_check_constraint
+
 
 class Base(DeclarativeBase):
     pass
@@ -105,7 +107,9 @@ class EventRequest(Base):
     __table_args__ = (
         CheckConstraint("end_time > start_time", name="ck_event_requests_time_order"),
         CheckConstraint("expected_attendance > 0", name="ck_event_requests_positive_attendance"),
-        CheckConstraint("status in ('submitted')", name="ck_event_requests_known_status"),
+        # CS-E07-S1. The vocabulary lives in one place so the constraint and the wording
+        # shown to the organiser can never drift apart.
+        CheckConstraint(status_check_constraint(), name="ck_event_requests_known_status"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -121,9 +125,12 @@ class EventRequest(Base):
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
     expected_attendance: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default="submitted")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default=INITIAL_STATUS)
     # CS-E03-S5. Nullable so requests stored before that story remain readable.
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # CS-E07-S1. Empty until something moves the status on; the organiser is then shown the
+    # submission time instead. Nothing in this story writes it — CS-E06 and CS-E07-S3 to S5 do.
+    status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_room_layout: Mapped[str | None] = mapped_column(Text)
     required_facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     facilities_notes: Mapped[str | None] = mapped_column(Text)

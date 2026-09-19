@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
+from app.event_statuses import status_explanation, status_label
 from app.models import EquipmentRequirement, EventRequest, Role
 
 SLOT_WINDOWS = (
@@ -301,6 +302,17 @@ def _submitted_at(value: datetime | None) -> str | None:
     return value.isoformat()
 
 
+def _status_changed_at(event: EventRequest) -> str | None:
+    """When the status last moved, falling back to submission (CS-E07-S1).
+
+    A request that has not changed since it was submitted has never had a status change to
+    record, so the submission time is the honest answer to "as of when?". Both are empty for
+    requests stored before CS-E03-S5, and the interface says so rather than inventing a date.
+    """
+
+    return _submitted_at(event.status_changed_at or event.submitted_at)
+
+
 def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -315,6 +327,11 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "mapped_slots": _mapped_slots(event.start_time, event.end_time),
         "expected_attendance": event.expected_attendance,
         "status": event.status,
+        # CS-E07-S1. The wording travels with the record so one vocabulary serves every
+        # client, and the interface never has to interpret the stored value itself.
+        "status_label": status_label(event.status),
+        "status_explanation": status_explanation(event.status),
+        "status_changed_at": _status_changed_at(event),
         "submitted_at": _submitted_at(event.submitted_at),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,

@@ -29,7 +29,15 @@ function emptyForm(): FormState {
   };
 }
 
-export function EventRequestSubmit({ accessToken }: { accessToken: string }) {
+// CS-E07-S1 takes the organiser to their requests once a submission succeeds. The callback is
+// optional so the form can still be rendered and tested on its own.
+export function EventRequestSubmit({
+  accessToken,
+  onSubmitted,
+}: {
+  accessToken: string;
+  onSubmitted?: () => void;
+}) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitted, setSubmitted] = useState<Submitted | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +78,9 @@ export function EventRequestSubmit({ accessToken }: { accessToken: string }) {
       if (response.status === 201 && payload?.event_request) {
         setSubmitted(payload.event_request);
         setForm(emptyForm());
+        // Only a successful submission moves the organiser on (CS-E07-S1 AC7). A refusal
+        // leaves them here with their entries and the reason.
+        onSubmitted?.();
         return;
       }
       if (Array.isArray(payload?.missing_field_labels)) {

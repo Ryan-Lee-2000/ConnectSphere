@@ -17,7 +17,7 @@ function listFromText(value: string) {
   return value.split(',').map(item => item.trim()).filter(Boolean);
 }
 
-export function EventRequestForm({ accessToken, request }: { accessToken: string | null; request?: ApiRequest }) {
+export function EventRequestForm({ accessToken, request, onSubmitted }: { accessToken: string | null; request?: ApiRequest; onSubmitted?: () => void }) {
   const api = request || (accessToken ? defaultRequest(accessToken) : undefined);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -95,6 +95,7 @@ export function EventRequestForm({ accessToken, request }: { accessToken: string
     const body = await response.json() as { event_request: EventRequest };
     setNotice('Event request created.');
     setMappedSlots(body.event_request.mapped_slots);
+    onSubmitted?.();
   };
 
   return <section className="catalogue" aria-labelledby="event-request-heading">

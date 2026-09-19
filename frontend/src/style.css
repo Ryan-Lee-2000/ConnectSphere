@@ -322,3 +322,30 @@ button { touch-action: manipulation; }
 }
 .event-request-submit__form { max-width: 34rem; }
 .event-request-submit__missing { margin: var(--space-xs) 0 0 var(--space-base); }
+
+/* CS-E07-S1 see the current status of my event */
+.form-message--info {
+  color: var(--color-mineral-teal);
+  background: var(--color-mist-surface);
+  border: 1px solid var(--color-blueprint-line);
+}
+.event-request-status__table { border-collapse: collapse; margin-top: var(--space-base); width: 100%; }
+.event-request-status__table th, .event-request-status__table td {
+  border-bottom: 1px solid var(--color-blueprint-line);
+  padding: var(--space-xs) var(--space-base) var(--space-xs) 0;
+  text-align: left;
+  vertical-align: top;
+}
+.event-request-status__reference { display: block; font-size: 0.85em; opacity: 0.75; }
+/* The status name carries the meaning on its own; weight and spacing only reinforce it. */
+.event-request-status__label { display: block; font-weight: 600; }
+.event-request-status__explanation { display: block; font-size: 0.9em; max-width: 28rem; opacity: 0.85; }
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
