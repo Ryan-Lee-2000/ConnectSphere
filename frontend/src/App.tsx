@@ -13,6 +13,7 @@ import {
 import { VenueCatalogue } from './VenueCatalogue';
 import { EventRequestCreate } from './EventRequestCreate';
 import { EventRequestDrafts } from './EventRequestDrafts';
+import { OrganisationEvents } from './OrganisationEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -44,6 +45,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
+  if (/^\/workspace\/organisation-events(?:\/\d+)?$/.test(requestedPath)) {
+    return role === 'event_organiser';
+  }
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -353,6 +357,10 @@ function Workspace({
   const safePath = roleCanAccessPath(activeRole, path) ? path : '/workspace';
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
   const organiserRole = activeRole === 'event_organiser';
+  const organisationEventMatch = safePath.match(/^\/workspace\/organisation-events\/(\d+)$/);
+  const organisationEventId = organisationEventMatch
+    ? Number(organisationEventMatch[1])
+    : undefined;
 
   return (
     <main className="workspace">
@@ -407,6 +415,11 @@ function Workspace({
           href="/workspace/my-requests"
           onClick={event => { event.preventDefault(); navigate('/workspace/my-requests'); }}
         >My requests</a>}
+        {organiserRole && <a
+          aria-current={safePath.startsWith('/workspace/organisation-events') ? 'page' : undefined}
+          href="/workspace/organisation-events"
+          onClick={event => { event.preventDefault(); navigate('/workspace/organisation-events'); }}
+        >Organisation events</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
@@ -425,7 +438,13 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues' ? 'Venue catalogue workspace' : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests' ? 'Event request workspace' : undefined}
+        aria-label={safePath === '/workspace/venues'
+          ? 'Venue catalogue workspace'
+          : safePath.startsWith('/workspace/organisation-events')
+            ? 'Organisation event workspace'
+            : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests'
+              ? 'Event request workspace'
+              : undefined}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
@@ -440,6 +459,13 @@ function Workspace({
             accessToken={session.access_token}
             key={`${activeRole}:my-requests`}
             onUnsavedChanges={setHasUnsavedChanges}
+          />
+        ) : safePath.startsWith('/workspace/organisation-events') ? (
+          <OrganisationEvents
+            accessToken={session.access_token}
+            eventId={organisationEventId}
+            key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
+            onNavigate={navigate}
           />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
@@ -486,6 +512,9 @@ export function App({ authGateway = defaultAuthGateway }: AppProps) {
         const { session } = await authGateway.getSession();
         const verified = session ? await verifySession(session) : false;
         if (active) {
+          if (verified && !window.location.pathname.startsWith('/workspace')) {
+            window.history.replaceState({}, '', '/workspace');
+          }
           setSession(verified ? session : null);
           setView(verified ? 'workspace' : 'sign-in');
         }

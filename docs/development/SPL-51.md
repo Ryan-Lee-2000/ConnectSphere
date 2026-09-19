@@ -36,10 +36,9 @@ access through the existing trusted-role boundary.
 
 ## Explicit limitations and follow-up
 
-- The current account model has no client-organisation relationship. `organisation_id` is a
-  nullable, untrusted-input-resistant compatibility field and is always `NULL` in this batch.
-  Therefore the organisation-linking acceptance criterion is **not complete** and SPL-51 must not
-  be marked Done until the team approves and supplies that relationship.
+- At the time SPL-51 was delivered, the account model had no client-organisation relationship and
+  `organisation_id` remained `NULL`. SPL-45 now supersedes that temporary boundary by deriving a
+  required organisation from trusted account membership; request input is still never trusted.
 - The only current state is `submitted`. Adding draft or workflow states requires an additive
   migration to extend the database check; this migration must never be rewritten after merge.
 - The slot calculation is display-only and does not create or imply a venue booking.

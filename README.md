@@ -17,7 +17,9 @@ CS-E01-S2 adds the approved account-role authorization foundation; a valid token
 business permissions. Sprint 1 adds the venue catalogue and the approved event-request flow:
 authorised Event Organisers can submit requests, save and reopen their own drafts, and delete drafts
 after confirmation. Event Coordinators can read submitted requests, but drafts are visible only to
-their creator. Booking, availability and organisation isolation remain later, separately approved work.
+their creator. Event Organisers can also read submitted events within their own trusted client
+organisation while other clients and colleagues' drafts remain hidden. Booking and availability
+remain later, separately approved work.
 
 ## First setup (Windows and macOS)
 
@@ -139,6 +141,16 @@ the Alembic migration. With the local stack and browser fixture available, run `
 the draft flow also needs a manual browser walkthrough until dedicated draft browser checks exist.
 The story-specific behavior and test evidence are in `docs/development/SPL-56.md`,
 `docs/development/SPL-57.md` and `docs/development/SPL-58.md`.
+
+### Client-organisation event checks
+
+Sign in with the local Event Organiser fixture and open **Organisation events**. The list contains
+submitted events associated with that fixture's client organisation and exposes read-only event
+details. Drafts remain under **My event requests** and never appear in the organisation list.
+
+Run `npm run verify` for the API and interface scope tests. Run `npm run integration` against an
+empty disposable PostgreSQL database to verify the organisation migration, RLS and browser-role
+grant denial. The story boundary and evidence map are in `docs/development/SPL-45.md`.
 
 ## Repository map
 
