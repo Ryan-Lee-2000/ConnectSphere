@@ -49,3 +49,33 @@ access through the existing trusted-role boundary.
   stories still own their interfaces and acceptance behaviour.
 
 Sources: SPL-51; Week 4 core #2; Q50, Q72, Q107 and Q119; schema/API handoff supplied by Ranveer.
+
+## Follow-up: venue/slot picker, redone QA, and save-draft integration
+
+Owner: Ranveer.
+
+- The free-text `start_time`/`end_time` inputs were replaced with an AM/PM/Night slot picker
+  (`frontend/src/slots.ts`) tied to a real venue selection (`venue_id`, see SPL-52). The backend
+  still stores concrete `start_time`/`end_time` (derived from the chosen slot) and validates that
+  the selected venue actually operates in that slot (`_venue_id()` in `event_requests.py`).
+- Fixed a genuine client/server contract defect found during QA: the live form sent equipment
+  lines as `equipment_lines`, the backend only accepted `equipment_requirements`, so every real
+  submission with equipment failed with a 400. Both sides now agree on `equipment_requirements`.
+- QA redone end-to-end under the `QA-SPL-51-0XX` naming convention (13 test cases across all 6
+  ACs, ≥2 per AC, each citing an exact automated test): see `QA-SPL-51` in the QA SPACE. AC1–AC5
+  pass with no defects. AC6 (automatic organisation link) is still blocked — there is no
+  `Organisation` entity or `Account`→`Organisation` relationship in the system yet, and it also
+  depends on SPL-45 (view events in my client organisation), which is not built. Not a defect;
+  raised separately as a candidate for its own ticket.
+- One test case, `QA-SPL-51-002`, is reserved for a manual full browser walkthrough recording,
+  still pending.
+
+**Save-draft integration, briefly:** SPL-56/57/58 (draft save/reopen/submit/delete) were merged in
+from `main` on top of this rework. `EventRequestForm.tsx` now has a "Save as draft" action
+(`POST /api/event-requests/drafts`, only the event name required) alongside the existing full
+submit. Opening a draft (`draftId` prop) fetches and prefills every field, including the chosen
+venue and slot. Once a draft exists, the same "Submit event request" button posts to
+`POST /api/event-requests/drafts/<id>/submit` instead of the plain `POST /api/event-requests`; a
+fresh submission that was never saved as a draft is unaffected and still goes straight to the
+plain create endpoint. See `docs/development/SPL-56.md`/`SPL-57.md`/`SPL-58.md` for the feature
+itself and its own acceptance criteria.
