@@ -21,7 +21,7 @@ function formatDate(value: string) {
   const parsed = new Date(`${value}T00:00:00`);
   return Number.isNaN(parsed.getTime())
     ? value
-    : parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    : parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function OrganisationEvents({
