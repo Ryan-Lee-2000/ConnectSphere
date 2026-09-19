@@ -9,13 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
-from app.models import EquipmentRequirement, EventRequest, Role
-
-SLOT_WINDOWS = (
-    ("AM", 7 * 60, 12 * 60),
-    ("PM", 13 * 60, 18 * 60),
-    ("NIGHT", 19 * 60, 24 * 60),
-)
+from app.models import EquipmentRequirement, EventRequest, Role, Venue
+from app.slots import slots_for_range
 
 # CS-E03-S5. Every ConnectSphere venue is in Singapore (Q36), so submissions are stamped in
 # a single zone. A fixed offset avoids depending on the platform time-zone database.
@@ -39,7 +34,6 @@ _OPTIONAL_TEXT_FIELDS = (
     "accessibility_needs",
     "location_preference",
     "venue_notes",
-    "preferred_venue_name",
     "registration_notes",
 )
 _REQUEST_FIELDS = {
@@ -52,6 +46,7 @@ _REQUEST_FIELDS = {
     "required_facilities",
     "registration_required",
     "equipment_requirements",
+    "venue_id",
     *_OPTIONAL_TEXT_FIELDS,
 }
 
@@ -75,18 +70,18 @@ def register_event_request_routes(app: Flask) -> None:
                 400,
             )
 
-        attributes, equipment_lines = _event_request_attributes(data)
-        event_request = EventRequest(
-            organiser_account_id=g.user_id,
-            organisation_id=None,
-            status="submitted",
-            submitted_at=datetime.now(SINGAPORE),
-            **attributes,
-        )
-        event_request.equipment_requirements = [
-            EquipmentRequirement(**line) for line in equipment_lines
-        ]
         with Session(app.extensions["engine"]) as session:
+            attributes, equipment_lines = _event_request_attributes(data, session)
+            event_request = EventRequest(
+                organiser_account_id=g.user_id,
+                organisation_id=None,
+                status="submitted",
+                submitted_at=datetime.now(SINGAPORE),
+                **attributes,
+            )
+            event_request.equipment_requirements = [
+                EquipmentRequirement(**line) for line in equipment_lines
+            ]
             session.add(event_request)
             session.commit()
             event_id = event_request.id
@@ -143,7 +138,7 @@ def _request_json() -> dict[str, Any]:
 
 
 def _event_request_attributes(
-    data: dict[str, Any],
+    data: dict[str, Any], session: Session
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     unexpected = set(data) - _REQUEST_FIELDS
     if unexpected:
@@ -172,10 +167,25 @@ def _event_request_attributes(
         "registration_required": _boolean(
             data.get("registration_required", False), "Registration required"
         ),
+        "venue_id": _venue_id(data.get("venue_id"), start_time, end_time, session),
     }
     for field in _OPTIONAL_TEXT_FIELDS:
         attributes[field] = _optional_text(data.get(field), field.replace("_", " ").title())
     return attributes, _equipment_lines(data.get("equipment_requirements", []))
+
+
+def _venue_id(value: Any, start_time: time, end_time: time, session: Session) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        abort(400, "Venue must be a venue id.")
+    venue = session.get(Venue, value)
+    if venue is None:
+        abort(400, "Venue not found.")
+    matching_slots = slots_for_range(start_time, end_time)
+    if len(matching_slots) != 1 or matching_slots[0] not in venue.operating_slots:
+        abort(400, "Selected time is not available for this venue.")
+    return value
 
 
 def _required_text(value: Any, label: str) -> str:
@@ -278,16 +288,6 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
     return event
 
 
-def _mapped_slots(start: time, end: time) -> list[str]:
-    start_minutes = start.hour * 60 + start.minute
-    end_minutes = end.hour * 60 + end.minute
-    return [
-        name
-        for name, slot_start, slot_end in SLOT_WINDOWS
-        if start_minutes < slot_end and end_minutes > slot_start
-    ]
-
-
 def _submitted_at(value: datetime | None) -> str | None:
     """Return the submission time with its offset, whatever the database preserved.
 
@@ -324,7 +324,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "proposed_date": event.proposed_date.isoformat(),
         "start_time": event.start_time.isoformat(timespec="minutes"),
         "end_time": event.end_time.isoformat(timespec="minutes"),
-        "mapped_slots": _mapped_slots(event.start_time, event.end_time),
+        "mapped_slots": slots_for_range(event.start_time, event.end_time),
         "expected_attendance": event.expected_attendance,
         "status": event.status,
         # CS-E07-S1. The wording travels with the record so one vocabulary serves every
@@ -339,7 +339,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "accessibility_needs": event.accessibility_needs,
         "location_preference": event.location_preference,
         "venue_notes": event.venue_notes,
-        "preferred_venue_name": event.preferred_venue_name,
+        "venue_id": event.venue_id,
         "registration_required": event.registration_required,
         "registration_notes": event.registration_notes,
         "equipment_requirements": [

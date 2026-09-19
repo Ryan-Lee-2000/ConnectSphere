@@ -1,6 +1,8 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
+import { SLOTS, type SlotKey } from './slots';
+import type { Venue, VenueSummary } from './VenueCatalogue';
 
 type EquipmentLineDraft = { id?: number; equipmentType: string; quantity: string; notes: string };
 type EquipmentLine = { id: number; equipment_type: string; quantity: number; notes: string | null };
@@ -8,7 +10,7 @@ type EventRequest = {
   id: number;
   name: string;
   mapped_slots: string[];
-  equipment_lines: EquipmentLine[];
+  equipment_requirements: EquipmentLine[];
 };
 
 const EVENT_REQUEST_FALLBACK = 'The event request could not be created.';
@@ -17,14 +19,18 @@ function listFromText(value: string) {
   return value.split(',').map(item => item.trim()).filter(Boolean);
 }
 
+function slotBounds(key: SlotKey) {
+  const slot = SLOTS.find(item => item.key === key);
+  return slot ? { start_time: slot.start, end_time: slot.end } : null;
+}
+
 export function EventRequestForm({ accessToken, request, onSubmitted }: { accessToken: string | null; request?: ApiRequest; onSubmitted?: () => void }) {
   const api = request || (accessToken ? defaultRequest(accessToken) : undefined);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [description, setDescription] = useState('');
   const [proposedDate, setProposedDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [slot, setSlot] = useState<SlotKey | null>(null);
   const [expectedAttendance, setExpectedAttendance] = useState('');
   const [preferredRoomLayout, setPreferredRoomLayout] = useState('');
   const [requiredFacilities, setRequiredFacilities] = useState('');
@@ -32,7 +38,9 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
   const [accessibilityNeeds, setAccessibilityNeeds] = useState('');
   const [locationPreference, setLocationPreference] = useState('');
   const [venueNotes, setVenueNotes] = useState('');
-  const [preferredVenueName, setPreferredVenueName] = useState('');
+  const [venues, setVenues] = useState<VenueSummary[]>([]);
+  const [venueId, setVenueId] = useState<number | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [registrationRequired, setRegistrationRequired] = useState(false);
   const [registrationNotes, setRegistrationNotes] = useState('');
   const [equipmentLines, setEquipmentLines] = useState<EquipmentLineDraft[]>([]);
@@ -49,11 +57,48 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
   const canSave = Boolean(name.trim())
     && Boolean(purpose.trim())
     && Boolean(proposedDate)
-    && Boolean(startTime)
-    && Boolean(endTime)
-    && startTime < endTime
+    && Boolean(slot)
     && Number.isInteger(attendance) && attendance > 0
     && equipmentLinesAreValid;
+
+  const availableSlots = selectedVenue
+    ? SLOTS.filter(item => selectedVenue.operating_slots.includes(item.key))
+    : SLOTS;
+
+  useEffect(() => {
+    if (!api) return;
+    let active = true;
+    void (async () => {
+      const response = await api('/api/venues');
+      if (!active || !response.ok) return;
+      const body = await response.json() as { venues: VenueSummary[] };
+      setVenues(body.venues);
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (venueId === null) {
+      setSelectedVenue(null);
+      return;
+    }
+    if (!api) return;
+    let active = true;
+    void (async () => {
+      const response = await api(`/api/venues/${venueId}`);
+      if (!active || !response.ok) return;
+      const body = await response.json() as { venue: Venue };
+      setSelectedVenue(body.venue);
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId]);
+
+  useEffect(() => {
+    if (slot && !availableSlots.some(item => item.key === slot)) setSlot(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVenue]);
 
   if (!accessToken) return <section className="catalogue-auth" aria-labelledby="event-request-heading">
     <p className="eyebrow">Event request</p>
@@ -63,7 +108,7 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!api) return;
+    if (!api || !slot) return;
     setSaving(true);
     setError(null);
     const payload = {
@@ -71,8 +116,7 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
       purpose,
       description: description || null,
       proposed_date: proposedDate,
-      start_time: startTime,
-      end_time: endTime,
+      ...slotBounds(slot),
       expected_attendance: attendance,
       preferred_room_layout: preferredRoomLayout || null,
       required_facilities: listFromText(requiredFacilities),
@@ -80,10 +124,10 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
       accessibility_needs: accessibilityNeeds || null,
       location_preference: locationPreference || null,
       venue_notes: venueNotes || null,
-      preferred_venue_name: preferredVenueName || null,
+      venue_id: venueId,
       registration_required: registrationRequired,
       registration_notes: registrationNotes || null,
-      equipment_lines: equipmentLines.map(line => ({
+      equipment_requirements: equipmentLines.map(line => ({
         equipment_type: line.equipmentType,
         quantity: Number(line.quantity),
         notes: line.notes || null,
@@ -115,10 +159,6 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
       <label>Purpose<input value={purpose} onChange={event => setPurpose(event.target.value)} required /></label>
       <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
       <label>Proposed date<input type="date" value={proposedDate} onChange={event => setProposedDate(event.target.value)} required /></label>
-      <div className="buffer-fields">
-        <label>Start time<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} required /></label>
-        <label>End time<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} required /></label>
-      </div>
       <label>Expected attendance<input type="number" min="1" step="1" value={expectedAttendance} onChange={event => setExpectedAttendance(event.target.value)} required /></label>
 
       <div className="detail-heading"><div><p className="eyebrow">Venue requirements (optional)</p><h3>Where would this work best?</h3></div></div>
@@ -127,7 +167,30 @@ export function EventRequestForm({ accessToken, request, onSubmitted }: { access
       <label>Facilities notes<textarea value={facilitiesNotes} onChange={event => setFacilitiesNotes(event.target.value)} rows={2} /></label>
       <label>Accessibility needs<textarea value={accessibilityNeeds} onChange={event => setAccessibilityNeeds(event.target.value)} rows={2} /></label>
       <label>Location preference<input value={locationPreference} onChange={event => setLocationPreference(event.target.value)} /></label>
-      <label>Preferred venue <span className="hint">A preference only; this does not book the venue</span><input value={preferredVenueName} onChange={event => setPreferredVenueName(event.target.value)} /></label>
+      <label>Venue <span className="hint">Selecting a venue may restrict which time slots are available</span>
+        <select value={venueId ?? ''} onChange={event => setVenueId(event.target.value ? Number(event.target.value) : null)}>
+          <option value="">No preference</option>
+          {venues.map(venue => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
+        </select>
+      </label>
+      <fieldset>
+        <legend>Time slot</legend>
+        <div className="slot-options">
+          {SLOTS.map(item => {
+            const disabled = Boolean(selectedVenue) && !availableSlots.some(available => available.key === item.key);
+            return <label key={item.key} className={disabled ? 'slot-option--unavailable' : undefined}>
+              <input
+                type="radio"
+                name="slot"
+                checked={slot === item.key}
+                disabled={disabled}
+                onChange={() => setSlot(item.key)}
+              />
+              {item.label}
+            </label>;
+          })}
+        </div>
+      </fieldset>
       <label>Venue notes<textarea value={venueNotes} onChange={event => setVenueNotes(event.target.value)} rows={2} /></label>
 
       <EquipmentLineManager lines={equipmentLines} onChange={setEquipmentLines} />

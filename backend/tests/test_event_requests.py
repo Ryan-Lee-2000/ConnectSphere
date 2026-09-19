@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, EventRequest, Role
+from app.models import Account, AccountRole, Base, EventRequest, Role, Venue
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -68,7 +68,6 @@ def event_payload(**overrides):
         "accessibility_needs": "Reserved wheelchair spaces",
         "location_preference": "Central",
         "venue_notes": "Near public transport",
-        "preferred_venue_name": "Harbour Hall",
         "registration_required": True,
         "registration_notes": None,
         "equipment_requirements": [
@@ -217,3 +216,53 @@ def test_slot_mapping_uses_the_shared_venue_windows(client):
     assert am_only["mapped_slots"] == ["AM"]
     assert night_only["mapped_slots"] == ["NIGHT"]
     assert gap_only["mapped_slots"] == []
+
+
+def _add_venue(event_app, **overrides):
+    attributes = {
+        "name": "Harbour Hall",
+        "location": "Central",
+        "operating_slots": ["AM", "PM"],
+    }
+    attributes.update(overrides)
+    with Session(event_app.extensions["engine"]) as session:
+        venue = Venue(**attributes)
+        session.add(venue)
+        session.commit()
+        return venue.id
+
+
+def test_organiser_selects_a_venue_whose_operating_slots_cover_the_request(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["AM"])
+
+    created = create_event(client, start_time="07:00", end_time="12:00", venue_id=venue_id)
+
+    assert created["venue_id"] == venue_id
+
+
+def test_unknown_venue_id_is_rejected(client):
+    response = client.post(
+        "/api/event-requests", json=event_payload(venue_id=999), headers=headers()
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Venue not found."}
+
+
+def test_venue_id_is_rejected_when_the_time_falls_outside_its_operating_slots(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["NIGHT"])
+
+    response = client.post(
+        "/api/event-requests",
+        json=event_payload(start_time="07:00", end_time="12:00", venue_id=venue_id),
+        headers=headers(),
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Selected time is not available for this venue."}
+
+
+def test_null_venue_id_bypasses_the_slot_availability_check(client):
+    created = create_event(client, venue_id=None)
+
+    assert created["venue_id"] is None

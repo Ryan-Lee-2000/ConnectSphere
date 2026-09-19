@@ -12,8 +12,34 @@ const created = {
   id: 1,
   name: 'Alumni Homecoming',
   mapped_slots: ['NIGHT'],
-  equipment_lines: [],
+  equipment_requirements: [],
 };
+
+const harbourHall = {
+  id: 7,
+  name: 'Harbour Hall',
+  location: 'Level 3',
+  description: null,
+  facilities: [],
+  accessibility_features: [],
+  operating_slots: ['AM'],
+  setup_buffer_slots: 0,
+  turnaround_buffer_slots: 0,
+  layouts: [],
+};
+
+function noVenuesRequest() {
+  return vi.fn(async () => response({ venues: [] }));
+}
+
+async function fillMandatoryFields() {
+  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Alumni Homecoming' } });
+  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
+  fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
+  fireEvent.click(screen.getByRole('radio', { name: /Night/ }));
+  fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
+  await waitFor(() => expect(screen.getByRole('radio', { name: /Night/ })).toHaveProperty('checked', true));
+}
 
 it('asks unauthenticated visitors to sign in', () => {
   render(<EventRequestForm accessToken={null} />);
@@ -21,33 +47,40 @@ it('asks unauthenticated visitors to sign in', () => {
 });
 
 it('requires the mandatory fields before saving', async () => {
-  const request = vi.fn();
+  const request = noVenuesRequest();
   render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues'));
   const save = screen.getByRole('button', { name: 'Submit event request' });
   expect(save).toHaveProperty('disabled', true);
   fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Alumni Homecoming' } });
   fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
   fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
-  fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '18:00' } });
-  fireEvent.change(screen.getByLabelText('End time'), { target: { value: '21:00' } });
+  fireEvent.click(screen.getByRole('radio', { name: /Night/ }));
   expect(save).toHaveProperty('disabled', true);
   fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
   expect(save).toHaveProperty('disabled', false);
 });
 
-it('disables saving when start time is not before end time', () => {
-  render(<EventRequestForm accessToken="token" request={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Alumni Homecoming' } });
-  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
-  fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
-  fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '21:00' } });
-  fireEvent.change(screen.getByLabelText('End time'), { target: { value: '18:00' } });
-  fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
-  expect(screen.getByRole('button', { name: 'Submit event request' })).toHaveProperty('disabled', true);
+it('restricts the available time slots to the selected venue\'s operating slots', async () => {
+  const request = vi.fn(async (path: string) => {
+    if (path === '/api/venues') return response({ venues: [{ id: harbourHall.id, name: harbourHall.name, location: harbourHall.location }] });
+    if (path === `/api/venues/${harbourHall.id}`) return response({ venue: harbourHall });
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Harbour Hall' })).toBeTruthy());
+
+  fireEvent.change(screen.getByRole('combobox', { name: /Venue/ }), { target: { value: String(harbourHall.id) } });
+
+  await waitFor(() => expect(screen.getByRole('radio', { name: /^AM/ })).toHaveProperty('disabled', false));
+  expect(screen.getByRole('radio', { name: /^PM/ })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('radio', { name: /Night/ })).toHaveProperty('disabled', true);
 });
 
-it('adds and removes equipment lines', () => {
-  render(<EventRequestForm accessToken="token" request={vi.fn()} />);
+it('adds and removes equipment lines', async () => {
+  const request = noVenuesRequest();
+  render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues'));
   expect(screen.getByText('None recorded.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Add equipment' }));
   expect(screen.getByLabelText('Equipment type 1')).toBeTruthy();
@@ -56,44 +89,43 @@ it('adds and removes equipment lines', () => {
 });
 
 it('submits the mandatory fields and shows the mapped slots on success', async () => {
-  const request = vi.fn(async (_path: string, _init?: RequestInit) => response({ event_request: created }, 201));
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/event-requests' && init?.method === 'POST') return response({ event_request: created }, 201);
+    return response({}, 404);
+  });
   render(<EventRequestForm accessToken="token" request={request} />);
-  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Alumni Homecoming' } });
-  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
-  fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
-  fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '18:00' } });
-  fireEvent.change(screen.getByLabelText('End time'), { target: { value: '21:00' } });
-  fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
+  await fillMandatoryFields();
   fireEvent.click(screen.getByRole('button', { name: 'Submit event request' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests', expect.objectContaining({ method: 'POST' })));
-  const body = JSON.parse(request.mock.calls[0][1]?.body as string);
+  const call = request.mock.calls.find(([path]) => path === '/api/event-requests');
+  const body = JSON.parse(call?.[1]?.body as string);
   expect(body).toMatchObject({
     name: 'Alumni Homecoming',
     purpose: 'Reconnect cohorts',
     proposed_date: '2099-01-01',
-    start_time: '18:00',
-    end_time: '21:00',
+    start_time: '19:00',
+    end_time: '23:59',
     expected_attendance: 150,
     registration_required: false,
-    equipment_lines: [],
+    venue_id: null,
+    equipment_requirements: [],
   });
   expect(await screen.findByText('Event request created.')).toBeTruthy();
   expect(await screen.findByText('This falls in the NIGHT venue slot.')).toBeTruthy();
 });
 
 it('shows a server error and only shows registration notes once registration is required', async () => {
-  const request = vi.fn(async () => response({ error: 'Start time must be before end time.' }, 400));
+  const request = vi.fn(async (path: string) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    return response({ error: 'Complete the required fields before submitting.' }, 400);
+  });
   render(<EventRequestForm accessToken="token" request={request} />);
   expect(screen.queryByLabelText('Registration notes')).toBeNull();
   fireEvent.click(screen.getByLabelText('Registration is required for this event'));
   expect(screen.getByLabelText('Registration notes')).toBeTruthy();
 
-  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Alumni Homecoming' } });
-  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
-  fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
-  fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '21:00' } });
-  fireEvent.change(screen.getByLabelText('End time'), { target: { value: '23:00' } });
-  fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
+  await fillMandatoryFields();
   fireEvent.click(screen.getByRole('button', { name: 'Submit event request' }));
-  expect(await screen.findByText('Start time must be before end time.')).toBeTruthy();
+  expect(await screen.findByText('Complete the required fields before submitting.')).toBeTruthy();
 });

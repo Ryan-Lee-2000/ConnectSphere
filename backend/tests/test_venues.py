@@ -11,6 +11,7 @@ def client(tmp_path):
         "coordinator-user": "00000000-0000-0000-0000-000000000012",
         "multi-role-user": "00000000-0000-0000-0000-000000000013",
         "organiser": "00000000-0000-0000-0000-000000000014",
+        "event-organiser-user": "00000000-0000-0000-0000-000000000015",
     }
     app = create_app(
         {
@@ -33,6 +34,9 @@ def client(tmp_path):
                     account_id=identities["multi-role-user"], role=Role.EVENT_COORDINATOR.value
                 ),
                 AccountRole(account_id=identities["multi-role-user"], role=Role.VENUE_STAFF.value),
+                AccountRole(
+                    account_id=identities["event-organiser-user"], role=Role.EVENT_ORGANISER.value
+                ),
             ]
         )
         session.commit()
@@ -393,6 +397,27 @@ def test_duplicate_layout_is_rejected_for_the_same_selected_venue(client):
     )
     assert duplicate.status_code == 409
     assert duplicate.json == {"error": "This room layout is already recorded for the venue."}
+
+
+def test_event_organiser_can_browse_the_catalogue_but_cannot_change_it(client):
+    venue = create_venue(client)
+
+    catalogue = client.get("/api/venues", headers=request_headers("event-organiser-user"))
+    assert catalogue.status_code == 200
+    assert catalogue.json["capabilities"] == {"can_manage": False}
+
+    detail = client.get(
+        f"/api/venues/{venue['id']}", headers=request_headers("event-organiser-user")
+    )
+    assert detail.status_code == 200
+    assert detail.json["venue"] == venue
+
+    forbidden = client.patch(
+        f"/api/venues/{venue['id']}",
+        json={"name": "Forged update"},
+        headers=request_headers("event-organiser-user"),
+    )
+    assert forbidden.status_code == 403
 
 
 def test_forged_role_is_not_accepted_and_unauthorized_access_is_denied(client):
