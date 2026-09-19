@@ -115,6 +115,86 @@ it('submits the mandatory fields and shows the mapped slots on success', async (
   expect(await screen.findByText('This falls in the NIGHT venue slot.')).toBeTruthy();
 });
 
+it('saves a draft with only the event name filled in', async () => {
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/event-requests/drafts' && init?.method === 'POST') {
+      return response({ event_request: { id: 9, name: 'Idea', last_saved_at: '2026-09-19T10:00:00+00:00' } }, 201);
+    }
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues'));
+  const saveDraft = screen.getByRole('button', { name: 'Save as draft' });
+  expect(saveDraft).toHaveProperty('disabled', true);
+
+  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Idea' } });
+  expect(saveDraft).toHaveProperty('disabled', false);
+  fireEvent.click(saveDraft);
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/drafts', expect.objectContaining({ method: 'POST' })));
+  const call = request.mock.calls.find(([path]) => path === '/api/event-requests/drafts');
+  const body = JSON.parse(call?.[1]?.body as string);
+  expect(body).toMatchObject({ name: 'Idea', proposed_date: null, start_time: null, end_time: null, expected_attendance: null });
+  expect(await screen.findByText('Draft saved.')).toBeTruthy();
+  expect(screen.getByText(/Last saved/)).toBeTruthy();
+});
+
+it('loads an existing draft by id and resaves it with a PATCH', async () => {
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/event-requests/42') return response({ event_request: {
+      id: 42, name: 'Reunion', purpose: null, description: null, proposed_date: null,
+      start_time: null, end_time: null, expected_attendance: null, preferred_room_layout: null,
+      required_facilities: [], facilities_notes: null, accessibility_needs: null,
+      location_preference: null, venue_notes: null, venue_id: null,
+      registration_required: false, registration_notes: null,
+      last_saved_at: '2026-09-19T09:00:00+00:00', equipment_requirements: [],
+    } });
+    if (path === '/api/event-requests/drafts/42' && init?.method === 'PATCH') {
+      return response({ event_request: { id: 42, name: 'Reunion', last_saved_at: '2026-09-19T11:00:00+00:00' } });
+    }
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} draftId={42} />);
+
+  expect(await screen.findByDisplayValue('Reunion')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/drafts/42', expect.objectContaining({ method: 'PATCH' })));
+});
+
+it('submits an in-progress draft through the drafts submit endpoint, not the plain create endpoint', async () => {
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/event-requests/7') return response({ event_request: {
+      id: 7, name: 'Alumni Homecoming', purpose: null, description: null, proposed_date: null,
+      start_time: null, end_time: null, expected_attendance: null, preferred_room_layout: null,
+      required_facilities: [], facilities_notes: null, accessibility_needs: null,
+      location_preference: null, venue_notes: null, venue_id: null,
+      registration_required: false, registration_notes: null,
+      last_saved_at: '2026-09-19T09:00:00+00:00', equipment_requirements: [],
+    } });
+    if (path === '/api/event-requests/drafts/7/submit' && init?.method === 'POST') {
+      return response({ event_request: created }, 200);
+    }
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} draftId={7} />);
+  await screen.findByDisplayValue('Alumni Homecoming');
+
+  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Reconnect cohorts' } });
+  fireEvent.change(screen.getByLabelText('Proposed date'), { target: { value: '2099-01-01' } });
+  fireEvent.click(screen.getByRole('radio', { name: /Night/ }));
+  fireEvent.change(screen.getByLabelText('Expected attendance'), { target: { value: '150' } });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Submit event request' })).toHaveProperty('disabled', false));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Submit event request' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/drafts/7/submit', expect.objectContaining({ method: 'POST' })));
+  expect(request).not.toHaveBeenCalledWith('/api/event-requests', expect.anything());
+  expect(await screen.findByText('Event request created.')).toBeTruthy();
+});
+
 it('shows a server error and only shows registration notes once registration is required', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [] });

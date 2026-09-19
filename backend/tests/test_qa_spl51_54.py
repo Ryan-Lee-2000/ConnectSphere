@@ -9,22 +9,17 @@ test_event_requests.py, test_event_request_submission.py, test_slots.py and
 EventRequestForm.test.tsx directly where that coverage already existed.
 
 Fixtures and helpers are reused from test_event_requests.py rather than
-duplicated.
+duplicated. `client`/`event_app` are not imported here: they're re-exported from
+conftest.py so pytest resolves them by fixture name without ruff flagging a
+parameter-name/import shadow (F811).
 """
 
-from datetime import date, timedelta
+from datetime import date
 
 from app.models import EventRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from test_event_requests import (  # noqa: F401  (event_app, client are fixtures)
-    _add_venue,
-    client,
-    create_event,
-    event_app,
-    event_payload,
-    headers,
-)
+from test_event_requests import create_event, event_payload, headers
 
 # ---------------------------------------------------------------------------
 # QA-SPL-51 (CS-E03-S1 — core event request details)
@@ -102,7 +97,7 @@ def test_qa_spl52_007_every_venue_requirement_field_is_optional_at_creation(clie
 
 
 def test_qa_spl52_009_coordinator_sees_the_same_venue_fields_as_the_organiser(client):
-    """QA-SPL-52-009 [Cross Cut Quality Expectations] AC4: saved requirements visible to coordinator."""
+    """QA-SPL-52-009 [Cross Cut Quality Expectations] AC4: visible to coordinator."""
 
     created = create_event(
         client,
@@ -166,20 +161,21 @@ def test_qa_spl53_006_non_integer_equipment_quantity_is_rejected(client):
 
 
 def test_qa_spl53_007_equipment_type_outside_any_catalogue_is_accepted(client):
-    """QA-SPL-53-007 [Cross Cut Quality Expectations] AC3: blocked pending an unbuilt catalogue.
+    """QA-SPL-53-007 [Happy Flow] AC3: equipment_type is free text, by design.
 
-    No Technical Support Staff equipment catalogue exists yet (confirmed by
-    code search across frontend/backend), so equipment_type is unrestricted
-    free text today. This test documents that current behaviour rather than
-    asserting the AC is met; the AC itself is 'proposed' in the Jira story.
+    AC3 was corrected on the Jira ticket (no concrete customer requirement for a
+    Technical Support Staff catalogue exists) to describe this free-text
+    behaviour directly, so an arbitrary descriptive string being accepted is the
+    expected, correct outcome rather than a gap pending a future catalogue.
     """
 
+    equipment_type = "Not a real catalogue item xyz123"
     created = create_event(
         client,
-        equipment_requirements=[{"equipment_type": "Not a real catalogue item xyz123", "quantity": 1}],
+        equipment_requirements=[{"equipment_type": equipment_type, "quantity": 1}],
     )
 
-    assert created["equipment_requirements"][0]["equipment_type"] == "Not a real catalogue item xyz123"
+    assert created["equipment_requirements"][0]["equipment_type"] == equipment_type
 
 
 def test_qa_spl53_008_regression_equipment_requirements_matches_the_live_frontend_contract(client):
@@ -194,14 +190,16 @@ def test_qa_spl53_008_regression_equipment_requirements_matches_the_live_fronten
     now accepts that exact shape end to end.
     """
 
+    equipment_line = {"equipment_type": "Lectern", "quantity": 1, "notes": None}
     response = client.post(
         "/api/event-requests",
-        json=event_payload(equipment_requirements=[{"equipment_type": "Lectern", "quantity": 1, "notes": None}]),
+        json=event_payload(equipment_requirements=[equipment_line]),
         headers=headers(),
     )
 
     assert response.status_code == 201
-    assert response.json["event_request"]["equipment_requirements"][0]["equipment_type"] == "Lectern"
+    created_line = response.json["event_request"]["equipment_requirements"][0]
+    assert created_line["equipment_type"] == "Lectern"
 
 
 def test_qa_spl53_009_omitting_equipment_requirements_entirely_defaults_to_an_empty_list(client):
@@ -260,9 +258,7 @@ def test_qa_spl54_004_registration_notes_stay_null_when_false_and_omitted(client
 def test_qa_spl54_005_coordinator_sees_registration_fields(client):
     """QA-SPL-54-005 [Cross Cut Quality Expectations] AC3: visible to the Event Coordinator."""
 
-    created = create_event(
-        client, registration_required=True, registration_notes="Bring photo ID"
-    )
+    created = create_event(client, registration_required=True, registration_notes="Bring photo ID")
 
     seen_by_coordinator = client.get(
         f"/api/event-requests/{created['id']}", headers=headers("coordinator")

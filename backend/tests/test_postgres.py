@@ -8,6 +8,7 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 
 @pytest.mark.skipif(
@@ -84,5 +85,25 @@ def test_empty_baseline_migration_is_rerunnable():
                 )
             ).all()
             assert browser_grants == []
+        with engine.begin() as conn:
+            conn.execute(
+                text("insert into accounts (id) values (:account_id)"),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
+            conn.execute(
+                text(
+                    "insert into event_requests (organiser_account_id, name, status) "
+                    "values (:account_id, 'An early idea', 'draft')"
+                ),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
+        with pytest.raises(IntegrityError), engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into event_requests (organiser_account_id, name, status) "
+                    "values (:account_id, 'Incomplete submission', 'submitted')"
+                ),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
     finally:
         engine.dispose()

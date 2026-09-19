@@ -1,19 +1,24 @@
 """Replace the free-text preferred venue name with a real venue selection (CS-E03-S2).
 
 Revision ID: s1_event_request_venue_id
-Revises: s1_event_request_statuses
+Revises: sprint1_event_request_drafts
 
 Organisers now pick a venue from the catalogue rather than typing a name, so the free-text
 column is no longer read or written anywhere and is dropped. The new column is nullable and
 has no foreign-key-driven backfill requirement: every event_requests row predates this story
 and simply gains a null venue_id, matching "all venue requirement fields are optional".
+
+Chained after sprint1_event_request_drafts (the merged save-draft migration) rather than
+directly after s1_event_request_statuses, since both were independently written against
+that same parent and only one can hold that slot; this one is still local/unmerged, so it
+is the side that moves.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "s1_event_request_venue_id"
-down_revision = "s1_event_request_statuses"
+down_revision = "sprint1_event_request_drafts"
 branch_labels = None
 depends_on = None
 
