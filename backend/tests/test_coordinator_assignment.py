@@ -313,11 +313,12 @@ def test_tc_59_13_multi_role_account_with_manager_role_can_open_the_queue(app, c
     assert queue(client, token="manager-and-organiser").status_code == 200
 
 
-# Authorization shared by every story in the epic (TC-59-06/07, TC-60-07/08, TC-61-10/11)
+# Authorization shared by every story in the epic. Each test name carries the test
+# case IDs it covers so a reader can find it from the QA page by grepping the ID.
 
 
 @pytest.mark.parametrize("token", ["organiser", "coordinator", "venue-staff"])
-def test_roles_other_than_manager_are_denied_without_state_change(app, client, token):
+def test_tc_59_06_60_07_61_10_roles_other_than_manager_are_denied(app, client, token):
     event_id = add_request(app)
 
     for method, path, body in ENDPOINTS:
@@ -331,7 +332,7 @@ def test_roles_other_than_manager_are_denied_without_state_change(app, client, t
     assert history_count(app, event_id) == 0
 
 
-def test_unauthenticated_requests_are_rejected_without_state_change(app, client):
+def test_tc_59_07_60_08_61_11_unauthenticated_requests_are_rejected(app, client):
     event_id = add_request(app)
 
     for method, path, body in ENDPOINTS:
@@ -342,7 +343,7 @@ def test_unauthenticated_requests_are_rejected_without_state_change(app, client)
     assert history_count(app, event_id) == 0
 
 
-def test_forged_role_claims_do_not_grant_manager_access(app, client):
+def test_tc_59_08_forged_role_claims_do_not_grant_manager_access(app, client):
     event_id = add_request(app)
 
     response = client.post(
@@ -358,7 +359,7 @@ def test_forged_role_claims_do_not_grant_manager_access(app, client):
 # SPL-60 / CS-E05-S2: assign an Event Coordinator
 
 
-def test_tc_60_01_assignment_hands_over_responsibility_and_records_history(app, client):
+def test_tc_60_01_09_assignment_records_the_coordinator_and_the_history(app, client):
     event_id = add_request(app)
 
     response = assign(client, event_id, ALICE)

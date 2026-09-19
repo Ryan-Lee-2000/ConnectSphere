@@ -2,30 +2,37 @@
 
 **Epic:** SPL-5 CS-E05 Coordinator Assignment (priority 2 of 4)
 **Assignee:** Clive Lim
-**Status (Jira):** To Do — blocked, see Dependencies
+**Status (Jira):** Dev Ops — awaiting merge of PR #16
 
 ## User story
 
 As an Event Operations Manager, I want to assign an Event Coordinator to a
-submitted event so that I can hand it to someone accountable for planning it.
+submitted event so that they can start planning it.
 
 ## Acceptance criteria
 
-1. The manager can choose from every active user holding the Event
-   Coordinator role.
+1. The manager can choose an Event Coordinator from a list.
 2. An event can be assigned only if it has no assigned coordinator.
 3. An event that already has an assigned coordinator cannot be assigned again.
-4. On assignment the coordinator becomes responsible immediately — no
-   acceptance step required from them.
+4. The event records which Event Coordinator is assigned to it, with no
+   acceptance step required from the coordinator.
 5. On assignment the event status changes from Submitted to Under Review.
 6. The Event Organiser sees the assigned coordinator's name when they view
    the event.
 7. The event's history records who assigned, who was assigned, and when —
    visible to the Event Operations Manager.
-8. When no active user holds the Event Coordinator role, the manager is told
-   why and cannot complete the assignment.
+8. When there are no Event Coordinators to choose from, the manager is told
+   why and the assignment does not complete.
 9. A user without the Event Operations Manager role who attempts to assign
    is denied.
+
+## Out of scope
+
+- Changing an existing coordinator — SPL-61.
+- Role authorisation — provided by SPL-44.
+- Notifying the coordinator that they have been assigned.
+- Any workload, capacity or availability rule for choosing between
+  coordinators.
 
 ## Open questions / assumptions (unconfirmed)
 
@@ -64,11 +71,9 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
   own requests, so nothing is disclosed across organisations.
 - **Status vocabulary:** CS-E07-S1 owns it in `app.event_statuses`; this story reads that module
   and stamps `status_changed_at` when it moves a request to Under Review.
-- **Not done — AC6** (Organiser sees the coordinator name): there is no
-  organiser event view yet (SPL-51/SPL-63) and no organisation isolation
-  (SPL-45) to scope it safely.
-- **Needs team agreement:** "active" is a new `accounts.is_active` flag and
-  names come from a new `accounts.display_name`; no story manages either yet.
+- **Needs team agreement:** the picker is filtered by a new `accounts.is_active`
+  flag and names come from a new `accounts.display_name`; no story manages
+  either yet.
 
 ## Test cases
 
@@ -84,3 +89,9 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 | TC-60-08 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt to assign | — | 401; no state change | Integration |
 | TC-60-09 | 7 | History visible to EOM only where specified | After a successful assignment | EOM views event history | — | Assigner, assignee, timestamp all present and accurate | Integration |
 | TC-60-10 | 1 | Boundary — exactly one active coordinator | 1 active Event Coordinator | Open the picker | — | That coordinator is the only option; assignable | Integration |
+
+## Related resources
+
+- QA test report: [QA-SPL-60](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/4882482/QA-SPL-60)
+- Every test case ID above is greppable in the test suite — TC-60-04 is `test_tc_60_04_concurrent_assignment_cannot_overwrite_the_first`.
+- DevOps report — to be added once the branch is merged.

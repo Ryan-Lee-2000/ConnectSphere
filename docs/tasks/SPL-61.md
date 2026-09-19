@@ -2,7 +2,7 @@
 
 **Epic:** SPL-5 CS-E05 Coordinator Assignment (priority 3 of 4)
 **Assignee:** Clive Lim
-**Status (Jira):** To Do — blocked, see Dependencies
+**Status (Jira):** Dev Ops — awaiting merge of PR #16
 
 ## User story
 
@@ -16,10 +16,10 @@ unavailable.
    any status other than Completed, Cancelled, Rejected or Withdrawn.
 2. Events in Completed, Cancelled, Rejected or Withdrawn status cannot be
    reassigned.
-3. The manager can choose from every active user holding the Event
-   Coordinator role **other than** the event's current coordinator.
-4. When no other active user holds the Event Coordinator role, the manager
-   is told why and cannot complete the reassignment.
+3. The manager can choose from coordinators other than the event's current
+   one.
+4. When there are no other Event Coordinators to choose from, the manager is
+   told why and the reassignment does not complete.
 5. On reassignment the new coordinator can edit the event and the previous
    coordinator no longer can.
 6. The Event Organiser sees the new coordinator's name in place of the
@@ -31,16 +31,23 @@ unavailable.
 9. A user without the Event Operations Manager role who attempts to
    reassign is denied.
 
+## Out of scope
+
+- The reassignment screen — SPL-62 owns the coordinator's assigned-events
+  list it would be launched from.
+- Role authorisation — provided by SPL-44.
+- Notifying either coordinator of the change.
+
 ## Open questions / assumptions (unconfirmed)
 
 - The excluded statuses in AC2 are the team's proposal.
 - Whether reassignment is allowed on Confirmed events is **assumed yes** —
   needs customer confirmation.
-- "Previous coordinator retains read access after reassignment" is proposed,
-  not raised by the customer.
-- AC5 (edit-rights hand-over) depends on the coordinator edit-permission
-  model. If that model isn't delivered in R1, AC5 reduces to name-visibility
+- AC5 (edit-rights hand-over) depends on an event-edit route existing. No such
+  route exists yet, so `is_assigned_coordinator()` is the single check any
+  future edit route must use, and until then AC5 reduces to name-visibility
   only (TC-61-05 has a conditional variant for this).
+  **Proposed: move AC5 out of scope — needs team agreement.**
 - Deliberately paired with SPL-60 in the same sprint — reuses its screen and
   coordinator-picker component.
 
@@ -93,3 +100,9 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment-pr
 | TC-61-11 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt reassignment | — | 401; no state change | Integration |
 | TC-61-12 | 3 | Boundary — exactly one other active coordinator | Current = Alice; only other active Coordinator = Bob | Open picker | — | Bob is the only option | Integration |
 | TC-61-13 | — | Negative — reassign an event with no coordinator at all | Event Submitted, no coordinator assigned | Attempt reassignment (defensive/API-level; UI shouldn't expose this) | — | Refused — reassignment presupposes an existing coordinator (use SPL-60 instead) | Integration |
+
+## Related resources
+
+- QA test report: [QA-SPL-61](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/4882507/QA-SPL-61)
+- Every test case ID above is greppable in the test suite — TC-61-08 is `test_tc_61_08_history_reads_chronologically_across_reassignments`.
+- DevOps report — to be added once the branch is merged.

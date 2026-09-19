@@ -2,7 +2,7 @@
 
 **Epic:** SPL-5 CS-E05 Coordinator Assignment (priority 1 of 4)
 **Assignee:** Clive Lim
-**Status (Jira):** To Do — blocked, see Dependencies
+**Status (Jira):** Dev Ops — awaiting merge of PR #16
 
 ## User story
 
@@ -13,15 +13,22 @@ Event Coordinator so that I can assign one promptly.
 
 1. Lists events in Submitted status with no coordinator.
 2. Shows for each event: name, client organisation, proposed date, submission date.
-3. Ordered by submission date, oldest first.
-4. Shows the number of unassigned events, which always matches the number of
-   events in the list.
+3. The list of events awaiting assignment is ordered by submission date,
+   oldest first.
+4. Shows how many events are awaiting assignment.
 5. Once an event is assigned, it no longer appears the next time the manager
    opens or refreshes the list.
 6. When no events are awaiting assignment, the list shows an empty-state
    message.
 7. A user without the Event Operations Manager role who opens the list is
    denied access.
+
+## Out of scope
+
+- Assigning a coordinator to an event — SPL-60.
+- Role authorisation — provided by SPL-44.
+- Filtering, searching or paging the list.
+- Notifying the manager when a new event is submitted.
 
 ## Open questions / assumptions (unconfirmed — do not harden into "Done")
 
@@ -77,3 +84,9 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 | TC-59-11 | 2 | Field correctness | 1 event, known field values | Open the queue | — | Displayed values match stored values exactly; no extra/missing fields | E2E |
 | TC-59-12 | 5 | No side effects from viewing | 1 event in queue | Open the queue twice | — | Event still present after second view; read has no side effects | Integration |
 | TC-59-13 | 7 | Cross-role isolation | Multi-role account holding EOM + Organiser (depends on SPL-46, still To Do) | Open queue as EOM vs as Organiser-only | — | Accessible under EOM context; denied under Organiser-only context | E2E |
+
+## Related resources
+
+- QA test report: [QA-SPL-59](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/5111924/QA-SPL-59)
+- Every test case ID above is greppable in the test suite — TC-59-10 is `test_tc_59_10_equal_submission_times_tie_break_on_request_id`.
+- DevOps report — to be added once the branch is merged.
