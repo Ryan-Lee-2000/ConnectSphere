@@ -191,7 +191,7 @@ def organiser_view(client, event_id):
 # SPL-59 / CS-E05-S1: see submitted events awaiting assignment
 
 
-def test_tc_59_01_02_11_queue_lists_unassigned_submitted_requests_oldest_first(app, client):
+def test_tc_e05_s1_01_02_11_queue_lists_unassigned_submitted_requests_oldest_first(app, client):
     newest = add_request(app, "Gala Night", submitted_at=SUBMITTED_AT + timedelta(hours=2))
     oldest = add_request(app, "Harbour Summit")
     middle = add_request(
@@ -232,14 +232,14 @@ def test_tc_59_01_02_11_queue_lists_unassigned_submitted_requests_oldest_first(a
     }
 
 
-def test_tc_59_03_empty_queue_reports_zero_events(client):
+def test_tc_e05_s1_03_empty_queue_reports_zero_events(client):
     response = queue(client)
 
     assert response.status_code == 200
     assert response.json == {"count": 0, "events": []}
 
 
-def test_tc_59_04_queue_excludes_other_statuses_and_assigned_requests(app, client):
+def test_tc_e05_s1_04_queue_excludes_other_statuses_and_assigned_requests(app, client):
     add_request(app, "Under review", status=UNDER_REVIEW)
     add_request(app, "Approved", status="approved")
     add_request(app, "Draft", status="draft", submitted_at=None)
@@ -262,7 +262,7 @@ def test_tc_59_04_queue_excludes_other_statuses_and_assigned_requests(app, clien
     assert response.json["count"] == 1
 
 
-def test_tc_59_05_assigned_request_leaves_the_queue_on_refresh(app, client):
+def test_tc_e05_s1_05_assigned_request_leaves_the_queue_on_refresh(app, client):
     event_id = add_request(app)
     other = add_request(app, "Gala Night", submitted_at=SUBMITTED_AT + timedelta(hours=1))
     assert queue(client).json["count"] == 2
@@ -274,13 +274,13 @@ def test_tc_59_05_assigned_request_leaves_the_queue_on_refresh(app, client):
     assert refreshed["count"] == 1
 
 
-def test_tc_59_09_single_request_is_listed_rather_than_empty(app, client):
+def test_tc_e05_s1_09_single_request_is_listed_rather_than_empty(app, client):
     add_request(app)
 
     assert queue(client).json["count"] == 1
 
 
-def test_tc_59_10_equal_submission_times_tie_break_on_request_id(app, client):
+def test_tc_e05_s1_10_equal_submission_times_tie_break_on_request_id(app, client):
     first = add_request(app, "First recorded")
     second = add_request(app, "Second recorded")
 
@@ -299,7 +299,7 @@ def test_requests_without_a_submission_time_sort_after_submitted_ones(app, clien
     assert events[1]["submitted_at"] is None
 
 
-def test_tc_59_12_viewing_the_queue_has_no_side_effects(app, client):
+def test_tc_e05_s1_12_viewing_the_queue_has_no_side_effects(app, client):
     event_id = add_request(app)
 
     assert queue(client).json == queue(client).json
@@ -307,7 +307,7 @@ def test_tc_59_12_viewing_the_queue_has_no_side_effects(app, client):
     assert history_count(app, event_id) == 0
 
 
-def test_tc_59_13_multi_role_account_with_manager_role_can_open_the_queue(app, client):
+def test_tc_e05_s1_13_multi_role_account_with_manager_role_can_open_the_queue(app, client):
     add_request(app)
 
     assert queue(client, token="manager-and-organiser").status_code == 200
@@ -318,7 +318,7 @@ def test_tc_59_13_multi_role_account_with_manager_role_can_open_the_queue(app, c
 
 
 @pytest.mark.parametrize("token", ["organiser", "coordinator", "venue-staff"])
-def test_tc_59_06_60_07_61_10_roles_other_than_manager_are_denied(app, client, token):
+def test_tc_e05_s1_06_s2_07_s3_10_roles_other_than_manager_are_denied(app, client, token):
     event_id = add_request(app)
 
     for method, path, body in ENDPOINTS:
@@ -332,7 +332,7 @@ def test_tc_59_06_60_07_61_10_roles_other_than_manager_are_denied(app, client, t
     assert history_count(app, event_id) == 0
 
 
-def test_tc_59_07_60_08_61_11_unauthenticated_requests_are_rejected(app, client):
+def test_tc_e05_s1_07_s2_08_s3_11_unauthenticated_requests_are_rejected(app, client):
     event_id = add_request(app)
 
     for method, path, body in ENDPOINTS:
@@ -343,7 +343,7 @@ def test_tc_59_07_60_08_61_11_unauthenticated_requests_are_rejected(app, client)
     assert history_count(app, event_id) == 0
 
 
-def test_tc_59_08_forged_role_claims_do_not_grant_manager_access(app, client):
+def test_tc_e05_s1_08_forged_role_claims_do_not_grant_manager_access(app, client):
     event_id = add_request(app)
 
     response = client.post(
@@ -359,7 +359,7 @@ def test_tc_59_08_forged_role_claims_do_not_grant_manager_access(app, client):
 # SPL-60 / CS-E05-S2: assign an Event Coordinator
 
 
-def test_tc_60_01_09_assignment_records_the_coordinator_and_the_history(app, client):
+def test_tc_e05_s2_01_09_assignment_records_the_coordinator_and_the_history(app, client):
     event_id = add_request(app)
 
     response = assign(client, event_id, ALICE)
@@ -388,7 +388,7 @@ def test_tc_60_01_09_assignment_records_the_coordinator_and_the_history(app, cli
     }
 
 
-def test_tc_60_01b_organiser_sees_the_assigned_coordinator(app, client):
+def test_tc_e05_s2_01b_organiser_sees_the_assigned_coordinator(app, client):
     event_id = add_request(app)
     assert organiser_view(client, event_id).json["event_request"]["coordinator"] is None
 
@@ -399,7 +399,7 @@ def test_tc_60_01b_organiser_sees_the_assigned_coordinator(app, client):
     assert event["status"] == UNDER_REVIEW
 
 
-def test_tc_60_02_picker_lists_only_active_event_coordinators(app, client):
+def test_tc_e05_s2_02_picker_lists_only_active_event_coordinators(app, client):
     event_id = add_request(app)
 
     response = options(client, event_id)
@@ -416,7 +416,7 @@ def test_tc_60_02_picker_lists_only_active_event_coordinators(app, client):
     }
 
 
-def test_tc_60_03_assigned_request_cannot_be_assigned_again(app, client):
+def test_tc_e05_s2_03_assigned_request_cannot_be_assigned_again(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
 
@@ -428,7 +428,7 @@ def test_tc_60_03_assigned_request_cannot_be_assigned_again(app, client):
     assert history_count(app, event_id) == 1
 
 
-def test_tc_60_04_concurrent_assignment_cannot_overwrite_the_first(app, client, monkeypatch):
+def test_tc_e05_s2_04_concurrent_assignment_cannot_overwrite_the_first(app, client, monkeypatch):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
     # Replay the losing request as if it read the request before the first assignment committed.
@@ -444,7 +444,7 @@ def test_tc_60_04_concurrent_assignment_cannot_overwrite_the_first(app, client, 
     assert history_count(app, event_id) == 1
 
 
-def test_tc_60_05_manager_is_told_why_when_no_coordinator_is_active(app, client):
+def test_tc_e05_s2_05_manager_is_told_why_when_no_coordinator_is_active(app, client):
     event_id = add_request(app)
     deactivate(app, ALICE, BOB, CAROL)
 
@@ -460,7 +460,7 @@ def test_tc_60_05_manager_is_told_why_when_no_coordinator_is_active(app, client)
 
 
 @pytest.mark.parametrize("status", [UNDER_REVIEW, "approved", "cancelled"])
-def test_tc_60_06_requests_that_are_not_submitted_are_refused_server_side(app, client, status):
+def test_tc_e05_s2_06_requests_that_are_not_submitted_are_refused_server_side(app, client, status):
     event_id = add_request(app, status=status)
 
     response = assign(client, event_id)
@@ -510,7 +510,7 @@ def test_unknown_requests_are_not_found(client):
         assert response.json == {"error": "Event request not found."}
 
 
-def test_tc_60_10_single_active_coordinator_is_the_only_option(app, client):
+def test_tc_e05_s2_10_single_active_coordinator_is_the_only_option(app, client):
     event_id = add_request(app)
     deactivate(app, BOB, CAROL)
 
@@ -521,7 +521,7 @@ def test_tc_60_10_single_active_coordinator_is_the_only_option(app, client):
 # SPL-61 / CS-E05-S3: reassign an Event Coordinator
 
 
-def test_tc_61_01_reassignment_moves_responsibility_and_keeps_status(app, client):
+def test_tc_e05_s3_01_reassignment_moves_responsibility_and_keeps_status(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
 
@@ -540,7 +540,7 @@ def test_tc_61_01_reassignment_moves_responsibility_and_keeps_status(app, client
     assert latest["changed_at"] == assignment["assigned_at"]
 
 
-def test_tc_61_06b_organiser_sees_the_new_coordinator_in_place_of_the_previous_one(app, client):
+def test_tc_e05_s3_06b_organiser_sees_the_new_coordinator_in_place_of_the_previous_one(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
 
@@ -553,7 +553,7 @@ def test_tc_61_06b_organiser_sees_the_new_coordinator_in_place_of_the_previous_o
 
 
 @pytest.mark.parametrize("status", ["completed", "cancelled", "rejected", "withdrawn"])
-def test_tc_61_02_to_04_closed_requests_cannot_be_reassigned(app, client, status):
+def test_tc_e05_s3_02_to_04_closed_requests_cannot_be_reassigned(app, client, status):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
     set_status(app, event_id, status)
@@ -568,7 +568,7 @@ def test_tc_61_02_to_04_closed_requests_cannot_be_reassigned(app, client, status
     assert history_count(app, event_id) == 1
 
 
-def test_tc_61_06_picker_excludes_the_current_coordinator(app, client):
+def test_tc_e05_s3_06_picker_excludes_the_current_coordinator(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
 
@@ -581,7 +581,7 @@ def test_tc_61_06_picker_excludes_the_current_coordinator(app, client):
     }
 
 
-def test_tc_61_07_manager_is_told_why_when_no_other_coordinator_is_active(app, client):
+def test_tc_e05_s3_07_manager_is_told_why_when_no_other_coordinator_is_active(app, client):
     event_id = add_request(app)
     deactivate(app, BOB, CAROL)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -596,7 +596,7 @@ def test_tc_61_07_manager_is_told_why_when_no_other_coordinator_is_active(app, c
     assert holds_event(app, event_id, ALICE)
 
 
-def test_tc_61_08_history_reads_chronologically_across_reassignments(app, client):
+def test_tc_e05_s3_08_history_reads_chronologically_across_reassignments(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
     assert reassign(client, event_id, BOB).status_code == 200
@@ -618,7 +618,7 @@ def test_tc_61_08_history_reads_chronologically_across_reassignments(app, client
 
 
 @pytest.mark.parametrize("status", [UNDER_REVIEW, "approved"])
-def test_tc_61_09_reassignment_never_changes_status(app, client, status):
+def test_tc_e05_s3_09_reassignment_never_changes_status(app, client, status):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
     set_status(app, event_id, status)
@@ -630,7 +630,7 @@ def test_tc_61_09_reassignment_never_changes_status(app, client, status):
     assert stored_request(app, event_id)[0] == status
 
 
-def test_tc_61_12_single_other_coordinator_is_the_only_option(app, client):
+def test_tc_e05_s3_12_single_other_coordinator_is_the_only_option(app, client):
     event_id = add_request(app)
     deactivate(app, CAROL)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -639,7 +639,7 @@ def test_tc_61_12_single_other_coordinator_is_the_only_option(app, client):
     assert reassign(client, event_id, BOB).status_code == 200
 
 
-def test_tc_61_13_request_without_a_coordinator_cannot_be_reassigned(app, client):
+def test_tc_e05_s3_13_request_without_a_coordinator_cannot_be_reassigned(app, client):
     event_id = add_request(app)
 
     response = reassign(client, event_id, BOB)

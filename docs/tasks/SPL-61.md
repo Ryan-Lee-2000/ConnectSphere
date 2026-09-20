@@ -46,7 +46,7 @@ unavailable.
 - AC5 (edit-rights hand-over) depends on an event-edit route existing. No such
   route exists yet, so `is_assigned_coordinator()` is the single check any
   future edit route must use, and until then AC5 reduces to name-visibility
-  only (TC-61-05 has a conditional variant for this).
+  only (TC-CS-E05-S3-05 has a conditional variant for this).
   **Proposed: move AC5 out of scope — needs team agreement.**
 - Deliberately paired with SPL-60 in the same sprint — reuses its screen and
   coordinator-picker component.
@@ -80,29 +80,29 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment-pr
   in place of the previous one.
 - **No reassignment UI yet** — there is no assigned-events screen to launch
   it from (SPL-62 is Daniel's). Backend and tests only.
-- TC-61-05 (Confirmed events) is currently allowed but deliberately not
+- TC-CS-E05-S3-05 (Confirmed events) is currently allowed but deliberately not
   tested as final.
 
 ## Test cases
 
 | ID | AC | Scenario | Pre-conditions | Steps | Test data | Expected result | Level |
 |---|---|---|---|---|---|---|---|
-| TC-61-01 | 1,5,6,7,8 | Happy path — reassign in an allowed status | Event Under Review, coordinator = Alice; 1 other active Coordinator Bob | Select event, pick Bob, confirm | — | Coordinator = Bob; Bob can edit, Alice cannot; Organiser sees "Bob"; status unchanged (still Under Review); history: Alice→Bob, who, when | E2E |
-| TC-61-02 | 2 | Blocked — Completed status | Event Completed, coordinator = Alice | Attempt reassignment | — | Refused | Integration |
-| TC-61-03 | 2 | Blocked — Cancelled status | Event Cancelled, coordinator = Alice | Attempt reassignment | — | Refused | Integration |
-| TC-61-04 | 2 | Blocked — Rejected / Withdrawn status | Event Rejected (repeat for Withdrawn), coordinator = Alice | Attempt reassignment | — | Refused for both statuses | Integration |
-| TC-61-05 | 1 | Confirmed-status reassignment — flagged pending clarification | Event Confirmed, coordinator = Alice | Attempt reassignment | — | Currently assumed allowed; **do not implement/test as final until customer confirms** | Integration (blocked) |
-| TC-61-06 | 3 | Picker excludes current coordinator | Coordinator = Alice; active Coordinators = Alice, Bob, Carol | Open the reassignment picker | — | Only Bob and Carol listed; Alice excluded | Integration |
-| TC-61-07 | 4 | No other active coordinator available | Only active Coordinator is the current one (Alice) | Attempt reassignment | — | Manager told why; reassignment not completed | Integration |
-| TC-61-08 | 7 | History ordering across multiple reassignments | Event reassigned Alice→Bob, then later Bob→Carol | View event history | — | Entries read chronologically: Alice→Bob before Bob→Carol | Integration |
-| TC-61-09 | 8 | Status never changes on reassignment | Event in each allowed status (e.g. Under Review, Approved) | Reassign coordinator | — | Status identical before and after, for every allowed status tested | Integration |
-| TC-61-10 | 9 | Authorization — denied | Signed in as non-EOM role | Attempt reassignment | — | 403; no state change | Integration |
-| TC-61-11 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt reassignment | — | 401; no state change | Integration |
-| TC-61-12 | 3 | Boundary — exactly one other active coordinator | Current = Alice; only other active Coordinator = Bob | Open picker | — | Bob is the only option | Integration |
-| TC-61-13 | — | Negative — reassign an event with no coordinator at all | Event Submitted, no coordinator assigned | Attempt reassignment (defensive/API-level; UI shouldn't expose this) | — | Refused — reassignment presupposes an existing coordinator (use SPL-60 instead) | Integration |
+| TC-CS-E05-S3-01 | 1,5,6,7,8 | Happy path — reassign in an allowed status | Event Under Review, coordinator = Alice; 1 other active Coordinator Bob | Select event, pick Bob, confirm | — | Coordinator = Bob; Bob can edit, Alice cannot; Organiser sees "Bob"; status unchanged (still Under Review); history: Alice→Bob, who, when | E2E |
+| TC-CS-E05-S3-02 | 2 | Blocked — Completed status | Event Completed, coordinator = Alice | Attempt reassignment | — | Refused | Integration |
+| TC-CS-E05-S3-03 | 2 | Blocked — Cancelled status | Event Cancelled, coordinator = Alice | Attempt reassignment | — | Refused | Integration |
+| TC-CS-E05-S3-04 | 2 | Blocked — Rejected / Withdrawn status | Event Rejected (repeat for Withdrawn), coordinator = Alice | Attempt reassignment | — | Refused for both statuses | Integration |
+| TC-CS-E05-S3-05 | 1 | Confirmed-status reassignment — flagged pending clarification | Event Confirmed, coordinator = Alice | Attempt reassignment | — | Currently assumed allowed; **do not implement/test as final until customer confirms** | Integration (blocked) |
+| TC-CS-E05-S3-06 | 3 | Picker excludes current coordinator | Coordinator = Alice; active Coordinators = Alice, Bob, Carol | Open the reassignment picker | — | Only Bob and Carol listed; Alice excluded | Integration |
+| TC-CS-E05-S3-07 | 4 | No other active coordinator available | Only active Coordinator is the current one (Alice) | Attempt reassignment | — | Manager told why; reassignment not completed | Integration |
+| TC-CS-E05-S3-08 | 7 | History ordering across multiple reassignments | Event reassigned Alice→Bob, then later Bob→Carol | View event history | — | Entries read chronologically: Alice→Bob before Bob→Carol | Integration |
+| TC-CS-E05-S3-09 | 8 | Status never changes on reassignment | Event in each allowed status (e.g. Under Review, Approved) | Reassign coordinator | — | Status identical before and after, for every allowed status tested | Integration |
+| TC-CS-E05-S3-10 | 9 | Authorization — denied | Signed in as non-EOM role | Attempt reassignment | — | 403; no state change | Integration |
+| TC-CS-E05-S3-11 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt reassignment | — | 401; no state change | Integration |
+| TC-CS-E05-S3-12 | 3 | Boundary — exactly one other active coordinator | Current = Alice; only other active Coordinator = Bob | Open picker | — | Bob is the only option | Integration |
+| TC-CS-E05-S3-13 | — | Negative — reassign an event with no coordinator at all | Event Submitted, no coordinator assigned | Attempt reassignment (defensive/API-level; UI shouldn't expose this) | — | Refused — reassignment presupposes an existing coordinator (use SPL-60 instead) | Integration |
 
 ## Related resources
 
 - QA test report: [QA-SPL-61](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/4882507/QA-SPL-61)
-- Every test case ID above is greppable in the test suite — TC-61-08 is `test_tc_61_08_history_reads_chronologically_across_reassignments`.
+- Every test case ID above is greppable in the test suite — TC-CS-E05-S3-08 is `test_tc_e05_s3_08_history_reads_chronologically_across_reassignments`.
 - DevOps report — to be added once the branch is merged.

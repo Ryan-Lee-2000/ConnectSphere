@@ -35,7 +35,7 @@ async function submitRequest(page: Page, name: string) {
   await expect(page).toHaveURL(/\/workspace\/my-requests$/);
 }
 
-test('TC-59-01, TC-60-01 and AC6: a submitted request is queued, assigned, and shown to its organiser', async ({
+test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, assigned, and shown to its organiser', async ({
   page,
 }) => {
   const name = `E2E Assignment ${Date.now()}`;
@@ -46,13 +46,13 @@ test('TC-59-01, TC-60-01 and AC6: a submitted request is queued, assigned, and s
   await expect(page.getByRole('row').filter({ hasText: name })).toContainText('Not assigned yet');
   await signOut(page);
 
-  // TC-59-01: the manager finds that request waiting in the queue.
+  // TC-CS-E05-S1-01: the manager finds that request waiting in the queue.
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   const queued = page.getByRole('row').filter({ hasText: name });
   await expect(queued).toBeVisible();
 
-  // TC-60-01: assigning an active coordinator confirms and clears the request from the queue.
+  // TC-CS-E05-S2-01: assigning an active coordinator confirms and clears the request from the queue.
   await queued.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
   await page.getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
@@ -68,7 +68,7 @@ test('TC-59-01, TC-60-01 and AC6: a submitted request is queued, assigned, and s
   await expect(organiserRow).toContainText(coordinatorName);
 });
 
-test('TC-59-06: a role without Event Operations Manager is never offered the queue', async ({
+test('TC-CS-E05-S1-06: a role without Event Operations Manager is never offered the queue', async ({
   page,
 }) => {
   await signIn(page, organiser, 'Event Organiser');

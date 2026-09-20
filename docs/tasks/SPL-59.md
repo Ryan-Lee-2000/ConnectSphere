@@ -59,34 +59,34 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 - `GET /api/event-requests/awaiting-assignment` returns `{events, count}` (AC1, AC4, AC7). The
   Workspace shows it to Event Operations Managers only, as a navigation destination, with an
   empty state (AC6).
-- AC5 follows from the assignment record (TC-59-05).
+- AC5 follows from the assignment record (TC-CS-E05-S1-05).
 - **AC2 and AC3 are met** now that CS-E03-S5 records `submitted_at`: the queue is ordered oldest
-  submission first, with request id as the tie-break (TC-59-10). Requests stored before that
+  submission first, with request id as the tie-break (TC-CS-E05-S1-10). Requests stored before that
   story have no submission time and sort last.
 - **AC2 partial:** the client organisation is `organisation_id`, which stays null until SPL-45,
   so the queue shows "Not recorded yet".
-- TC-59-13 passes for a multi-role account, and SPL-46 role switching is merged.
+- TC-CS-E05-S1-13 passes for a multi-role account, and SPL-46 role switching is merged.
 
 ## Test cases
 
 | ID | AC | Scenario | Pre-conditions | Steps | Test data | Expected result | Level |
 |---|---|---|---|---|---|---|---|
-| TC-59-01 | 1,2,3 | Happy path — queue populated correctly | Signed in as EOM; 3 Submitted events, no coordinator, distinct submission times | Open the queue | 3 events submitted at T1<T2<T3 | All 3 shown with name/client org/proposed date/submission date; ordered T1,T2,T3 | E2E |
-| TC-59-02 | 4 | Count matches list length | Same as TC-59-01 | Open the queue | — | Count = 3, list length = 3 | Integration |
-| TC-59-03 | 6 | Empty state | 0 Submitted-no-coordinator events | Open the queue | — | Empty-state message shown; count = 0 | Integration |
-| TC-59-04 | 1 | Filter correctness | 1 Draft, 1 Under Review, 1 Approved, 1 Submitted-with-coordinator, 1 Submitted-no-coordinator | Open the queue | 5 events, mixed statuses | Only the Submitted-no-coordinator event appears | Integration |
-| TC-59-05 | 5 | Drop-off after assignment | 1 Submitted-no-coordinator event; coordinator assigned via SPL-60 | Assign coordinator, reopen/refresh queue | — | Event no longer appears; count decreases by 1 | E2E |
-| TC-59-06 | 7 | Authorization — denied | Signed in as non-EOM role | Request the queue (UI or direct API) | — | 403; no event data in response | Integration |
-| TC-59-07 | 7 | Authorization — unauthenticated | No/invalid auth token | Request the queue | — | 401; no data returned | Integration |
-| TC-59-08 | 7 | Authorization — default deny | Role check absent/misconfigured (per SPL-44 default-deny rule) | Request the queue with an ungranted role | — | Denied (fail closed) | Integration |
-| TC-59-09 | 4 | Boundary — single event | Exactly 1 Submitted-no-coordinator event | Open the queue | — | 1 event shown, count = 1 (not empty-state) | Integration |
-| TC-59-10 | 3 | Boundary — tie on submission time | 2 events, identical submission datetime | Open the queue | Same T for both | Both appear; order deterministic and stable across repeated loads — **tiebreak rule needs PO confirmation** | Integration |
-| TC-59-11 | 2 | Field correctness | 1 event, known field values | Open the queue | — | Displayed values match stored values exactly; no extra/missing fields | E2E |
-| TC-59-12 | 5 | No side effects from viewing | 1 event in queue | Open the queue twice | — | Event still present after second view; read has no side effects | Integration |
-| TC-59-13 | 7 | Cross-role isolation | Multi-role account holding EOM + Organiser (depends on SPL-46, still To Do) | Open queue as EOM vs as Organiser-only | — | Accessible under EOM context; denied under Organiser-only context | E2E |
+| TC-CS-E05-S1-01 | 1,2,3 | Happy path — queue populated correctly | Signed in as EOM; 3 Submitted events, no coordinator, distinct submission times | Open the queue | 3 events submitted at T1<T2<T3 | All 3 shown with name/client org/proposed date/submission date; ordered T1,T2,T3 | E2E |
+| TC-CS-E05-S1-02 | 4 | Count matches list length | Same as TC-CS-E05-S1-01 | Open the queue | — | Count = 3, list length = 3 | Integration |
+| TC-CS-E05-S1-03 | 6 | Empty state | 0 Submitted-no-coordinator events | Open the queue | — | Empty-state message shown; count = 0 | Integration |
+| TC-CS-E05-S1-04 | 1 | Filter correctness | 1 Draft, 1 Under Review, 1 Approved, 1 Submitted-with-coordinator, 1 Submitted-no-coordinator | Open the queue | 5 events, mixed statuses | Only the Submitted-no-coordinator event appears | Integration |
+| TC-CS-E05-S1-05 | 5 | Drop-off after assignment | 1 Submitted-no-coordinator event; coordinator assigned via SPL-60 | Assign coordinator, reopen/refresh queue | — | Event no longer appears; count decreases by 1 | E2E |
+| TC-CS-E05-S1-06 | 7 | Authorization — denied | Signed in as non-EOM role | Request the queue (UI or direct API) | — | 403; no event data in response | Integration |
+| TC-CS-E05-S1-07 | 7 | Authorization — unauthenticated | No/invalid auth token | Request the queue | — | 401; no data returned | Integration |
+| TC-CS-E05-S1-08 | 7 | Authorization — default deny | Role check absent/misconfigured (per SPL-44 default-deny rule) | Request the queue with an ungranted role | — | Denied (fail closed) | Integration |
+| TC-CS-E05-S1-09 | 4 | Boundary — single event | Exactly 1 Submitted-no-coordinator event | Open the queue | — | 1 event shown, count = 1 (not empty-state) | Integration |
+| TC-CS-E05-S1-10 | 3 | Boundary — tie on submission time | 2 events, identical submission datetime | Open the queue | Same T for both | Both appear; order deterministic and stable across repeated loads — **tiebreak rule needs PO confirmation** | Integration |
+| TC-CS-E05-S1-11 | 2 | Field correctness | 1 event, known field values | Open the queue | — | Displayed values match stored values exactly; no extra/missing fields | E2E |
+| TC-CS-E05-S1-12 | 5 | No side effects from viewing | 1 event in queue | Open the queue twice | — | Event still present after second view; read has no side effects | Integration |
+| TC-CS-E05-S1-13 | 7 | Cross-role isolation | Multi-role account holding EOM + Organiser (depends on SPL-46, still To Do) | Open queue as EOM vs as Organiser-only | — | Accessible under EOM context; denied under Organiser-only context | E2E |
 
 ## Related resources
 
 - QA test report: [QA-SPL-59](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/5111924/QA-SPL-59)
-- Every test case ID above is greppable in the test suite — TC-59-10 is `test_tc_59_10_equal_submission_times_tie_break_on_request_id`.
+- Every test case ID above is greppable in the test suite — TC-CS-E05-S1-10 is `test_tc_e05_s1_10_equal_submission_times_tie_break_on_request_id`.
 - DevOps report — to be added once the branch is merged.

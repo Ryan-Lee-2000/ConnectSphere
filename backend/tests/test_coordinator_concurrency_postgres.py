@@ -126,7 +126,7 @@ def _assign(session, scenario, coordinator_id):
     )
 
 
-def test_tc_60_04_first_assignment_wins_when_two_managers_assign_at_once(engine, scenario):
+def test_tc_e05_s2_04_first_assignment_wins_when_two_managers_assign_at_once(engine, scenario):
     event_request_id = scenario["event_request_id"]
 
     with Session(engine) as loser, Session(engine) as winner:
@@ -149,7 +149,7 @@ def test_tc_60_04_first_assignment_wins_when_two_managers_assign_at_once(engine,
         assert session.get(EventRequest, event_request_id).status == UNDER_REVIEW
 
 
-def test_tc_61_02_reassignment_loses_to_a_concurrent_terminal_transition(engine, scenario):
+def test_tc_e05_s3_02_reassignment_loses_to_a_concurrent_terminal_transition(engine, scenario):
     event_request_id = scenario["event_request_id"]
     assert "cancelled" in NON_REASSIGNABLE_STATUSES
     with Session(engine) as session:

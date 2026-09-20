@@ -39,7 +39,7 @@ submitted event so that they can start planning it.
 - Status name "Under Review" (AC5) is a proposal.
 - "An event with no coordinator is always Submitted in R1" — if a status is
   ever added before assignment, this story keys off the coordinator, not
-  the status. Test defensively (TC-60-06) in case the UI path is bypassed.
+  the status. Test defensively (TC-CS-E05-S2-06) in case the UI path is bypassed.
 - How the manager picks which coordinator (workload/availability) is a
   business judgement outside the system — no rule enforced (Q95).
 - Coordinators are not notified of assignment in R1 — to be confirmed.
@@ -63,7 +63,7 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 - `POST /api/event-requests/<id>/coordinator` — assigns immediately and moves the
   request from Submitted to Under Review (AC2–5, AC9). The one-row-per-request key
   plus a conditional status update make the first of two concurrent
-  assignments win (TC-60-04, proved on PostgreSQL).
+  assignments win (TC-CS-E05-S2-04, proved on PostgreSQL).
 - `GET /api/event-requests/<id>/coordinator-history` — who assigned whom and when (AC7).
 - Workspace queue has an inline assignment panel (no modal).
 - **AC6 is met.** The organiser's own request view (CS-E07-S1) now names the coordinator
@@ -79,19 +79,19 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 
 | ID | AC | Scenario | Pre-conditions | Steps | Test data | Expected result | Level |
 |---|---|---|---|---|---|---|---|
-| TC-60-01 | 1,4,5,6,7 | Happy path — assign coordinator | Signed in as EOM; 1 Submitted event, no coordinator; 2 active Event Coordinators exist | Select event, pick a coordinator, confirm | Coordinator "Alice" | Status → Under Review; coordinator = Alice; Organiser sees "Alice"; history records assigner, Alice, timestamp; no pending/acceptance state | E2E |
-| TC-60-02 | 1 | Picker shows only active Event Coordinators | 2 active Coordinators, 1 inactive Coordinator, 1 active Venue Staff | Open the coordinator picker | — | Only the 2 active Coordinators listed; inactive and other-role users excluded | Integration |
-| TC-60-03 | 3 | Cannot assign an already-assigned event | Event already has a coordinator | Attempt to assign again | — | Refused; existing coordinator unchanged; no duplicate history entry | Integration |
-| TC-60-04 | 3 | Concurrency — two EOMs assign the same event simultaneously | 1 unassigned Submitted event; 2 EOM sessions | Both submit an assignment for the same event near-simultaneously | 2 different coordinators picked | Exactly one assignment succeeds; the other is refused as "already assigned"; no split-brain state | Integration |
-| TC-60-05 | 8 | No active coordinators available | 0 active Event Coordinator-role users | Attempt to assign | — | Manager told why (specific reason, not a generic error); assignment not completed | Integration |
-| TC-60-06 | 2 | Defensive — reject assignment on non-Submitted event | Event in Draft/Under Review/Approved status, no coordinator (bypassing UI, e.g. direct API call) | Attempt to assign | — | Refused server-side even though client UI wouldn't normally allow it | Integration |
-| TC-60-07 | 9 | Authorization — denied | Signed in as non-EOM role | Attempt to assign | — | 403; no state change | Integration |
-| TC-60-08 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt to assign | — | 401; no state change | Integration |
-| TC-60-09 | 7 | History visible to EOM only where specified | After a successful assignment | EOM views event history | — | Assigner, assignee, timestamp all present and accurate | Integration |
-| TC-60-10 | 1 | Boundary — exactly one active coordinator | 1 active Event Coordinator | Open the picker | — | That coordinator is the only option; assignable | Integration |
+| TC-CS-E05-S2-01 | 1,4,5,6,7 | Happy path — assign coordinator | Signed in as EOM; 1 Submitted event, no coordinator; 2 active Event Coordinators exist | Select event, pick a coordinator, confirm | Coordinator "Alice" | Status → Under Review; coordinator = Alice; Organiser sees "Alice"; history records assigner, Alice, timestamp; no pending/acceptance state | E2E |
+| TC-CS-E05-S2-02 | 1 | Picker shows only active Event Coordinators | 2 active Coordinators, 1 inactive Coordinator, 1 active Venue Staff | Open the coordinator picker | — | Only the 2 active Coordinators listed; inactive and other-role users excluded | Integration |
+| TC-CS-E05-S2-03 | 3 | Cannot assign an already-assigned event | Event already has a coordinator | Attempt to assign again | — | Refused; existing coordinator unchanged; no duplicate history entry | Integration |
+| TC-CS-E05-S2-04 | 3 | Concurrency — two EOMs assign the same event simultaneously | 1 unassigned Submitted event; 2 EOM sessions | Both submit an assignment for the same event near-simultaneously | 2 different coordinators picked | Exactly one assignment succeeds; the other is refused as "already assigned"; no split-brain state | Integration |
+| TC-CS-E05-S2-05 | 8 | No active coordinators available | 0 active Event Coordinator-role users | Attempt to assign | — | Manager told why (specific reason, not a generic error); assignment not completed | Integration |
+| TC-CS-E05-S2-06 | 2 | Defensive — reject assignment on non-Submitted event | Event in Draft/Under Review/Approved status, no coordinator (bypassing UI, e.g. direct API call) | Attempt to assign | — | Refused server-side even though client UI wouldn't normally allow it | Integration |
+| TC-CS-E05-S2-07 | 9 | Authorization — denied | Signed in as non-EOM role | Attempt to assign | — | 403; no state change | Integration |
+| TC-CS-E05-S2-08 | 9 | Authorization — unauthenticated | No/invalid auth token | Attempt to assign | — | 401; no state change | Integration |
+| TC-CS-E05-S2-09 | 7 | History visible to EOM only where specified | After a successful assignment | EOM views event history | — | Assigner, assignee, timestamp all present and accurate | Integration |
+| TC-CS-E05-S2-10 | 1 | Boundary — exactly one active coordinator | 1 active Event Coordinator | Open the picker | — | That coordinator is the only option; assignable | Integration |
 
 ## Related resources
 
 - QA test report: [QA-SPL-60](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/4882482/QA-SPL-60)
-- Every test case ID above is greppable in the test suite — TC-60-04 is `test_tc_60_04_concurrent_assignment_cannot_overwrite_the_first`.
+- Every test case ID above is greppable in the test suite — TC-CS-E05-S2-04 is `test_tc_e05_s2_04_concurrent_assignment_cannot_overwrite_the_first`.
 - DevOps report — to be added once the branch is merged.
