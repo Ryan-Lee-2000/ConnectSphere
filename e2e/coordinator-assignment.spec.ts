@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const organiser = { email: 'developer@example.test', password: 'LocalDemo123!' };
 const manager = { email: 'operations.manager@example.test', password: 'LocalDemo123!' };
+const coordinator = { email: 'event.coordinator@example.test', password: 'LocalDemo123!' };
 const coordinatorName = 'Casey Lim';
 
 async function signIn(page: Page, account: { email: string; password: string }, role?: string) {
@@ -28,11 +29,11 @@ async function submitRequest(page: Page, name: string) {
   await page.getByLabel('Event name').fill(name);
   await page.getByLabel('Purpose').fill('Coordinator assignment end-to-end check');
   await page.getByLabel('Proposed date').fill(tomorrow);
-  await page.getByLabel('Start time').fill('09:00');
-  await page.getByLabel('End time').fill('11:30');
+  await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
   await page.getByLabel('Expected attendance').fill('120');
-  await page.getByRole('button', { name: 'Submit request' }).click();
+  await page.getByRole('button', { name: 'Submit event request' }).click();
   await expect(page).toHaveURL(/\/workspace\/my-requests$/);
+  return tomorrow;
 }
 
 test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, assigned, and shown to its organiser', async ({
@@ -42,7 +43,7 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, a
 
   // The organiser submits, and sees nobody is responsible yet.
   await signIn(page, organiser, 'Event Organiser');
-  await submitRequest(page, name);
+  const proposedDate = await submitRequest(page, name);
   await expect(page.getByRole('row').filter({ hasText: name })).toContainText('Not assigned yet');
   await signOut(page);
 
@@ -66,6 +67,21 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, a
   const organiserRow = page.getByRole('row').filter({ hasText: name });
   await expect(organiserRow).toContainText('Under review');
   await expect(organiserRow).toContainText(coordinatorName);
+  await signOut(page);
+
+  // SPL-62: the assigned coordinator can open the event with its status and proposed date.
+  await signIn(page, coordinator);
+  await page.getByRole('link', { name: 'My assigned events' }).click();
+  const assigned = page.getByRole('row').filter({ hasText: name });
+  const displayedDate = new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${proposedDate}T00:00:00Z`));
+  await expect(assigned).toContainText('Under review');
+  await expect(assigned).toContainText(displayedDate);
+  await assigned.getByRole('link', { name }).click();
+  await expect(page).toHaveURL(/\/workspace\/assigned-events\/\d+$/);
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+  await expect(page.getByText('Under review')).toBeVisible();
+  await expect(page.getByText(displayedDate)).toBeVisible();
 });
 
 test('TC-CS-E05-S1-06: a role without Event Operations Manager is never offered the queue', async ({

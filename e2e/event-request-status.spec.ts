@@ -25,10 +25,9 @@ async function submitRequest(page: Page, name: string) {
   await page.getByLabel('Event name').fill(name);
   await page.getByLabel('Purpose').fill('Brief partners on the roadmap');
   await page.getByLabel('Proposed date').fill(tomorrow);
-  await page.getByLabel('Start time').fill('09:00');
-  await page.getByLabel('End time').fill('11:30');
+  await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
   await page.getByLabel('Expected attendance').fill('120');
-  await page.getByRole('button', { name: 'Submit request' }).click();
+  await page.getByRole('button', { name: 'Submit event request' }).click();
 }
 
 function uniqueName() {
@@ -60,17 +59,13 @@ test('TC-CS-E07-S1-17 and -18 a submission lands on My requests with the new req
   await expect(firstRow).toContainText('waiting to be picked up for review');
 });
 
-test('TC-CS-E07-S1-19 a refused submission does not move the organiser on', async ({ page }) => {
+test('TC-CS-E07-S1-19 an incomplete submission does not move the organiser on', async ({ page }) => {
   await signIn(page, organiser, 'Event Organiser');
   await page.goto('/workspace/event-requests');
 
-  await page.getByRole('button', { name: 'Submit request' }).click();
-
-  await expect(page.getByRole('alert')).toContainText(
-    'Complete the required fields before submitting.',
-  );
+  await expect(page.getByRole('button', { name: 'Submit event request' })).toBeDisabled();
   await expect(page).toHaveURL(/\/workspace\/event-requests$/);
-  await expect(page.getByRole('heading', { name: 'Submit an event request' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Request an event' })).toBeVisible();
 });
 
 test('TC-CS-E07-S1-20 and -22 another role is neither offered the view nor served it', async ({
@@ -103,7 +98,7 @@ test('TC-CS-E07-S1-23 and -24 the navigation opens the view and returns to it', 
   await expect(page.getByRole('heading', { name: 'The status of my events' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'The status of my events' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Submit request' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Submit event request' })).toHaveCount(0);
 });
 
 test('TC-CS-E07-S1-25 the navigation entry follows the active role', async ({ page }) => {
