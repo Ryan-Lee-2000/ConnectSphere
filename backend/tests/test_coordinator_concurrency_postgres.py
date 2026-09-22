@@ -24,6 +24,7 @@ from app.models import (
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
+    Organisation,
     Role,
 )
 from sqlalchemy import create_engine, delete, inspect, update
@@ -67,6 +68,10 @@ def scenario(engine):
 
     manager, alice, bob = (str(uuid.uuid4()) for _ in range(3))
     with Session(engine) as session:
+        organisation = Organisation(name=f"Concurrency Client {uuid.uuid4()}")
+        session.add(organisation)
+        session.flush()
+        organisation_id = organisation.id
         session.add_all(
             [
                 Account(id=manager, display_name="Morgan Manager"),
@@ -83,6 +88,7 @@ def scenario(engine):
         )
         event = EventRequest(
             organiser_account_id=manager,
+            organisation_id=organisation_id,
             name="Concurrency Summit",
             purpose="Proving interleaved transactions",
             proposed_date=date(2026, 10, 12),
@@ -112,6 +118,7 @@ def scenario(engine):
         session.execute(delete(EventRequest).where(EventRequest.id == event_request_id))
         session.execute(delete(AccountRole).where(AccountRole.account_id.in_(accounts)))
         session.execute(delete(Account).where(Account.id.in_(accounts)))
+        session.execute(delete(Organisation).where(Organisation.id == organisation_id))
         session.commit()
 
 
