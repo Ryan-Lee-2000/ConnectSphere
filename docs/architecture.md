@@ -41,7 +41,40 @@ CS-E01-S2 adds the smallest trusted application model needed for reusable role a
 Sprint 1 maps venue catalogue functions onto that trusted foundation: Venue Staff may create and
 maintain venue profiles and room layouts; Event Coordinators may browse the catalogue and details.
 The browser does not submit a role, user ID or organisation ID to choose this access. Sprint 1 does
-not define coordinator assignment or booking availability.
+not define booking availability.
+
+## Coordinator assignment
+
+CS-E05-S1 to S3 (SPL-59 to SPL-61) let Event Operations Managers find submitted requests without a
+coordinator, assign one and reassign later, on top of SPL-51's `event_requests` aggregate. Every
+operation requires the Event Operations Manager role through `require_roles`.
+
+- `event_coordinator_assignments` holds one row per request, keyed by `event_request_id`. The key
+  rejects a
+  second concurrent assignment. Reassignment applies only while the row still names the coordinator
+  that was read **and** the event is still in a reassignable status; both conditions live in the
+  statement, so a concurrent terminal transition cannot slip between the read and the write.
+  `is_assigned_coordinator()` is the check later coordinator-only operations must reuse.
+  `backend/tests/test_coordinator_concurrency_postgres.py` proves both races with real
+  interleaved PostgreSQL transactions under `npm run integration`.
+- `event_coordinator_history` appends every assignment and reassignment (previous coordinator,
+  new coordinator, who, when) and is read in `changed_at` order.
+- Coordinator names come from `accounts.display_name`, which SPL-45 now owns and makes non-null.
+  `accounts.is_active` carries the "active user" rule and is added here. **Active** means the
+  account may still be given new responsibility: `is_active` defaults to true for every account and
+  only an inactive account is withheld from the coordinator picker. Inactivity never removes an
+  existing assignment, so an event keeps its coordinator and its history if that account is later
+  deactivated. The value is provisioned by the migration default; no story yet gives the team a way
+  to edit it, so ownership of `is_active` still needs a decision.
+- **Status vocabulary.** CS-E07-S1 owns it in `app.event_statuses`; assignment reads that module
+  rather than restating the values, and an import-time check fails loudly if the statuses this
+  story depends on ever leave the vocabulary. Assignment is the first operation to move a request
+  off `submitted`, so it stamps `status_changed_at` as well, which CS-E07-S1 reads.
+- **Ordering.** The queue is oldest submission first, using CS-E03-S5's `submitted_at`. Requests
+  stored before that story carry no submission time and sort last by id, because PostgreSQL and
+  SQLite disagree on where NULLs fall.
+- **Client organisation.** SPL-45 now supplies `organisations` and a non-null
+  `event_requests.organisation_id`, so the queue names the requesting client organisation.
 
 ## Event-request submission foundation
 

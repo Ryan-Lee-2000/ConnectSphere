@@ -157,7 +157,16 @@ def main():
     elif cmd == "integration":
         if not os.getenv("INTEGRATION_DATABASE_URL"):
             raise SystemExit("Set INTEGRATION_DATABASE_URL to a disposable PostgreSQL database.")
-        run("uv", "run", "--frozen", "pytest", "backend/tests/test_postgres.py", "-q")
+        # test_postgres.py requires an empty database, so it must migrate before the rest.
+        run(
+            "uv",
+            "run",
+            "--frozen",
+            "pytest",
+            "backend/tests/test_postgres.py",
+            "backend/tests/test_coordinator_concurrency_postgres.py",
+            "-q",
+        )
     elif cmd == "dev":
         if not (ROOT / ".env").exists() or not (ROOT / "frontend/.env.local").exists():
             raise RuntimeError("Local configuration missing. Run npm run setup first.")

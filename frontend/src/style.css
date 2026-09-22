@@ -288,6 +288,21 @@ button { touch-action: manipulation; }
 .error { color: var(--color-refusal-red); background: var(--color-refusal-surface); }
 .notice { background: var(--color-mist-surface); }
 
+/* Sprint 1 coordinator assignment */
+.assignment-queue { margin-top: var(--space-12); }
+.assignment-table { overflow-x: auto; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.assignment-table table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+.assignment-table th, .assignment-table td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-blueprint-line); text-align: left; vertical-align: middle; }
+.assignment-table thead th { color: var(--color-muted-slate); font-size: .8125rem; font-weight: 650; background: var(--color-mist-surface); }
+.assignment-table tbody tr:last-child > * { border-bottom: 0; }
+.assignment-table td:last-child { text-align: right; white-space: nowrap; }
+.assignment-panel { display: grid; gap: var(--space-4); margin-top: var(--space-4); padding: clamp(var(--space-6), 3vw, var(--space-8)); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
+.assignment-panel h3 { margin: 0; font-size: 1.25rem; }
+.assignment-panel h3:focus-visible, .assignment-panel select:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.assignment-panel label { display: grid; gap: var(--space-2); max-width: 28rem; font-size: .875rem; font-weight: 650; }
+.assignment-panel select { min-height: 3rem; padding: 0 var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); color: var(--color-ink-navy); background: var(--color-atlas-paper); font: inherit; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 @keyframes pulse { from { opacity: 0.55; } to { opacity: 1; } }
 
 @media (min-width: 48rem) {

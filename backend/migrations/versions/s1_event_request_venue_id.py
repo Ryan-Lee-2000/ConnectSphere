@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "s1_event_request_venue_id"
-down_revision = "s1_client_organisations"
+down_revision = "s1_coordinator_assignment"
 branch_labels = None
 depends_on = None
 

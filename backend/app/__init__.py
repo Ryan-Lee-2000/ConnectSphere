@@ -7,6 +7,7 @@ from flask import Flask, abort, g, jsonify, request, send_from_directory
 from sqlalchemy import create_engine, text
 
 from .authorization import associate_account_roles, authenticated_only
+from .coordinator_assignment import register_coordinator_assignment_routes
 from .event_requests import register_event_request_routes
 from .venues import register_venue_routes
 
@@ -93,6 +94,7 @@ def create_app(test_config=None):
 
     register_venue_routes(app)
     register_event_request_routes(app)
+    register_coordinator_assignment_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")
