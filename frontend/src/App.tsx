@@ -15,6 +15,7 @@ import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
 import { EventRequestDrafts } from './EventRequestDrafts';
 import { OrganisationEvents } from './OrganisationEvents';
+import { AssignedEvents } from './AssignedEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -47,6 +48,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
+  if (/^\/workspace\/assigned-events(?:\/\d+)?$/.test(requestedPath)) {
+    return role === 'event_coordinator';
+  }
   if (/^\/workspace\/organisation-events(?:\/\d+)?$/.test(requestedPath)) {
     return role === 'event_organiser';
   }
@@ -364,10 +368,14 @@ function Workspace({
   const organisationEventId = organisationEventMatch
     ? Number(organisationEventMatch[1])
     : undefined;
+  const assignedEventMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)$/);
+  const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
     : safePath === '/workspace/assignments'
       ? 'Coordinator assignment workspace'
+    : safePath.startsWith('/workspace/assigned-events')
+      ? 'Assigned events workspace'
       : safePath.startsWith('/workspace/organisation-events')
         ? 'Organisation event workspace'
         : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests'
@@ -417,6 +425,11 @@ function Workspace({
           href="/workspace/assignments"
           onClick={event => { event.preventDefault(); navigate('/workspace/assignments'); }}
         >Coordinator assignment</a>}
+        {activeRole === 'event_coordinator' && <a
+          aria-current={safePath.startsWith('/workspace/assigned-events') ? 'page' : undefined}
+          href="/workspace/assigned-events"
+          onClick={event => { event.preventDefault(); navigate('/workspace/assigned-events'); }}
+        >My assigned events</a>}
         {venueRole && <a
           aria-current={safePath === '/workspace/venues' ? 'page' : undefined}
           href="/workspace/venues"
@@ -476,6 +489,13 @@ function Workspace({
             accessToken={session.access_token}
             eventId={organisationEventId}
             key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
+            onNavigate={navigate}
+          />
+        ) : safePath.startsWith('/workspace/assigned-events') ? (
+          <AssignedEvents
+            accessToken={session.access_token}
+            eventId={assignedEventId}
+            key={`${activeRole}:assigned-events:${assignedEventId ?? 'list'}`}
             onNavigate={navigate}
           />
         ) : safePath === '/workspace/venues' ? (
