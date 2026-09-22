@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.event_requests import SINGAPORE
-from app.event_statuses import EVENT_REQUEST_STATUSES
+from app.event_statuses import EVENT_REQUEST_STATUSES, status_label
 from app.models import (
     Account,
     AccountRole,
@@ -42,6 +42,34 @@ NO_OTHER_COORDINATOR_AVAILABLE = (
 
 
 def register_coordinator_assignment_routes(app: Flask) -> None:
+    @app.get("/api/event-requests/assigned")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def list_my_assigned_events():
+        with Session(app.extensions["engine"]) as session:
+            events = session.scalars(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(EventCoordinatorAssignment.coordinator_account_id == g.user_id)
+                .order_by(EventRequest.proposed_date, EventRequest.id)
+            ).all()
+            return jsonify(events=[_serialize_assigned_event(event) for event in events])
+
+    @app.get("/api/event-requests/assigned/<int:event_request_id>")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def get_my_assigned_event(event_request_id: int):
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Assigned event not found.")
+            return jsonify(event=_serialize_assigned_event(event))
+
     @app.get("/api/event-requests/awaiting-assignment")
     @require_roles(Role.EVENT_OPERATIONS_MANAGER)
     def list_events_awaiting_assignment():
@@ -315,6 +343,16 @@ def _serialize_queue_event(event: EventRequest) -> dict[str, Any]:
         "organisation_name": event.organisation.name,
         "proposed_date": _date(event.proposed_date),
         "submitted_at": _timestamp(event.submitted_at),
+    }
+
+
+def _serialize_assigned_event(event: EventRequest) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "name": event.name,
+        "status": event.status,
+        "status_label": status_label(event.status),
+        "proposed_date": _date(event.proposed_date),
     }
 
 
