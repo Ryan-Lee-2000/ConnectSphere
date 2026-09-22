@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const organiser = { email: 'developer@example.test', password: 'LocalDemo123!' };
 const manager = { email: 'operations.manager@example.test', password: 'LocalDemo123!' };
-const coordinatorName = 'Local Event Coordinator';
+const coordinatorName = 'Casey Lim';
 
 async function signIn(page: Page, account: { email: string; password: string }, role?: string) {
   await page.goto('/');

@@ -10,6 +10,8 @@ type RequestSummary = {
   status_changed_at: string | null;
   proposed_date: string | null;
   last_saved_at: string | null;
+  // CS-E05-S2 AC6 and CS-E05-S3 AC6: who is responsible, once a coordinator has been assigned.
+  coordinator: { id: string; name: string } | null;
 };
 
 export function EventRequestDrafts({ accessToken, onUnsavedChanges, request }: {
@@ -91,10 +93,11 @@ export function EventRequestDrafts({ accessToken, onUnsavedChanges, request }: {
       {submitted.length === 0 && <p>No submitted requests.</p>}
       {submitted.length > 0 && <table className="event-request-status__table">
         <caption className="visually-hidden">Your submitted event requests, most recently updated first</caption>
-        <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col">As of</th></tr></thead>
+        <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col">Event Coordinator</th><th scope="col">As of</th></tr></thead>
         <tbody>{submitted.map(item => <tr key={item.id}>
           <td><strong>{item.name}</strong><span className="event-request-status__reference">EVT-{item.id}</span></td>
           <td><span className="event-request-status__label">{item.status_label}</span><span className="event-request-status__explanation">{item.status_explanation}</span></td>
+          <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>
           <td>{item.status_changed_at ? new Date(item.status_changed_at).toLocaleString() : 'Not recorded'}</td>
         </tr>)}</tbody>
       </table>}
