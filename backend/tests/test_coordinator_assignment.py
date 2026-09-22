@@ -44,6 +44,7 @@ TOKENS = {
     "manager": MANAGER,
     "organiser": ORGANISER,
     "coordinator": ALICE,
+    "coordinator-b": BOB,
     "venue-staff": VENUE_STAFF,
     "manager-and-organiser": MANAGER_AND_ORGANISER,
 }
@@ -200,6 +201,52 @@ def history(client, event_id):
 
 def organiser_view(client, event_id):
     return client.get(f"/api/event-requests/{event_id}", headers=headers("organiser"))
+
+
+# SPL-62 / CS-E05-S4: the coordinator's own assignment entry point.
+
+
+def test_tc_e05_s4_01_02_04_lists_only_current_coordinator_assignments(app, client):
+    alice_event = add_request(app, "Alice's event")
+    bob_event = add_request(app, "Bob's event", proposed_date=date(2026, 11, 3))
+    unassigned = add_request(app, "Unassigned event")
+    assert assign(client, alice_event, ALICE).status_code == 201
+    assert assign(client, bob_event, BOB).status_code == 201
+
+    alice = client.get("/api/event-requests/assigned", headers=headers("coordinator"))
+    assert alice.status_code == 200
+    assert alice.json["events"] == [
+        {
+            "id": alice_event,
+            "name": "Alice's event",
+            "status": UNDER_REVIEW,
+            "status_label": "Under review",
+            "proposed_date": "2026-10-12",
+        }
+    ]
+    bob = client.get("/api/event-requests/assigned", headers=headers("coordinator-b"))
+    assert [event["id"] for event in bob.json["events"]] == [bob_event]
+    assert unassigned not in [event["id"] for event in alice.json["events"]]
+
+
+def test_tc_e05_s4_03_opens_only_current_assignment(app, client):
+    alice_event = add_request(app)
+    assert assign(client, alice_event, ALICE).status_code == 201
+    path = f"/api/event-requests/assigned/{alice_event}"
+    assert client.get(path, headers=headers("coordinator")).json["event"]["id"] == alice_event
+    assert client.get(path, headers=headers("coordinator-b")).status_code == 404
+    assert reassign(client, alice_event, BOB).status_code == 200
+    assert client.get(path, headers=headers("coordinator")).status_code == 404
+    assert client.get(path, headers=headers("coordinator-b")).status_code == 200
+
+
+def test_tc_e05_s4_05_empty_and_role_boundaries(app, client):
+    response = client.get("/api/event-requests/assigned", headers=headers("coordinator"))
+    assert response.json == {"events": []}
+    assert client.get("/api/event-requests/assigned", headers=headers("manager")).status_code == 403
+    response = client.get("/api/event-requests/assigned/1", headers=headers("organiser"))
+    assert response.status_code == 403
+    assert client.get("/api/event-requests/assigned").status_code == 401
 
 
 # SPL-59 / CS-E05-S1: see submitted events awaiting assignment

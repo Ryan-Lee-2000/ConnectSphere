@@ -114,6 +114,23 @@ describe('sign in', () => {
 });
 
 describe('protected access', () => {
+  it('opens the Event Coordinator assigned-events route', async () => {
+    vi.stubGlobal('fetch', vi.fn(input => {
+      if (String(input) === '/api/session') return Promise.resolve({ ok: true });
+      if (String(input) === '/api/account/roles') return Promise.resolve({
+        ok: true, json: async () => ({ roles: ['event_coordinator'] }),
+      });
+      if (String(input) === '/api/event-requests/assigned') return Promise.resolve({
+        ok: true, json: async () => ({ events: [] }),
+      });
+      return Promise.resolve({ ok: false, json: async () => ({}) });
+    }));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'My assigned events' }));
+    expect(window.location.pathname).toBe('/workspace/assigned-events');
+    expect(await screen.findByText('No events assigned to you yet.')).toBeTruthy();
+  });
+
   it('opens the permanent request form from the Event Organiser workspace', async () => {
     vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);

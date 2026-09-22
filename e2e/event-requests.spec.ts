@@ -31,17 +31,16 @@ test('TC-CS-E03-S5-10 an organiser submits from the interface and sees a confirm
 }) => {
   await signIn(page, organiser, 'Event Organiser');
   await page.getByRole('link', { name: 'Event requests' }).click();
-  await expect(page.getByRole('heading', { name: 'Submit an event request' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Request an event' })).toBeVisible();
 
   const name = uniqueName();
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await page.getByLabel('Event name').fill(name);
   await page.getByLabel('Purpose').fill('Brief partners on the roadmap');
   await page.getByLabel('Proposed date').fill(tomorrow);
-  await page.getByLabel('Start time').fill('09:00');
-  await page.getByLabel('End time').fill('11:30');
+  await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
   await page.getByLabel('Expected attendance').fill('120');
-  await page.getByRole('button', { name: 'Submit request' }).click();
+  await page.getByRole('button', { name: 'Submit event request' }).click();
 
   // CS-E07-S1 AC7 takes the organiser to their requests once the submission succeeds, so the
   // confirmation is now the request appearing there rather than a panel on this page.
@@ -61,7 +60,7 @@ test('TC-CS-E03-S5-11 a role that may not submit is not offered the control', as
 
   // Reaching the page directly does not present the submit control either.
   await page.goto('/workspace/event-requests');
-  await expect(page.getByRole('button', { name: 'Submit request' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Submit event request' })).toHaveCount(0);
 
   // And the operation itself is refused by the server.
   const refused = await page.evaluate(async () => {
@@ -75,40 +74,28 @@ test('TC-CS-E03-S5-11 a role that may not submit is not offered the control', as
   expect([401, 403]).toContain(refused);
 });
 
-test('TC-CS-E03-S5-12 a refused submission names every missing field, and TC-13 the error clears', async ({
+test('TC-CS-E03-S5-12 and TC-13 an incomplete request cannot submit until required fields are entered', async ({
   page,
 }) => {
   await signIn(page, organiser, 'Event Organiser');
   await page.goto('/workspace/event-requests');
 
-  await page.getByRole('button', { name: 'Submit request' }).click();
+  const submit = page.getByRole('button', { name: 'Submit event request' });
+  await expect(submit).toBeDisabled();
+  await expect(page).toHaveURL(/\/workspace\/event-requests$/);
 
-  const error = page.getByRole('alert');
-  await expect(error).toContainText('Complete the required fields before submitting.');
-  for (const label of [
-    'Event name',
-    'Purpose',
-    'Proposed date',
-    'Start time',
-    'End time',
-    'Expected attendance',
-  ]) {
-    await expect(error).toContainText(label);
-  }
-  await expect(page.getByRole('status')).toHaveCount(0);
-
-  // TC-CS-E03-S5-13: correcting the submission clears the earlier error.
+  // The permanent form enables submission only after its required fields are complete.
   const name = uniqueName();
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await page.getByLabel('Event name').fill(name);
   await page.getByLabel('Purpose').fill('Brief partners on the roadmap');
   await page.getByLabel('Proposed date').fill(tomorrow);
-  await page.getByLabel('Start time').fill('09:00');
-  await page.getByLabel('End time').fill('11:30');
+  await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
   await page.getByLabel('Expected attendance').fill('120');
-  await page.getByRole('button', { name: 'Submit request' }).click();
+  await expect(submit).toBeEnabled();
+  await submit.click();
 
-  // The earlier error is gone, and the corrected submission lands on My requests (CS-E07-S1).
+  // The completed submission lands on My requests (CS-E07-S1).
   await expect(page).toHaveURL(/\/workspace\/my-requests$/);
   await expect(page.getByRole('row').nth(1)).toContainText(name);
   await expect(page.getByRole('alert')).toHaveCount(0);
