@@ -11,8 +11,8 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
+import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
-import { EventRequestCreate } from './EventRequestCreate';
 import { EventRequestDrafts } from './EventRequestDrafts';
 import { OrganisationEvents } from './OrganisationEvents';
 
@@ -459,7 +459,7 @@ function Workspace({
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
-          <EventRequestCreate
+          <EventRequestForm
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
             onUnsavedChanges={setHasUnsavedChanges}

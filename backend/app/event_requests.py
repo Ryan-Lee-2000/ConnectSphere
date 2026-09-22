@@ -9,13 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
-from app.models import Account, EquipmentRequirement, EventRequest, Role
-
-SLOT_WINDOWS = (
-    ("AM", 7 * 60, 12 * 60),
-    ("PM", 13 * 60, 18 * 60),
-    ("NIGHT", 19 * 60, 24 * 60),
-)
+from app.models import Account, EquipmentRequirement, EventRequest, Role, Venue
+from app.slots import slots_for_range
 
 # CS-E03-S5. Every ConnectSphere venue is in Singapore (Q36), so submissions are stamped in
 # a single zone. A fixed offset avoids depending on the platform time-zone database.
@@ -39,7 +34,6 @@ _OPTIONAL_TEXT_FIELDS = (
     "accessibility_needs",
     "location_preference",
     "venue_notes",
-    "preferred_venue_name",
     "registration_notes",
 )
 _REQUEST_FIELDS = {
@@ -52,6 +46,7 @@ _REQUEST_FIELDS = {
     "required_facilities",
     "registration_required",
     "equipment_requirements",
+    "venue_id",
     *_OPTIONAL_TEXT_FIELDS,
 }
 
@@ -117,7 +112,7 @@ def register_event_request_routes(app: Flask) -> None:
                     ),
                     400,
                 )
-            attributes, equipment_lines = _event_request_attributes(merged)
+            attributes, equipment_lines = _event_request_attributes(merged, session)
             for field, value in attributes.items():
                 setattr(event, field, value)
             event.equipment_requirements = [
@@ -159,9 +154,9 @@ def register_event_request_routes(app: Flask) -> None:
                 400,
             )
 
-        attributes, equipment_lines = _event_request_attributes(data)
         with Session(app.extensions["engine"]) as session:
             account = _current_organiser_account(session)
+            attributes, equipment_lines = _event_request_attributes(data, session)
             event_request = EventRequest(
                 organiser_account_id=account.id,
                 organisation_id=account.organisation_id,
@@ -277,7 +272,7 @@ def _request_json() -> dict[str, Any]:
 
 
 def _event_request_attributes(
-    data: dict[str, Any],
+    data: dict[str, Any], session: Session
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     unexpected = set(data) - _REQUEST_FIELDS
     if unexpected:
@@ -306,15 +301,37 @@ def _event_request_attributes(
         "registration_required": _boolean(
             data.get("registration_required", False), "Registration required"
         ),
+        "venue_id": _venue_id(data.get("venue_id"), start_time, end_time, session),
     }
     for field in _OPTIONAL_TEXT_FIELDS:
         attributes[field] = _optional_text(data.get(field), field.replace("_", " ").title())
     return attributes, _equipment_lines(data.get("equipment_requirements", []))
 
 
+def _venue_id(value: Any, start_time: time, end_time: time, session: Session) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        abort(400, "Venue must be a venue id.")
+    venue = session.get(Venue, value)
+    if venue is None:
+        abort(400, "Venue not found.")
+    matching_slots = slots_for_range(start_time, end_time)
+    if len(matching_slots) != 1 or matching_slots[0] not in venue.operating_slots:
+        abort(400, "Selected time is not available for this venue.")
+    return value
+
+
 def _draft_attributes(
     data: dict[str, Any],
 ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    """Validate a draft's fields far more loosely than a full submission.
+
+    Every field is optional at draft time, including venue_id: a chosen venue is only
+    checked against a chosen time slot (_venue_id, above) once the request is complete
+    enough to submit, since a draft may have a venue but no time yet, or vice versa.
+    """
+
     unexpected = set(data) - _REQUEST_FIELDS
     if unexpected:
         abort(400, f"Unexpected event request field: {sorted(unexpected)[0]}.")
@@ -347,6 +364,11 @@ def _draft_attributes(
         attributes["registration_required"] = _boolean(
             data["registration_required"], "Registration required"
         )
+    if "venue_id" in data:
+        value = data["venue_id"]
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            abort(400, "Venue must be a venue id.")
+        attributes["venue_id"] = value
     equipment_lines = (
         _equipment_lines(data["equipment_requirements"])
         if "equipment_requirements" in data
@@ -365,6 +387,7 @@ def _editable_data(event: EventRequest) -> dict[str, Any]:
         "expected_attendance": event.expected_attendance,
         "required_facilities": event.required_facilities,
         "registration_required": event.registration_required,
+        "venue_id": event.venue_id,
         "equipment_requirements": [
             {"equipment_type": line.equipment_type, "quantity": line.quantity, "notes": line.notes}
             for line in event.equipment_requirements
@@ -516,16 +539,6 @@ def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
     }
 
 
-def _mapped_slots(start: time, end: time) -> list[str]:
-    start_minutes = start.hour * 60 + start.minute
-    end_minutes = end.hour * 60 + end.minute
-    return [
-        name
-        for name, slot_start, slot_end in SLOT_WINDOWS
-        if start_minutes < slot_end and end_minutes > slot_start
-    ]
-
-
 def _submitted_at(value: datetime | None) -> str | None:
     """Return the submission time with its offset, whatever the database preserved.
 
@@ -573,7 +586,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
         "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
         "mapped_slots": (
-            _mapped_slots(event.start_time, event.end_time)
+            slots_for_range(event.start_time, event.end_time)
             if event.start_time and event.end_time
             else []
         ),
@@ -602,7 +615,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "accessibility_needs": event.accessibility_needs,
         "location_preference": event.location_preference,
         "venue_notes": event.venue_notes,
-        "preferred_venue_name": event.preferred_venue_name,
+        "venue_id": event.venue_id,
         "registration_required": event.registration_required,
         "registration_notes": event.registration_notes,
         "equipment_requirements": [

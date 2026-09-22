@@ -172,10 +172,13 @@ class EventRequest(Base):
     accessibility_needs: Mapped[str | None] = mapped_column(Text)
     location_preference: Mapped[str | None] = mapped_column(Text)
     venue_notes: Mapped[str | None] = mapped_column(Text)
-    preferred_venue_name: Mapped[str | None] = mapped_column(Text)
+    venue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("venues.id", ondelete="SET NULL"), nullable=True
+    )
     registration_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     registration_notes: Mapped[str | None] = mapped_column(Text)
     organiser: Mapped[Account] = relationship(back_populates="event_requests")
+    venue: Mapped["Venue | None"] = relationship()
     organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(
         back_populates="event_request",
