@@ -39,16 +39,31 @@ class Role(StrEnum):
 ROLE_VALUES = tuple(role.value for role in Role)
 
 
+class Organisation(Base):
+    """A client organisation whose event information is isolated from other clients."""
+
+    __tablename__ = "organisations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    accounts: Mapped[list["Account"]] = relationship(back_populates="organisation")
+    event_requests: Mapped[list["EventRequest"]] = relationship(back_populates="organisation")
+
+
 class Account(Base):
     """Application account keyed by the verified Supabase Auth user identifier."""
 
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
-    display_name: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False, default="Unnamed account")
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=true()
     )
+    organisation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organisations.id"), nullable=True, index=True
+    )
+    organisation: Mapped[Organisation | None] = relationship(back_populates="accounts")
     event_requests: Mapped[list["EventRequest"]] = relationship(back_populates="organiser")
 
 
@@ -106,36 +121,51 @@ class VenueLayout(Base):
 
 
 class EventRequest(Base):
-    """An organiser-submitted request and its planning preferences."""
+    """An organiser request, including an incomplete draft when not yet submitted."""
 
     __tablename__ = "event_requests"
     __table_args__ = (
         CheckConstraint("end_time > start_time", name="ck_event_requests_time_order"),
-        CheckConstraint("expected_attendance > 0", name="ck_event_requests_positive_attendance"),
-        # CS-E07-S1. The vocabulary lives in one place so the constraint and the wording
-        # shown to the organiser can never drift apart.
-        CheckConstraint(status_check_constraint(), name="ck_event_requests_known_status"),
+        CheckConstraint(
+            "expected_attendance > 0",
+            name="ck_event_requests_positive_attendance",
+        ),
+        CheckConstraint(
+            status_check_constraint(),
+            name="ck_event_requests_known_status",
+        ),
+        CheckConstraint(
+            "status <> 'submitted' or (purpose is not null "
+            "and proposed_date is not null "
+            "and start_time is not null "
+            "and end_time is not null "
+            "and expected_attendance is not null)",
+            name="ck_event_requests_submitted_fields",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     organiser_account_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
-    # Temporary compatibility field only. No organisation entity exists yet.
-    organisation_id: Mapped[int | None] = mapped_column(Integer)
+    organisation_id: Mapped[int] = mapped_column(
+        ForeignKey("organisations.id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    purpose: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
-    proposed_date: Mapped[date] = mapped_column(Date, nullable=False)
-    start_time: Mapped[time] = mapped_column(Time, nullable=False)
-    end_time: Mapped[time] = mapped_column(Time, nullable=False)
-    expected_attendance: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default=INITIAL_STATUS)
-    # CS-E03-S5. Nullable so requests stored before that story remain readable.
+    proposed_date: Mapped[date | None] = mapped_column(Date)
+    start_time: Mapped[time | None] = mapped_column(Time)
+    end_time: Mapped[time | None] = mapped_column(Time)
+    expected_attendance: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default=INITIAL_STATUS,
+    )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # CS-E07-S1. Empty until something moves the status on; the organiser is then shown the
-    # submission time instead. Nothing in this story writes it — CS-E06 and CS-E07-S3 to S5 do.
     status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_room_layout: Mapped[str | None] = mapped_column(Text)
     required_facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     facilities_notes: Mapped[str | None] = mapped_column(Text)
@@ -146,6 +176,7 @@ class EventRequest(Base):
     registration_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     registration_notes: Mapped[str | None] = mapped_column(Text)
     organiser: Mapped[Account] = relationship(back_populates="event_requests")
+    organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(
         back_populates="event_request",
         cascade="all, delete-orphan",

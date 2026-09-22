@@ -149,7 +149,7 @@ describe('SPL-46 role context', () => {
     const switcher = screen.getByRole('combobox', { name: 'Active role' });
     fireEvent.change(switcher, { target: { value: 'attendee' } });
 
-    expect(screen.getByRole('heading', { name: 'Discard unsaved venue changes?' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Discard unsaved changes?' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Stay here' }));
     expect(screen.getByDisplayValue('Atlas Hall')).toBeTruthy();
     expect((screen.getByRole('combobox', { name: 'Active role' }) as HTMLSelectElement).value).toBe('venue_staff');

@@ -24,6 +24,7 @@ from app.models import (
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
+    Organisation,
     Role,
 )
 from sqlalchemy import func, select
@@ -37,6 +38,7 @@ CAROL = "00000000-0000-0000-0000-000000000025"
 INACTIVE_COORDINATOR = "00000000-0000-0000-0000-000000000026"
 VENUE_STAFF = "00000000-0000-0000-0000-000000000027"
 MANAGER_AND_ORGANISER = "00000000-0000-0000-0000-000000000028"
+ORGANISATION_NAME = "Northstar Community Partners"
 SUBMITTED_AT = datetime(2026, 9, 1, 9, 0, tzinfo=SINGAPORE)
 TOKENS = {
     "manager": MANAGER,
@@ -81,10 +83,21 @@ def app(tmp_path):
         ),
     ]
     with Session(engine) as session:
+        organisation = Organisation(name=ORGANISATION_NAME)
+        session.add(organisation)
+        session.flush()
         for account_id, name, active, roles in accounts:
-            session.add(Account(id=account_id, display_name=name, is_active=active))
+            session.add(
+                Account(
+                    id=account_id,
+                    display_name=name,
+                    is_active=active,
+                    organisation_id=organisation.id,
+                )
+            )
             session.add_all(AccountRole(account_id=account_id, role=role.value) for role in roles)
         session.commit()
+        app.config["TEST_ORGANISATION_ID"] = organisation.id
     yield app
     engine.dispose()
 
@@ -109,6 +122,7 @@ def add_request(
     with Session(app.extensions["engine"]) as session:
         event = EventRequest(
             organiser_account_id=ORGANISER,
+            organisation_id=app.config["TEST_ORGANISATION_ID"],
             name=name,
             purpose="Client showcase",
             proposed_date=proposed_date,
@@ -210,21 +224,24 @@ def test_tc_e05_s1_01_02_11_queue_lists_unassigned_submitted_requests_oldest_fir
             {
                 "id": oldest,
                 "name": "Harbour Summit",
-                "organisation_id": None,
+                "organisation_id": app.config["TEST_ORGANISATION_ID"],
+                "organisation_name": ORGANISATION_NAME,
                 "proposed_date": "2026-10-12",
                 "submitted_at": "2026-09-01T09:00:00+08:00",
             },
             {
                 "id": middle,
                 "name": "Tech Forum",
-                "organisation_id": None,
+                "organisation_id": app.config["TEST_ORGANISATION_ID"],
+                "organisation_name": ORGANISATION_NAME,
                 "proposed_date": "2026-11-03",
                 "submitted_at": "2026-09-01T10:00:00+08:00",
             },
             {
                 "id": newest,
                 "name": "Gala Night",
-                "organisation_id": None,
+                "organisation_id": app.config["TEST_ORGANISATION_ID"],
+                "organisation_name": ORGANISATION_NAME,
                 "proposed_date": "2026-10-12",
                 "submitted_at": "2026-09-01T11:00:00+08:00",
             },

@@ -8,13 +8,15 @@ const harbourSummit: QueueEvent = {
   id: 7,
   name: 'Harbour Summit',
   organisation_id: 3,
+  organisation_name: 'Northstar Community Partners',
   proposed_date: '2026-10-12',
   submitted_at: null,
 };
 const galaNight: QueueEvent = {
   id: 8,
   name: 'Gala Night',
-  organisation_id: null,
+  organisation_id: 4,
+  organisation_name: 'Harbourfront Arts Collective',
   proposed_date: null,
   submitted_at: null,
 };
@@ -37,9 +39,9 @@ it('lists submitted requests in server order with a matching count', async () =>
   expect(await screen.findByText('2 events awaiting assignment')).toBeTruthy();
   const rows = screen.getAllByRole('row').slice(1);
   expect(rows.map(row => within(row).getByRole('rowheader').textContent)).toEqual(['Harbour Summit', 'Gala Night']);
-  expect(within(rows[0]).getByText('Organisation 3')).toBeTruthy();
-  // Client organisation and submission time stay unrecorded until SPL-45 and SPL-55 land.
-  expect(within(rows[1]).getAllByText('Not recorded yet')).toHaveLength(2);
+  expect(within(rows[0]).getByText('Northstar Community Partners')).toBeTruthy();
+  expect(within(rows[1]).getByText('Harbourfront Arts Collective')).toBeTruthy();
+  expect(within(rows[1]).getByText('Not recorded yet')).toBeTruthy();
   expect(within(rows[1]).getByText('Not provided')).toBeTruthy();
 });
 

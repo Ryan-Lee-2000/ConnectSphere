@@ -1,17 +1,18 @@
 """Record Event Coordinator assignments and their history (SPL-59 to SPL-61).
 
 Revision ID: s1_coordinator_assignment
-Revises: s1_event_request_statuses
+Revises: s1_client_organisations
 
 The status vocabulary this story relies on is already widened by CS-E07-S1, so nothing here
-touches `ck_event_requests_known_status`.
+touches `ck_event_requests_known_status`. SPL-45 owns `accounts.display_name`, so only
+`is_active` is added here.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "s1_coordinator_assignment"
-down_revision = "s1_event_request_statuses"
+down_revision = "s1_client_organisations"
 branch_labels = None
 depends_on = None
 
@@ -56,7 +57,6 @@ def _secure_table(table_name: str, sequence_name: str | None = None) -> None:
 
 
 def upgrade():
-    op.add_column("accounts", sa.Column("display_name", sa.Text(), nullable=True))
     op.add_column(
         "accounts",
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
@@ -126,4 +126,3 @@ def downgrade():
     op.drop_table("event_coordinator_history")
     op.drop_table("event_coordinator_assignments")
     op.drop_column("accounts", "is_active")
-    op.drop_column("accounts", "display_name")

@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 import pytest
 from app import create_app
 from app.event_requests import SINGAPORE
-from app.models import Account, AccountRole, Base, EventRequest, Role
+from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -48,7 +48,19 @@ def app(tmp_path):
     engine = application.extensions["engine"]
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add_all(Account(id=account_id) for account_id in identities.values())
+        organisation = Organisation(name="Community Partners")
+        session.add(organisation)
+        session.flush()
+        session.add_all(
+            Account(
+                id=account_id,
+                display_name=f"Test account {index}",
+                organisation_id=(
+                    organisation.id if account_id in {ORGANISER_ID, OTHER_ORGANISER_ID} else None
+                ),
+            )
+            for index, account_id in enumerate(identities.values(), start=1)
+        )
         session.add_all(
             [
                 AccountRole(account_id=ORGANISER_ID, role=Role.EVENT_ORGANISER.value),
@@ -145,7 +157,7 @@ def test_tc_cs_e03_s5_03_a_request_stored_before_this_story_remains_readable(app
         session.add(
             EventRequest(
                 organiser_account_id=ORGANISER_ID,
-                organisation_id=None,
+                organisation_id=1,
                 name="Legacy Request",
                 purpose="Created before CS-E03-S5",
                 proposed_date=date.fromisoformat(TOMORROW),

@@ -15,7 +15,7 @@ from app.event_statuses import (
     status_explanation,
     status_label,
 )
-from app.models import Account, AccountRole, Base, EventRequest, Role
+from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -45,7 +45,19 @@ def status_app(tmp_path):
     engine = app.extensions["engine"]
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add_all(Account(id=account_id) for account_id in identities.values())
+        organisation = Organisation(name="Community Partners")
+        session.add(organisation)
+        session.flush()
+        session.add_all(
+            Account(
+                id=account_id,
+                display_name=f"Test account {index}",
+                organisation_id=(
+                    organisation.id if account_id in {ORGANISER_ONE, ORGANISER_TWO} else None
+                ),
+            )
+            for index, account_id in enumerate(identities.values(), start=1)
+        )
         session.add_all(
             [
                 AccountRole(account_id=ORGANISER_ONE, role=Role.EVENT_ORGANISER.value),
@@ -85,7 +97,7 @@ def seed_request(
     with Session(app.extensions["engine"]) as session:
         event = EventRequest(
             organiser_account_id=organiser,
-            organisation_id=None,
+            organisation_id=1,
             name=name,
             purpose="Connect residents with local technology partners",
             proposed_date=date(2026, 12, 1),

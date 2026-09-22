@@ -5,8 +5,8 @@ import type { ApiRequest } from './VenueCatalogue';
 export type QueueEvent = {
   id: number;
   name: string;
-  // SPL-45 owns client organisations and SPL-55 the submission time; both stay null until then.
-  organisation_id: number | null;
+  organisation_id: number;
+  organisation_name: string;
   proposed_date: string | null;
   submitted_at: string | null;
 };
@@ -87,7 +87,7 @@ export function CoordinatorAssignmentQueue({ accessToken, request }: { accessTok
         <thead><tr><th scope="col">Event</th><th scope="col">Client organisation</th><th scope="col">Proposed date</th><th scope="col">Submitted</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
         <tbody>{events.map(event => <tr key={event.id}>
           <th scope="row">{event.name}</th>
-          <td>{event.organisation_id === null ? 'Not recorded yet' : `Organisation ${event.organisation_id}`}</td>
+          <td>{event.organisation_name}</td>
           <td>{formatDate(event.proposed_date)}</td>
           <td>{event.submitted_at ? timestampFormat.format(new Date(event.submitted_at)) : 'Not recorded yet'}</td>
           <td><button type="button" className="button button--secondary" aria-label={`Assign coordinator to ${event.name}`} onClick={() => { setNotice(null); setSelected(event); }}>Assign coordinator</button></td>

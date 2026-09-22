@@ -8,10 +8,12 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 PRODUCT_TABLES = {
     "accounts",
     "account_roles",
+    "organisations",
     "venues",
     "venue_layouts",
     "event_requests",
@@ -87,5 +89,35 @@ def test_empty_baseline_migration_is_rerunnable():
                 )
             ).scalar()
             assert "under_review" in allowed
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into accounts (id, display_name, organisation_id) "
+                    "values (:account_id, 'Migration test organiser', "
+                    "(select id from organisations where name = 'Existing client organisation'))"
+                ),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
+            conn.execute(
+                text(
+                    "insert into event_requests "
+                    "(organiser_account_id, organisation_id, name, status) "
+                    "values (:account_id, "
+                    "(select id from organisations where name = 'Existing client organisation'), "
+                    "'An early idea', 'draft')"
+                ),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
+        with pytest.raises(IntegrityError), engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into event_requests "
+                    "(organiser_account_id, organisation_id, name, status) "
+                    "values (:account_id, "
+                    "(select id from organisations where name = 'Existing client organisation'), "
+                    "'Incomplete submission', 'submitted')"
+                ),
+                {"account_id": "00000000-0000-0000-0000-000000000099"},
+            )
     finally:
         engine.dispose()

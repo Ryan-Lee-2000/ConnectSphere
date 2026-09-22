@@ -311,8 +311,8 @@ def _serialize_queue_event(event: EventRequest) -> dict[str, Any]:
     return {
         "id": event.id,
         "name": event.name,
-        # SPL-45 owns client organisations; CS-E03 keeps the id nullable until then.
         "organisation_id": event.organisation_id,
+        "organisation_name": event.organisation.name,
         "proposed_date": _date(event.proposed_date),
         "submitted_at": _timestamp(event.submitted_at),
     }
@@ -344,7 +344,7 @@ def _serialize_history(
 
 
 def _serialize_account(account: Account) -> dict[str, Any]:
-    return {"id": account.id, "name": account.display_name or "Unnamed account"}
+    return {"id": account.id, "name": account.display_name}
 
 
 def _date(value: date | None) -> str | None:

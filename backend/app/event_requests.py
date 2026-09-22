@@ -4,12 +4,12 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from flask import Flask, abort, g, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
-from app.models import EquipmentRequirement, EventRequest, Role
+from app.models import Account, EquipmentRequirement, EventRequest, Role
 
 SLOT_WINDOWS = (
     ("AM", 7 * 60, 12 * 60),
@@ -57,6 +57,90 @@ _REQUEST_FIELDS = {
 
 
 def register_event_request_routes(app: Flask) -> None:
+    @app.post("/api/event-requests/drafts")
+    @require_roles(Role.EVENT_ORGANISER)
+    def create_event_request_draft():
+        attributes, equipment_lines = _draft_attributes(_request_json())
+        if "name" not in attributes:
+            abort(400, "Event name is required.")
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event = EventRequest(
+                organiser_account_id=account.id,
+                organisation_id=account.organisation_id,
+                status="draft",
+                last_saved_at=datetime.now(timezone.utc),
+                **attributes,
+            )
+            event.equipment_requirements = [
+                EquipmentRequirement(**line) for line in equipment_lines or []
+            ]
+            session.add(event)
+            session.commit()
+            return jsonify(
+                event_request=_serialize_event_request(_find_event_request(session, event.id))
+            ), 201
+
+    @app.patch("/api/event-requests/drafts/<int:event_request_id>")
+    @require_roles(Role.EVENT_ORGANISER)
+    def update_event_request_draft(event_request_id: int):
+        attributes, equipment_lines = _draft_attributes(_request_json())
+        with Session(app.extensions["engine"]) as session:
+            event = _own_draft(session, event_request_id)
+            for field, value in attributes.items():
+                setattr(event, field, value)
+            if equipment_lines is not None:
+                event.equipment_requirements = [
+                    EquipmentRequirement(**line) for line in equipment_lines
+                ]
+            event.last_saved_at = datetime.now(timezone.utc)
+            session.commit()
+            return jsonify(
+                event_request=_serialize_event_request(_find_event_request(session, event.id))
+            )
+
+    @app.post("/api/event-requests/drafts/<int:event_request_id>/submit")
+    @require_roles(Role.EVENT_ORGANISER)
+    def submit_event_request_draft(event_request_id: int):
+        data = _request_json()
+        with Session(app.extensions["engine"]) as session:
+            event = _own_draft(session, event_request_id)
+            merged = _editable_data(event)
+            merged.update(data)
+            missing = _missing_mandatory_fields(merged)
+            if missing:
+                return (
+                    jsonify(
+                        error="Complete the required fields before submitting.",
+                        missing_fields=[field for field, _ in missing],
+                        missing_field_labels=[label for _, label in missing],
+                    ),
+                    400,
+                )
+            attributes, equipment_lines = _event_request_attributes(merged)
+            for field, value in attributes.items():
+                setattr(event, field, value)
+            event.equipment_requirements = [
+                EquipmentRequirement(**line) for line in equipment_lines
+            ]
+            event.status = "submitted"
+            event.organisation_id = _current_organiser_account(session).organisation_id
+            event.last_saved_at = datetime.now(timezone.utc)
+            event.submitted_at = datetime.now(SINGAPORE)
+            event.status_changed_at = event.submitted_at
+            session.commit()
+            return jsonify(
+                event_request=_serialize_event_request(_find_event_request(session, event.id))
+            )
+
+    @app.delete("/api/event-requests/drafts/<int:event_request_id>")
+    @require_roles(Role.EVENT_ORGANISER)
+    def delete_event_request_draft(event_request_id: int):
+        with Session(app.extensions["engine"]) as session:
+            session.delete(_own_draft(session, event_request_id))
+            session.commit()
+        return "", 204
+
     @app.post("/api/event-requests")
     @require_roles(Role.EVENT_ORGANISER)
     def create_event_request():
@@ -76,17 +160,18 @@ def register_event_request_routes(app: Flask) -> None:
             )
 
         attributes, equipment_lines = _event_request_attributes(data)
-        event_request = EventRequest(
-            organiser_account_id=g.user_id,
-            organisation_id=None,
-            status="submitted",
-            submitted_at=datetime.now(SINGAPORE),
-            **attributes,
-        )
-        event_request.equipment_requirements = [
-            EquipmentRequirement(**line) for line in equipment_lines
-        ]
         with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event_request = EventRequest(
+                organiser_account_id=account.id,
+                organisation_id=account.organisation_id,
+                status="submitted",
+                submitted_at=datetime.now(SINGAPORE),
+                **attributes,
+            )
+            event_request.equipment_requirements = [
+                EquipmentRequirement(**line) for line in equipment_lines
+            ]
             session.add(event_request)
             session.commit()
             event_id = event_request.id
@@ -106,6 +191,10 @@ def register_event_request_routes(app: Flask) -> None:
         )
         if Role.EVENT_COORDINATOR.value not in g.account_roles:
             statement = statement.where(EventRequest.organiser_account_id == g.user_id)
+        else:
+            statement = statement.where(
+                or_(EventRequest.status != "draft", EventRequest.organiser_account_id == g.user_id)
+            )
         with Session(app.extensions["engine"]) as session:
             events = session.scalars(statement).all()
             return jsonify(event_requests=[_serialize_event_request(event) for event in events])
@@ -115,12 +204,54 @@ def register_event_request_routes(app: Flask) -> None:
     def get_event_request(event_request_id: int):
         with Session(app.extensions["engine"]) as session:
             event = _find_event_request(session, event_request_id)
+            if event.status == "draft" and event.organiser_account_id != g.user_id:
+                abort(404, "Event request not found.")
             if (
                 Role.EVENT_COORDINATOR.value not in g.account_roles
                 and event.organiser_account_id != g.user_id
             ):
                 abort(404, "Event request not found.")
             return jsonify(event_request=_serialize_event_request(event))
+
+    @app.get("/api/organisation/events")
+    @require_roles(Role.EVENT_ORGANISER)
+    def list_organisation_events():
+        """List submitted events for the caller's trusted client organisation."""
+
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            events = session.scalars(
+                select(EventRequest)
+                .where(
+                    EventRequest.organisation_id == account.organisation_id,
+                    EventRequest.status != "draft",
+                )
+                .options(selectinload(EventRequest.organiser))
+                .order_by(EventRequest.proposed_date, EventRequest.start_time, EventRequest.id)
+            ).all()
+            return jsonify(
+                events=[_serialize_organisation_event_summary(event) for event in events]
+            )
+
+    @app.get("/api/organisation/events/<int:event_request_id>")
+    @require_roles(Role.EVENT_ORGANISER)
+    def get_organisation_event(event_request_id: int):
+        """Return read-only details without revealing whether another client's event exists."""
+
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event = session.scalar(
+                select(EventRequest)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventRequest.organisation_id == account.organisation_id,
+                    EventRequest.status != "draft",
+                )
+                .options(selectinload(EventRequest.organiser))
+            )
+            if event is None:
+                abort(404, "Event not found.")
+            return jsonify(event=_serialize_organisation_event_detail(event))
 
 
 def _missing_mandatory_fields(data: dict[str, Any]) -> list[tuple[str, str]]:
@@ -179,6 +310,74 @@ def _event_request_attributes(
     for field in _OPTIONAL_TEXT_FIELDS:
         attributes[field] = _optional_text(data.get(field), field.replace("_", " ").title())
     return attributes, _equipment_lines(data.get("equipment_requirements", []))
+
+
+def _draft_attributes(
+    data: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    unexpected = set(data) - _REQUEST_FIELDS
+    if unexpected:
+        abort(400, f"Unexpected event request field: {sorted(unexpected)[0]}.")
+    attributes: dict[str, Any] = {}
+    if "name" in data:
+        attributes["name"] = _required_text(data["name"], "Event name")
+    for field in ("purpose", *_OPTIONAL_TEXT_FIELDS):
+        if field in data:
+            attributes[field] = _optional_text(data[field], field.replace("_", " ").title())
+    if "proposed_date" in data:
+        attributes["proposed_date"] = (
+            _iso_date(data["proposed_date"]) if data["proposed_date"] else None
+        )
+    for field in ("start_time", "end_time"):
+        if field in data:
+            attributes[field] = (
+                _iso_time(data[field], field.replace("_", " ").title()) if data[field] else None
+            )
+    if "expected_attendance" in data:
+        attributes["expected_attendance"] = (
+            _positive_integer(data["expected_attendance"], "Expected attendance")
+            if data["expected_attendance"] is not None
+            else None
+        )
+    if "required_facilities" in data:
+        attributes["required_facilities"] = _string_list(
+            data["required_facilities"], "Required facilities"
+        )
+    if "registration_required" in data:
+        attributes["registration_required"] = _boolean(
+            data["registration_required"], "Registration required"
+        )
+    equipment_lines = (
+        _equipment_lines(data["equipment_requirements"])
+        if "equipment_requirements" in data
+        else None
+    )
+    return attributes, equipment_lines
+
+
+def _editable_data(event: EventRequest) -> dict[str, Any]:
+    return {
+        "name": event.name,
+        "purpose": event.purpose,
+        "proposed_date": event.proposed_date.isoformat() if event.proposed_date else None,
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "expected_attendance": event.expected_attendance,
+        "required_facilities": event.required_facilities,
+        "registration_required": event.registration_required,
+        "equipment_requirements": [
+            {"equipment_type": line.equipment_type, "quantity": line.quantity, "notes": line.notes}
+            for line in event.equipment_requirements
+        ],
+        **{field: getattr(event, field) for field in _OPTIONAL_TEXT_FIELDS},
+    }
+
+
+def _own_draft(session: Session, event_request_id: int) -> EventRequest:
+    event = _find_event_request(session, event_request_id)
+    if event.status != "draft" or event.organiser_account_id != g.user_id:
+        abort(404, "Event request draft not found.")
+    return event
 
 
 def _required_text(value: Any, label: str) -> str:
@@ -284,6 +483,39 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
     return event
 
 
+def _current_organiser_account(session: Session) -> Account:
+    """Load organisation membership from trusted application data, never request input."""
+
+    account = session.get(Account, g.user_id)
+    if account is None or account.organisation_id is None:
+        abort(403, "Access denied.")
+    return account
+
+
+def _organiser_name(event: EventRequest) -> str:
+    return event.organiser.display_name
+
+
+def _serialize_organisation_event_summary(event: EventRequest) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "name": event.name,
+        "proposed_date": event.proposed_date.isoformat() if event.proposed_date else None,
+        "responsible_organiser": _organiser_name(event),
+    }
+
+
+def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
+    return {
+        **_serialize_organisation_event_summary(event),
+        "purpose": event.purpose,
+        "description": event.description,
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "expected_attendance": event.expected_attendance,
+    }
+
+
 def _mapped_slots(start: time, end: time) -> list[str]:
     start_minutes = start.hour * 60 + start.minute
     end_minutes = end.hour * 60 + end.minute
@@ -337,12 +569,23 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "name": event.name,
         "purpose": event.purpose,
         "description": event.description,
-        "proposed_date": event.proposed_date.isoformat(),
-        "start_time": event.start_time.isoformat(timespec="minutes"),
-        "end_time": event.end_time.isoformat(timespec="minutes"),
-        "mapped_slots": _mapped_slots(event.start_time, event.end_time),
+        "proposed_date": event.proposed_date.isoformat() if event.proposed_date else None,
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "mapped_slots": (
+            _mapped_slots(event.start_time, event.end_time)
+            if event.start_time and event.end_time
+            else []
+        ),
         "expected_attendance": event.expected_attendance,
         "status": event.status,
+        "last_saved_at": (
+            event.last_saved_at.replace(tzinfo=timezone.utc).isoformat()
+            if event.last_saved_at and event.last_saved_at.tzinfo is None
+            else event.last_saved_at.isoformat()
+            if event.last_saved_at
+            else None
+        ),
         # CS-E07-S1. The wording travels with the record so one vocabulary serves every
         # client, and the interface never has to interpret the stored value itself.
         "status_label": status_label(event.status),

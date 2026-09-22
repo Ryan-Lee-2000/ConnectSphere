@@ -2,8 +2,9 @@ from datetime import date, timedelta
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, EventRequest, Role
+from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 ORGANISER_ONE = "00000000-0000-0000-0000-000000000021"
@@ -30,7 +31,19 @@ def event_app(tmp_path):
     engine = app.extensions["engine"]
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add_all(Account(id=account_id) for account_id in identities.values())
+        organisation = Organisation(name="Community Partners")
+        session.add(organisation)
+        session.flush()
+        session.add_all(
+            Account(
+                id=account_id,
+                display_name=f"Test account {index}",
+                organisation_id=(
+                    organisation.id if account_id in {ORGANISER_ONE, ORGANISER_TWO} else None
+                ),
+            )
+            for index, account_id in enumerate(identities.values(), start=1)
+        )
         session.add_all(
             [
                 AccountRole(account_id=ORGANISER_ONE, role=Role.EVENT_ORGANISER.value),
@@ -95,7 +108,7 @@ def test_organiser_creates_complete_request_with_server_owned_identity_and_equip
 
     assert created["id"] == 1
     assert created["organiser_account_id"] == ORGANISER_ONE
-    assert created["organisation_id"] is None
+    assert isinstance(created["organisation_id"], int)
     assert created["status"] == "submitted"
     assert created["mapped_slots"] == ["AM", "PM"]
     assert created["registration_required"] is True
@@ -114,7 +127,7 @@ def test_organiser_creates_complete_request_with_server_owned_identity_and_equip
         stored = session.scalar(select(EventRequest))
         assert stored is not None
         assert stored.organiser_account_id == ORGANISER_ONE
-        assert stored.organisation_id is None
+        assert stored.organisation_id == created["organisation_id"]
 
 
 @pytest.mark.parametrize("field", ["organiser_account_id", "organisation_id", "status"])
@@ -153,6 +166,182 @@ def test_organisers_see_only_their_own_requests_while_coordinator_sees_all(clien
     ]
     assert coordinator_detail.status_code == 200
     assert coordinator_detail.json["event_request"]["id"] == first["id"]
+
+
+def test_drafts_are_visible_only_to_their_creator_even_with_a_coordinator_role(client, event_app):
+    submitted = create_event(client)
+    with Session(event_app.extensions["engine"]) as session:
+        draft = EventRequest(
+            organiser_account_id=ORGANISER_TWO,
+            organisation_id=submitted["organisation_id"],
+            name="Private draft",
+            status="draft",
+        )
+        session.add(draft)
+        session.add(AccountRole(account_id=ORGANISER_ONE, role=Role.EVENT_COORDINATOR.value))
+        session.commit()
+        draft_id = draft.id
+
+    creator_list = client.get("/api/event-requests", headers=headers("organiser-two"))
+    coordinator_list = client.get("/api/event-requests", headers=headers("coordinator"))
+    multi_role_list = client.get("/api/event-requests", headers=headers("organiser-one"))
+    creator_detail = client.get(f"/api/event-requests/{draft_id}", headers=headers("organiser-two"))
+    coordinator_detail = client.get(
+        f"/api/event-requests/{draft_id}", headers=headers("coordinator")
+    )
+    multi_role_detail = client.get(
+        f"/api/event-requests/{draft_id}", headers=headers("organiser-one")
+    )
+
+    assert [event["id"] for event in creator_list.json["event_requests"]] == [draft_id]
+    assert creator_detail.json["event_request"]["status"] == "draft"
+    assert creator_detail.json["event_request"]["mapped_slots"] == []
+    assert [event["id"] for event in coordinator_list.json["event_requests"]] == [submitted["id"]]
+    assert [event["id"] for event in multi_role_list.json["event_requests"]] == [submitted["id"]]
+    assert coordinator_detail.status_code == 404
+    assert multi_role_detail.status_code == 404
+
+
+def test_database_allows_name_only_draft_but_not_incomplete_submitted_request(event_app):
+    with Session(event_app.extensions["engine"]) as session:
+        session.add(
+            EventRequest(
+                organiser_account_id=ORGANISER_ONE,
+                organisation_id=1,
+                name="Early idea",
+                status="draft",
+            )
+        )
+        session.commit()
+
+    with Session(event_app.extensions["engine"]) as session:
+        session.add(
+            EventRequest(
+                organiser_account_id=ORGANISER_ONE,
+                organisation_id=1,
+                name="Incomplete",
+                status="submitted",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_draft_lifecycle_preserves_id_and_last_saved_time(client):
+    created_response = client.post(
+        "/api/event-requests/drafts", json={"name": "  Early idea  "}, headers=headers()
+    )
+    assert created_response.status_code == 201
+    draft = created_response.json["event_request"]
+    assert draft["name"] == "Early idea"
+    assert draft["status"] == "draft"
+    assert draft["purpose"] is None
+    assert draft["last_saved_at"]
+
+    saved_response = client.patch(
+        f"/api/event-requests/drafts/{draft['id']}",
+        json={"purpose": "A useful event", "proposed_date": event_payload()["proposed_date"]},
+        headers=headers(),
+    )
+    assert saved_response.status_code == 200
+    saved = saved_response.json["event_request"]
+    assert saved["id"] == draft["id"]
+    assert saved["last_saved_at"] >= draft["last_saved_at"]
+
+    incomplete = client.post(
+        f"/api/event-requests/drafts/{draft['id']}/submit", json={}, headers=headers()
+    )
+    assert incomplete.status_code == 400
+    assert (
+        client.get(f"/api/event-requests/{draft['id']}", headers=headers()).json["event_request"][
+            "status"
+        ]
+        == "draft"
+    )
+
+    submitted_response = client.post(
+        f"/api/event-requests/drafts/{draft['id']}/submit",
+        json={"start_time": "10:00", "end_time": "11:00", "expected_attendance": 25},
+        headers=headers(),
+    )
+    assert submitted_response.status_code == 200
+    assert submitted_response.json["event_request"]["id"] == draft["id"]
+    assert submitted_response.json["event_request"]["status"] == "submitted"
+    assert (
+        client.delete(f"/api/event-requests/drafts/{draft['id']}", headers=headers()).status_code
+        == 404
+    )
+
+
+def test_draft_save_delete_are_creator_only_and_never_expose_to_coordinator(client):
+    response = client.post(
+        "/api/event-requests/drafts", json={"name": "Private draft"}, headers=headers()
+    )
+    draft_id = response.json["event_request"]["id"]
+    url = f"/api/event-requests/drafts/{draft_id}"
+    assert (
+        client.get(f"/api/event-requests/{draft_id}", headers=headers("coordinator")).status_code
+        == 404
+    )
+    for identity in ("organiser-two", "coordinator"):
+        assert client.patch(
+            url, json={"name": "Stolen"}, headers=headers(identity)
+        ).status_code in (403, 404)
+        assert client.post(
+            f"{url}/submit", json=event_payload(), headers=headers(identity)
+        ).status_code in (403, 404)
+        assert client.delete(url, headers=headers(identity)).status_code in (403, 404)
+    assert client.delete(url, headers=headers()).status_code == 204
+    assert client.get(f"/api/event-requests/{draft_id}", headers=headers()).status_code == 404
+    assert client.get("/api/event-requests", headers=headers()).json["event_requests"] == []
+
+
+def test_draft_rejects_forged_identity_and_invalid_fields(client):
+    for field in ("organiser_account_id", "organisation_id", "status"):
+        response = client.post(
+            "/api/event-requests/drafts", json={"name": "Idea", field: "forged"}, headers=headers()
+        )
+        assert response.status_code == 400
+    assert client.post("/api/event-requests/drafts", json={}, headers=headers()).status_code == 400
+    assert (
+        client.post(
+            "/api/event-requests/drafts",
+            json={"name": "Idea", "expected_attendance": 0},
+            headers=headers(),
+        ).status_code
+        == 400
+    )
+
+
+def test_reopened_draft_retains_optional_fields_and_replaces_equipment_lines(client):
+    created = client.post(
+        "/api/event-requests/drafts", json=event_payload(), headers=headers()
+    ).json["event_request"]
+    assert created["preferred_room_layout"] == "Theatre"
+    assert len(created["equipment_requirements"]) == 2
+
+    saved = client.patch(
+        f"/api/event-requests/drafts/{created['id']}",
+        json={
+            "description": "Revised description",
+            "preferred_room_layout": None,
+            "equipment_requirements": [
+                {"equipment_type": "Projector", "quantity": 1, "notes": "Main stage"}
+            ],
+        },
+        headers=headers(),
+    )
+    assert saved.status_code == 200
+    reopened = client.get(f"/api/event-requests/{created['id']}", headers=headers()).json[
+        "event_request"
+    ]
+    assert reopened["description"] == "Revised description"
+    assert reopened["preferred_room_layout"] is None
+    assert reopened["required_facilities"] == ["Projector", "Step-free access"]
+    assert reopened["registration_required"] is True
+    assert len(reopened["equipment_requirements"]) == 1
+    assert reopened["equipment_requirements"][0]["equipment_type"] == "Projector"
+    assert reopened["equipment_requirements"][0]["notes"] == "Main stage"
 
 
 def test_event_request_routes_enforce_declared_roles(client):

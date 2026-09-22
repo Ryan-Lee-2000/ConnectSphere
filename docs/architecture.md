@@ -41,7 +41,7 @@ CS-E01-S2 adds the smallest trusted application model needed for reusable role a
 Sprint 1 maps venue catalogue functions onto that trusted foundation: Venue Staff may create and
 maintain venue profiles and room layouts; Event Coordinators may browse the catalogue and details.
 The browser does not submit a role, user ID or organisation ID to choose this access. Sprint 1 does
-not define organisation isolation, ownership, booking availability or a role-switching interface.
+not define booking availability.
 
 ## Coordinator assignment
 
@@ -59,13 +59,13 @@ operation requires the Event Operations Manager role through `require_roles`.
   interleaved PostgreSQL transactions under `npm run integration`.
 - `event_coordinator_history` appends every assignment and reassignment (previous coordinator,
   new coordinator, who, when) and is read in `changed_at` order.
-- `accounts.display_name` and `accounts.is_active` provide coordinator names and the "active user"
-  rule. **Active** means the account may still be given new responsibility: `is_active` defaults to
-  true for every account and only an inactive account is withheld from the coordinator picker.
-  Inactivity never removes an existing assignment, so an event keeps its coordinator and its
-  history if that account is later deactivated. Values are provisioned by the local seed and by
-  the migration default; no story yet gives the team a way to edit them, so ownership of both
-  columns needs a decision before these stories are called complete.
+- Coordinator names come from `accounts.display_name`, which SPL-45 now owns and makes non-null.
+  `accounts.is_active` carries the "active user" rule and is added here. **Active** means the
+  account may still be given new responsibility: `is_active` defaults to true for every account and
+  only an inactive account is withheld from the coordinator picker. Inactivity never removes an
+  existing assignment, so an event keeps its coordinator and its history if that account is later
+  deactivated. The value is provisioned by the migration default; no story yet gives the team a way
+  to edit it, so ownership of `is_active` still needs a decision.
 - **Status vocabulary.** CS-E07-S1 owns it in `app.event_statuses`; assignment reads that module
   rather than restating the values, and an import-time check fails loudly if the statuses this
   story depends on ever leave the vocabulary. Assignment is the first operation to move a request
@@ -73,8 +73,8 @@ operation requires the Event Operations Manager role through `require_roles`.
 - **Ordering.** The queue is oldest submission first, using CS-E03-S5's `submitted_at`. Requests
   stored before that story carry no submission time and sort last by id, because PostgreSQL and
   SQLite disagree on where NULLs fall.
-- **Still pending.** `organisation_id` stays null until SPL-45 introduces client organisations, so
-  the queue shows no organisation name yet.
+- **Client organisation.** SPL-45 now supplies `organisations` and a non-null
+  `event_requests.organisation_id`, so the queue names the requesting client organisation.
 
 ## Event-request submission foundation
 
@@ -87,9 +87,21 @@ organisation and status identifiers are rejected.
 The aggregate carries nullable venue, facilities, accessibility, equipment and registration
 preferences so adjacent Sprint 1 stories can share one migration chain. Those columns are a data
 contract only; they do not implement bookings, reservations, registration, drafts or workflow
-transitions. `organisation_id` is deliberately nullable and remains `NULL` until an approved
-organisation model can derive it server-side. Both tables use RLS with no browser-role grants;
-business access remains exclusively through Flask.
+transitions. Both tables use RLS with no browser-role grants; business access remains exclusively
+through Flask.
+
+## Client-organisation event isolation
+
+SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:
+
+- `organisations` identifies a client and is protected by RLS with no browser-role grants.
+- An Event Organiser's `accounts.organisation_id` is application-owned membership data.
+- Every event request stores the organisation derived from its authenticated organiser's account;
+  callers cannot select or override that organisation.
+- Dedicated organisation-event list and detail operations include non-draft events for the trusted
+  organisation. A cross-client identifier and a draft identifier both produce the same generic
+  not-found response.
+- The existing own-request API retains its narrower draft-management contract.
 
 ## Boundaries for future stories
 

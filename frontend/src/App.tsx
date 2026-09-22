@@ -11,9 +11,10 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
-import { EventRequestStatus } from './EventRequestStatus';
-import { EventRequestSubmit } from './EventRequestSubmit';
 import { VenueCatalogue } from './VenueCatalogue';
+import { EventRequestCreate } from './EventRequestCreate';
+import { EventRequestDrafts } from './EventRequestDrafts';
+import { OrganisationEvents } from './OrganisationEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -46,6 +47,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
+  if (/^\/workspace\/organisation-events(?:\/\d+)?$/.test(requestedPath)) {
+    return role === 'event_organiser';
+  }
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -356,9 +360,19 @@ function Workspace({
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
   const organiserRole = activeRole === 'event_organiser';
   const managerRole = activeRole === 'event_operations_manager';
+  const organisationEventMatch = safePath.match(/^\/workspace\/organisation-events\/(\d+)$/);
+  const organisationEventId = organisationEventMatch
+    ? Number(organisationEventMatch[1])
+    : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
-    : safePath === '/workspace/assignments' ? 'Coordinator assignment workspace' : undefined;
+    : safePath === '/workspace/assignments'
+      ? 'Coordinator assignment workspace'
+      : safePath.startsWith('/workspace/organisation-events')
+        ? 'Organisation event workspace'
+        : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests'
+          ? 'Event request workspace'
+          : undefined;
 
   return (
     <main className="workspace">
@@ -418,11 +432,16 @@ function Workspace({
           href="/workspace/my-requests"
           onClick={event => { event.preventDefault(); navigate('/workspace/my-requests'); }}
         >My requests</a>}
+        {organiserRole && <a
+          aria-current={safePath.startsWith('/workspace/organisation-events') ? 'page' : undefined}
+          href="/workspace/organisation-events"
+          onClick={event => { event.preventDefault(); navigate('/workspace/organisation-events'); }}
+        >Organisation events</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
           <div>
-            <h2 id="role-switch-warning-title">Discard unsaved venue changes?</h2>
+            <h2 id="role-switch-warning-title">Discard unsaved changes?</h2>
             <p>Switching to {ROLE_LABELS[pendingRole]} will leave this page without saving your changes.</p>
           </div>
           <div className="role-switch-warning__actions">
@@ -440,15 +459,24 @@ function Workspace({
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
-          <EventRequestSubmit
+          <EventRequestCreate
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
+            onUnsavedChanges={setHasUnsavedChanges}
             onSubmitted={() => navigate('/workspace/my-requests')}
           />
         ) : safePath === '/workspace/my-requests' ? (
-          <EventRequestStatus
+          <EventRequestDrafts
             accessToken={session.access_token}
             key={`${activeRole}:my-requests`}
+            onUnsavedChanges={setHasUnsavedChanges}
+          />
+        ) : safePath.startsWith('/workspace/organisation-events') ? (
+          <OrganisationEvents
+            accessToken={session.access_token}
+            eventId={organisationEventId}
+            key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
+            onNavigate={navigate}
           />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
@@ -501,6 +529,9 @@ export function App({ authGateway = defaultAuthGateway }: AppProps) {
         const { session } = await authGateway.getSession();
         const verified = session ? await verifySession(session) : false;
         if (active) {
+          if (verified && !window.location.pathname.startsWith('/workspace')) {
+            window.history.replaceState({}, '', '/workspace');
+          }
           setSession(verified ? session : null);
           setView(verified ? 'workspace' : 'sign-in');
         }
