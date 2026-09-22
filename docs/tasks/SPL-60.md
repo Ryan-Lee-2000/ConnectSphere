@@ -72,8 +72,9 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 - **Status vocabulary:** CS-E07-S1 owns it in `app.event_statuses`; this story reads that module
   and stamps `status_changed_at` when it moves a request to Under Review.
 - **Needs team agreement:** the picker is filtered by a new `accounts.is_active`
-  flag and names come from a new `accounts.display_name`; no story manages
-  either yet.
+  flag, which no story manages yet. Coordinator names come from
+  `accounts.display_name`, which SPL-45 now owns and makes non-null, so only
+  `is_active` is still unowned.
 
 ## Test cases
 

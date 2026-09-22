@@ -558,7 +558,7 @@ def _coordinator(event: EventRequest) -> dict[str, Any] | None:
     if assignment is None:
         return None
     coordinator = assignment.coordinator
-    return {"id": coordinator.id, "name": coordinator.display_name or "Unnamed account"}
+    return {"id": coordinator.id, "name": coordinator.display_name}
 
 
 def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
