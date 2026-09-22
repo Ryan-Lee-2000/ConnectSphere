@@ -12,5 +12,5 @@ def test_can_generate_a_revision_without_touching_project_migrations(tmp_path):
     config = Config()
     config.set_main_option("script_location", str(target))
     revision = command.revision(config, message="tooling check", rev_id="probe")
-    assert revision.down_revision == "s1_client_organisations"
+    assert revision.down_revision == "s1_coordinator_assignment"
     compile(Path(revision.path).read_text(), revision.path, "exec")

@@ -29,6 +29,11 @@ fixtures = {
         "organisation": None,
         "roles": ("event_coordinator",),
     },
+    "operations.manager@example.test": {
+        "display_name": "Morgan Ong",
+        "organisation": None,
+        "roles": ("event_operations_manager",),
+    },
 }
 with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
     page = 1
@@ -90,4 +95,7 @@ try:
 finally:
     engine.dispose()
 
-print("Local Auth fixtures ready for organiser, venue staff and event coordinator roles.")
+print(
+    "Local Auth fixtures ready for organiser, venue staff, event coordinator and "
+    "operations manager roles."
+)

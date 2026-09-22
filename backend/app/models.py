@@ -16,6 +16,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     Uuid,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -56,6 +57,9 @@ class Account(Base):
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     display_name: Mapped[str] = mapped_column(Text, nullable=False, default="Unnamed account")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
     organisation_id: Mapped[int | None] = mapped_column(
         ForeignKey("organisations.id"), nullable=True, index=True
     )
@@ -178,6 +182,10 @@ class EventRequest(Base):
         cascade="all, delete-orphan",
         order_by="EquipmentRequirement.id",
     )
+    # CS-E05-S2. At most one coordinator is responsible at a time; the organiser is shown who.
+    coordinator_assignment: Mapped["EventCoordinatorAssignment | None"] = relationship(
+        back_populates="event_request", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class EquipmentRequirement(Base):
@@ -196,3 +204,47 @@ class EquipmentRequirement(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
     event_request: Mapped[EventRequest] = relationship(back_populates="equipment_requirements")
+
+
+class EventCoordinatorAssignment(Base):
+    """The single Event Coordinator currently responsible for an event request."""
+
+    __tablename__ = "event_coordinator_assignments"
+
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
+    coordinator_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    assigned_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_request: Mapped[EventRequest] = relationship(
+        back_populates="coordinator_assignment", foreign_keys=[event_request_id]
+    )
+    coordinator: Mapped[Account] = relationship(foreign_keys=[coordinator_account_id])
+
+
+class EventCoordinatorHistory(Base):
+    """One assignment or reassignment, kept so the manager can audit responsibility changes."""
+
+    __tablename__ = "event_coordinator_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    previous_coordinator_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    new_coordinator_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
