@@ -68,13 +68,26 @@ operation requires the Event Operations Manager role through `require_roles`.
   to edit it, so ownership of `is_active` still needs a decision.
 - **Status vocabulary.** CS-E07-S1 owns it in `app.event_statuses`; assignment reads that module
   rather than restating the values, and an import-time check fails loudly if the statuses this
-  story depends on ever leave the vocabulary. Assignment is the first operation to move a request
-  off `submitted`, so it stamps `status_changed_at` as well, which CS-E07-S1 reads.
+  story depends on ever leave the vocabulary. Assignment leaves the request `submitted`; SPL-70's
+  assigned-coordinator action is the first operation to move it to `under_review` and stamp
+  `status_changed_at`.
 - **Ordering.** The queue is oldest submission first, using CS-E03-S5's `submitted_at`. Requests
   stored before that story carry no submission time and sort last by id, because PostgreSQL and
   SQLite disagree on where NULLs fall.
 - **Client organisation.** SPL-45 now supplies `organisations` and a non-null
   `event_requests.organisation_id`, so the queue names the requesting client organisation.
+
+## Event review transitions
+
+SPL-70 introduces the first explicit workflow action at
+`POST /api/event-requests/<id>/begin-review`. The route verifies that the caller is the currently
+assigned Event Coordinator; clients never submit a target status. `event_review.TRANSITION_RULES`
+is the server-owned before/after policy that later workflow actions extend.
+
+`transition_event_status()` conditionally updates the expected current status and appends an
+`event_status_history` row in the caller's transaction. The history records the named action,
+previous and resulting statuses, actor, and timestamp. A competing or repeated action updates no
+row and therefore writes no audit evidence.
 
 ## Event-request submission foundation
 

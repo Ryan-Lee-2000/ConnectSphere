@@ -63,7 +63,7 @@ it('assigns the chosen coordinator and refreshes the queue', async () => {
     }
     if (path === '/api/event-requests/7/coordinator' && init?.method === 'POST') {
       assigned = true;
-      return response({ assignment: { event_request_id: 7, status: 'under_review', coordinator: coordinators[1] } }, 201);
+      return response({ assignment: { event_request_id: 7, status: 'submitted', coordinator: coordinators[1] } }, 201);
     }
     return response({ error: 'Unexpected request.' }, 500);
   });
