@@ -53,3 +53,40 @@ reflects that review has started.
 | TC-SPL-70-03 | 2 | Event is not Submitted or action is repeated | Request refused; no second transition or audit record | API |
 | TC-SPL-70-04 | 3 | Client submits an arbitrary target status | Request refused; server-owned transition is not bypassed | API |
 | TC-SPL-70-05 | 1,2 | Coordinator uses the assigned-event page | Button appears only for Submitted; success refreshes status; refusal remains actionable | UI |
+
+## Automated test traceability
+
+Every test-case ID above is written beside its executable test, so the documentation and code can
+be found with the same search term. One documented case may have more than one executable test when
+separate input partitions need independent setup or assertions.
+
+| Test case | Executable evidence |
+|---|---|
+| TC-SPL-70-01 | `backend/tests/test_begin_review.py`; `frontend/src/AssignedEvents.test.tsx` |
+| TC-SPL-70-02 | `backend/tests/test_begin_review.py` (wrong-role and unassigned partitions) |
+| TC-SPL-70-03 | `backend/tests/test_begin_review.py` (wrong-state and repeated-action partitions) |
+| TC-SPL-70-04 | `backend/tests/test_begin_review.py` |
+| TC-SPL-70-05 | `frontend/src/AssignedEvents.test.tsx` |
+
+From the repository root, an instructor can locate a case with:
+
+```sh
+rg -n "TC-SPL-70-03" docs backend/tests frontend/src
+```
+
+Run the story's focused automated tests with:
+
+```sh
+uv run pytest backend/tests/test_begin_review.py -q
+pnpm --dir frontend exec vitest run src/AssignedEvents.test.tsx
+```
+
+To demonstrate one case rather than the whole file:
+
+```sh
+uv run pytest backend/tests/test_begin_review.py -q -k tc_spl_70_03
+pnpm --dir frontend exec vitest run src/AssignedEvents.test.tsx -t "TC-SPL-70-05"
+```
+
+Focused commands provide quick feedback; `npm run verify` remains the required full local gate and
+the pull-request CI result remains the clean-environment evidence.

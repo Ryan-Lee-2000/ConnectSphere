@@ -125,7 +125,8 @@ def audit_rows(app, event_id: int):
         ).all()
 
 
-def test_assigned_coordinator_begins_review_and_records_audit_evidence(app, client):
+# TC-SPL-70-01
+def test_tc_spl_70_01_assigned_coordinator_begins_review_and_records_audit_evidence(app, client):
     event_id = assigned_request(app)
 
     response = begin_review(client, event_id)
@@ -156,7 +157,8 @@ def test_assigned_coordinator_begins_review_and_records_audit_evidence(app, clie
 
 
 @pytest.mark.parametrize("token", ["manager", "organiser"])
-def test_non_coordinator_role_is_refused_without_changing_event(app, client, token):
+# TC-SPL-70-02
+def test_tc_spl_70_02_non_coordinator_role_is_refused_without_changing_event(app, client, token):
     event_id = assigned_request(app)
 
     response = begin_review(client, event_id, token)
@@ -166,7 +168,8 @@ def test_non_coordinator_role_is_refused_without_changing_event(app, client, tok
     assert audit_rows(app, event_id) == []
 
 
-def test_unassigned_coordinator_is_refused_without_changing_event(app, client):
+# TC-SPL-70-02
+def test_tc_spl_70_02_unassigned_coordinator_is_refused_without_changing_event(app, client):
     event_id = assigned_request(app)
 
     response = begin_review(client, event_id, "bob")
@@ -176,7 +179,8 @@ def test_unassigned_coordinator_is_refused_without_changing_event(app, client):
     assert audit_rows(app, event_id) == []
 
 
-def test_event_not_in_submitted_is_refused_without_a_second_transition(app, client):
+# TC-SPL-70-03
+def test_tc_spl_70_03_event_not_in_submitted_is_refused_without_a_second_transition(app, client):
     event_id = assigned_request(app, status="under_review")
 
     response = begin_review(client, event_id)
@@ -186,7 +190,8 @@ def test_event_not_in_submitted_is_refused_without_a_second_transition(app, clie
     assert audit_rows(app, event_id) == []
 
 
-def test_client_cannot_supply_an_arbitrary_target_status(app, client):
+# TC-SPL-70-04
+def test_tc_spl_70_04_client_cannot_supply_an_arbitrary_target_status(app, client):
     event_id = assigned_request(app)
 
     response = begin_review(client, event_id, json={"status": "approved"})
@@ -196,7 +201,8 @@ def test_client_cannot_supply_an_arbitrary_target_status(app, client):
     assert audit_rows(app, event_id) == []
 
 
-def test_repeating_begin_review_is_refused_and_keeps_one_audit_record(app, client):
+# TC-SPL-70-03
+def test_tc_spl_70_03_repeating_begin_review_is_refused_and_keeps_one_audit_record(app, client):
     event_id = assigned_request(app)
     assert begin_review(client, event_id).status_code == 200
 

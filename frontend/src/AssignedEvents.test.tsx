@@ -29,7 +29,7 @@ it('opens the selected event using the assigned-only detail endpoint', async () 
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/12');
 });
 
-it('lets the assigned coordinator begin review from a submitted event', async () => {
+it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
   const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: assigned }) })
@@ -47,7 +47,7 @@ it('lets the assigned coordinator begin review from a submitted event', async ()
   );
 });
 
-it('keeps the submitted status available when begin review is refused', async () => {
+it('[TC-SPL-70-05] keeps the submitted status available when begin review is refused', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: assigned }) })
     .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Only a submitted event can begin review.' }) });
