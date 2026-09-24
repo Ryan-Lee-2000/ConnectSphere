@@ -158,7 +158,7 @@ function AssignCoordinatorPanel({ api, event, onCancel, onAssigned }: { api: Api
   const canAssign = Boolean(options?.coordinators.length) && Boolean(choice) && !saving;
 
   return <form className="assignment-panel" onSubmit={submit} aria-labelledby="assign-coordinator-heading">
-    <div><p className="eyebrow">Assign Event Coordinator</p><h3 id="assign-coordinator-heading" ref={heading} tabIndex={-1}>{event.name}</h3><p className="hint">The coordinator becomes responsible immediately, with no acceptance step, and the event moves to Under Review.</p></div>
+    <div><p className="eyebrow">Assign Event Coordinator</p><h3 id="assign-coordinator-heading" ref={heading} tabIndex={-1}>{event.name}</h3><p className="hint">The coordinator becomes responsible immediately. The event remains Submitted until they begin their review.</p></div>
     {error && <p className="error" role="alert">{error}</p>}
     {!options && !error && <p role="status">Loading Event Coordinators…</p>}
     {options?.unavailable_reason && <p className="error" role="alert">{options.unavailable_reason}</p>}

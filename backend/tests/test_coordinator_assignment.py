@@ -219,8 +219,8 @@ def test_tc_e05_s4_01_02_04_lists_only_current_coordinator_assignments(app, clie
         {
             "id": alice_event,
             "name": "Alice's event",
-            "status": UNDER_REVIEW,
-            "status_label": "Under review",
+            "status": SUBMITTED,
+            "status_label": "Submitted",
             "proposed_date": "2026-10-12",
         }
     ]
@@ -431,14 +431,14 @@ def test_tc_e05_s2_01_09_assignment_records_the_coordinator_and_the_history(app,
     assert response.status_code == 201
     assignment = response.json["assignment"]
     assert assignment["event_request_id"] == event_id
-    assert assignment["status"] == UNDER_REVIEW
+    assert assignment["status"] == SUBMITTED
     assert assignment["coordinator"] == {"id": ALICE, "name": "Alice Tan"}
     assert assignment["assigned_by"] == {"id": MANAGER, "name": "Morgan Manager"}
     assert holds_event(app, event_id, ALICE)
     status, status_changed_at = stored_request(app, event_id)
-    assert status == UNDER_REVIEW
-    # CS-E07-S1 reads this to tell the organiser when the status last moved.
-    assert status_changed_at is not None
+    assert status == SUBMITTED
+    # Assignment is responsibility metadata; SPL-70 owns the next status transition.
+    assert status_changed_at is None
     assert history(client, event_id).json == {
         "history": [
             {
@@ -460,7 +460,7 @@ def test_tc_e05_s2_01b_organiser_sees_the_assigned_coordinator(app, client):
 
     event = organiser_view(client, event_id).json["event_request"]
     assert event["coordinator"] == {"id": ALICE, "name": "Alice Tan"}
-    assert event["status"] == UNDER_REVIEW
+    assert event["status"] == SUBMITTED
 
 
 def test_tc_e05_s2_02_picker_lists_only_active_event_coordinators(app, client):
@@ -594,7 +594,7 @@ def test_tc_e05_s3_01_reassignment_moves_responsibility_and_keeps_status(app, cl
     assert response.status_code == 200
     assignment = response.json["assignment"]
     assert assignment["coordinator"] == {"id": BOB, "name": "Bob Lim"}
-    assert assignment["status"] == UNDER_REVIEW
+    assert assignment["status"] == SUBMITTED
     assert holds_event(app, event_id, BOB)
     assert not holds_event(app, event_id, ALICE)
     latest = history(client, event_id).json["history"][-1]

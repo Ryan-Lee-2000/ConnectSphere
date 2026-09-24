@@ -1,8 +1,8 @@
 """Coordinator assignment routes for Sprint 1 stories SPL-59 through SPL-61.
 
 These operate on the CS-E03 `event_requests` aggregate and the CS-E07-S1 status vocabulary.
-Assignment is the first thing that moves a request off `submitted`, so it also stamps
-`status_changed_at`.
+Assignment deliberately leaves a request `submitted`; SPL-70 owns the assigned coordinator's
+explicit transition to `under_review`.
 """
 
 import uuid
@@ -130,8 +130,8 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
             )
             now = datetime.now(SINGAPORE)
             try:
-                # The assignment key and the conditional status change both reject a concurrent
-                # assignment that passed the checks above, so the first commit always wins.
+                # The assignment primary key rejects a concurrent assignment that passed the
+                # checks above, so the first commit always wins.
                 session.add(
                     EventCoordinatorAssignment(
                         event_request_id=event_request_id,
@@ -148,13 +148,6 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                         changed_at=now,
                     )
                 )
-                transitioned = session.execute(
-                    update(EventRequest)
-                    .where(EventRequest.id == event_request_id, EventRequest.status == SUBMITTED)
-                    .values(status=UNDER_REVIEW, status_changed_at=now)
-                )
-                if transitioned.rowcount != 1:
-                    abort(409, ALREADY_ASSIGNED)
                 session.commit()
             except IntegrityError:
                 session.rollback()

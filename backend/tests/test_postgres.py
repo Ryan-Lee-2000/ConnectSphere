@@ -20,6 +20,7 @@ PRODUCT_TABLES = {
     "equipment_requirements",
     "event_coordinator_assignments",
     "event_coordinator_history",
+    "event_status_history",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 
@@ -81,7 +82,7 @@ def test_empty_baseline_migration_is_rerunnable():
                 )
             ).all()
             assert browser_grants == []
-            # SPL-60 must be able to move a request out of 'submitted'.
+            # SPL-70 must be able to move a request out of 'submitted'.
             allowed = conn.execute(
                 text(
                     "select pg_get_constraintdef(oid) from pg_constraint "

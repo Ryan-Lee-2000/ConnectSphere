@@ -25,12 +25,15 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
   const [events, setEvents] = useState<AssignedEvent[] | null>(null);
   const [event, setEvent] = useState<AssignedEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
 
   useEffect(() => {
     let active = true;
     setEvents(null);
     setEvent(null);
     setError(null);
+    setNotice(null);
     void (async () => {
       try {
         const response = await api(eventId === undefined
@@ -59,6 +62,29 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
     onNavigate(path);
   }
 
+  async function beginReview() {
+    if (!event || event.status !== 'submitted' || transitioning) return;
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/begin-review`, { method: 'POST' });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not begin review. Try again.');
+      } else if (body?.event) {
+        setEvent(body.event);
+        setNotice('Review started.');
+      } else {
+        setError('Could not begin review. Try again.');
+      }
+    } catch {
+      setError('Could not begin review. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   const back = <a className="organisation-events__back" href="/workspace/assigned-events"
     onClick={click => follow(click, '/workspace/assigned-events')}>Back to my assigned events</a>;
 
@@ -67,11 +93,18 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
     <p className="eyebrow">Event Coordinator</p>
     <h1 id="assigned-events-title">{event ? event.name : 'My assigned events'}</h1>
     {error && <p className="error" role="alert">{error}</p>}
+    {notice && <p className="notice" role="status">{notice}</p>}
     {!error && events === null && event === null && <p role="status">Loading assigned events…</p>}
     {event && <dl className="organisation-events__details">
       <div><dt>Status</dt><dd>{event.status_label}</dd></div>
       <div><dt>Proposed date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
     </dl>}
+    {event?.status === 'submitted' && <div className="organisation-events__actions">
+      <button type="button" className="button button--primary" disabled={transitioning}
+        onClick={() => { void beginReview(); }}>
+        {transitioning ? 'Beginning review…' : 'Begin review'}
+      </button>
+    </div>}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">
       <strong>No events assigned to you yet.</strong>
       <span>Events appear here when an Event Operations Manager assigns them to you.</span>

@@ -251,3 +251,21 @@ class EventCoordinatorHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EventStatusHistory(Base):
+    """One server-authorised event status transition and its audit evidence."""
+
+    __tablename__ = "event_status_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    previous_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    resulting_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    actor_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
