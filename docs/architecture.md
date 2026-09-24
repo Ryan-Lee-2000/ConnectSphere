@@ -116,6 +116,18 @@ SPL-45 adds the minimal trusted organisation relationship needed for same-client
   not-found response.
 - The existing own-request API retains its narrower draft-management contract.
 
+## Venue preparation occupancy
+
+SPL-87 establishes the shared, database-free rule for turning dated event slots into complete venue
+occupancy. `app.slots.derive_venue_occupancy()` orders event slots using the fixed AM, PM and Night
+sequence, derives at most one directly adjacent setup and turnaround slot from a venue's catalogue
+requirements, and rolls adjacency across Singapore calendar days. Its immutable result identifies
+each slot as event, setup or turnaround occupancy.
+
+The calculation deliberately creates no booking record and exposes no endpoint or interface.
+Venue search, booking, calendars and conflict prevention consume this rule in their own approved
+stories, preventing each workflow from implementing a different interpretation of preparation time.
+
 ## Boundaries for future stories
 
 React may call Supabase directly only for authentication. All business operations go through Flask.
