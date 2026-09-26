@@ -82,6 +82,12 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, a
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.getByText('Under review')).toBeVisible();
   await expect(page.getByText(displayedDate)).toBeVisible();
+
+  // SPL-64: the detail is the complete read-only request, including organisation and organiser.
+  await expect(page.getByRole('rowheader', { name: 'Client organisation' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Responsible Event Organiser' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Registration required' })).toBeVisible();
+  await expect(page.getByRole('textbox')).toHaveCount(0);
 });
 
 test('TC-CS-E05-S1-06: a role without Event Operations Manager is never offered the queue', async ({

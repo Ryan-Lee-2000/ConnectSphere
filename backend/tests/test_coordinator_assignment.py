@@ -14,6 +14,7 @@ from app.coordinator_assignment import (
     NO_OTHER_COORDINATOR_AVAILABLE,
     SUBMITTED,
     UNDER_REVIEW,
+    _serialize_assigned_event_detail,
     is_assigned_coordinator,
 )
 from app.event_requests import SINGAPORE
@@ -21,11 +22,13 @@ from app.models import (
     Account,
     AccountRole,
     Base,
+    EquipmentRequirement,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
     Organisation,
     Role,
+    Venue,
 )
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -238,6 +241,299 @@ def test_tc_e05_s4_03_opens_only_current_assignment(app, client):
     assert reassign(client, alice_event, BOB).status_code == 200
     assert client.get(path, headers=headers("coordinator")).status_code == 404
     assert client.get(path, headers=headers("coordinator-b")).status_code == 200
+
+
+def fill_request_details(app, event_id):
+    with Session(app.extensions["engine"]) as session:
+        venue = Venue(name="Harbour Hall")
+        session.add(venue)
+        session.flush()
+        event = session.get(EventRequest, event_id)
+        event.description = "Annual client forum"
+        event.venue_id = venue.id
+        event.preferred_room_layout = "Theatre"
+        event.required_facilities = ["Projector", "Microphone"]
+        event.facilities_notes = "Two lapel microphones"
+        event.accessibility_needs = ["Step-free access"]
+        event.location_preference = "Ground floor"
+        event.venue_notes = "Loading bay access"
+        event.registration_required = True
+        event.registration_notes = "Ticketed"
+        event.equipment_requirements = [
+            EquipmentRequirement(equipment_type="Podium", quantity=2, notes="Lockable"),
+        ]
+        session.commit()
+
+
+# SPL-64 / CS-E06-S1: the assigned coordinator reads the complete submitted request.
+
+
+def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client):
+    event_id = add_request(app)
+    fill_request_details(app, event_id)
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    response = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    )
+
+    assert response.status_code == 200
+    assert response.json["event"] == {
+        "id": event_id,
+        "name": "Harbour Summit",
+        "status": SUBMITTED,
+        "status_label": "Submitted",
+        "proposed_date": "2026-10-12",
+        "purpose": "Client showcase",
+        "description": "Annual client forum",
+        "start_time": "09:00",
+        "end_time": "12:00",
+        "expected_attendance": 120,
+        "venue_name": "Harbour Hall",
+        "preferred_room_layout": "Theatre",
+        "required_facilities": ["Projector", "Microphone"],
+        "facilities_notes": "Two lapel microphones",
+        "accessibility_needs": ["Step-free access"],
+        "location_preference": "Ground floor",
+        "venue_notes": "Loading bay access",
+        "equipment_requirements": [
+            {"equipment_type": "Podium", "quantity": 2, "notes": "Lockable"}
+        ],
+        "registration_required": True,
+        "registration_notes": "Ticketed",
+        "client_organisation": ORGANISATION_NAME,
+        "responsible_organiser": "Olivia Organiser",
+        "submitted_at": SUBMITTED_AT.isoformat(),
+    }
+
+
+def test_tc_spl_64_02_empty_optional_fields_are_returned_empty(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    event = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    ).json["event"]
+
+    assert event["description"] is None
+    assert event["venue_name"] is None
+    assert event["required_facilities"] == []
+    assert event["accessibility_needs"] == []
+    assert event["equipment_requirements"] == []
+    assert event["registration_required"] is False
+
+
+def test_tc_spl_64_03_04_unassigned_and_missing_requests_leak_nothing(app, client):
+    event_id = add_request(app)
+    fill_request_details(app, event_id)
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    unassigned = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator-b")
+    )
+    missing = client.get("/api/event-requests/assigned/9999", headers=headers("coordinator-b"))
+
+    assert unassigned.status_code == missing.status_code == 404
+    assert unassigned.json == missing.json == {"error": "Assigned event not found."}
+    assert "Harbour" not in unassigned.get_data(as_text=True)
+
+
+def test_tc_spl_64_03_unassigned_event_is_not_readable_by_any_coordinator(app, client):
+    event_id = add_request(app)
+    path = f"/api/event-requests/assigned/{event_id}"
+    assert client.get(path, headers=headers("coordinator")).status_code == 404
+    assert assign(client, event_id, ALICE).status_code == 201
+    assert reassign(client, event_id, BOB).status_code == 200
+    assert client.get(path, headers=headers("coordinator")).status_code == 404
+    assert client.get(path, headers=headers("coordinator-b")).status_code == 200
+
+
+def test_tc_spl_64_05_detail_is_read_only_and_role_protected(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+    path = f"/api/event-requests/assigned/{event_id}"
+
+    for method in ("put", "patch", "post", "delete"):
+        response = getattr(client, method)(
+            path, json={"name": "Changed"}, headers=headers("coordinator")
+        )
+        # The default-deny hook refuses an unregistered method before routing can say 405.
+        assert response.status_code in (403, 405)
+    assert client.get(path, headers=headers("organiser")).status_code == 403
+    assert client.get(path, headers=headers("manager")).status_code == 403
+    assert client.get(path).status_code == 401
+    unchanged = client.get(path, headers=headers("coordinator"))
+    assert unchanged.json["event"]["name"] == "Harbour Summit"
+
+
+# SPL-64 QA additions: white-box serializer cases and black-box boundary partitions.
+
+
+def transient_event(**overrides):
+    """An unsaved request, so the serializer's branches can be driven without a database."""
+
+    values = {
+        "id": 7,
+        "name": "Unsaved",
+        "status": SUBMITTED,
+        "organiser": Account(id=ORGANISER, display_name="Olivia Organiser"),
+        "organisation": Organisation(name=ORGANISATION_NAME),
+        "venue": None,
+        "required_facilities": [],
+        "accessibility_needs": [],
+        "registration_required": False,
+        "equipment_requirements": [],
+    }
+    values.update(overrides)
+    return EventRequest(**values)
+
+
+def test_tc_spl_64_10_serializer_leaves_absent_optionals_null():
+    event = _serialize_assigned_event_detail(transient_event())
+
+    assert event["proposed_date"] is None
+    assert event["start_time"] is None and event["end_time"] is None
+    assert event["expected_attendance"] is None
+    assert event["venue_name"] is None
+    assert event["submitted_at"] is None
+    assert event["equipment_requirements"] == []
+    assert event["client_organisation"] == ORGANISATION_NAME
+    assert event["responsible_organiser"] == "Olivia Organiser"
+
+
+def test_tc_spl_64_11_serializer_formats_times_without_seconds():
+    event = _serialize_assigned_event_detail(
+        transient_event(start_time=time(9, 30, 45), end_time=time(17, 5))
+    )
+
+    assert event["start_time"] == "09:30"
+    assert event["end_time"] == "17:05"
+
+
+def test_tc_spl_64_12_serializer_stamps_singapore_on_a_naive_submission_time():
+    naive = _serialize_assigned_event_detail(
+        transient_event(submitted_at=datetime(2026, 9, 1, 9, 0))
+    )
+    aware = _serialize_assigned_event_detail(
+        transient_event(submitted_at=datetime(2026, 9, 1, 1, 0, tzinfo=SINGAPORE))
+    )
+
+    assert naive["submitted_at"] == "2026-09-01T09:00:00+08:00"
+    assert aware["submitted_at"] == "2026-09-01T01:00:00+08:00"
+
+
+def test_tc_spl_64_13_serializer_omits_internal_identifiers_from_equipment_and_event():
+    event = _serialize_assigned_event_detail(
+        transient_event(
+            equipment_requirements=[
+                EquipmentRequirement(id=5, equipment_type="Podium", quantity=1, notes=None)
+            ]
+        )
+    )
+
+    assert event["equipment_requirements"] == [
+        {"equipment_type": "Podium", "quantity": 1, "notes": None}
+    ]
+    for internal in ("organiser_account_id", "organisation_id", "venue_id"):
+        assert internal not in event
+
+
+def test_tc_spl_64_14_equipment_lines_keep_entry_order(app, client):
+    event_id = add_request(app)
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        event.equipment_requirements = [
+            EquipmentRequirement(equipment_type=name, quantity=index + 1)
+            for index, name in enumerate(["Zebra table", "Alpha lamp", "Microphone"])
+        ]
+        session.commit()
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    lines = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    ).json["event"]["equipment_requirements"]
+
+    assert [line["equipment_type"] for line in lines] == ["Zebra table", "Alpha lamp", "Microphone"]
+    assert [line["quantity"] for line in lines] == [1, 2, 3]
+
+
+def test_tc_spl_64_15_detail_stays_readable_after_review_begins(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+    set_status(app, event_id, UNDER_REVIEW)
+
+    event = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    ).json["event"]
+
+    assert event["status"] == UNDER_REVIEW
+    assert event["status_label"] == "Under review"
+    assert event["purpose"] == "Client showcase"
+
+
+def test_tc_spl_64_16_malformed_and_out_of_range_ids_return_no_event(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    for bad in ("0", "-1", "abc", "1%20OR%201=1", "99999999999999999999"):
+        response = client.get(f"/api/event-requests/assigned/{bad}", headers=headers("coordinator"))
+        # Unroutable ids are refused by the default-deny hook (403); routable ones are a 404.
+        assert response.status_code in (403, 404)
+        assert "Harbour Summit" not in response.get_data(as_text=True)
+
+
+def test_tc_spl_64_17_reassigned_back_coordinator_regains_access(app, client):
+    event_id = add_request(app)
+    path = f"/api/event-requests/assigned/{event_id}"
+    assert assign(client, event_id, ALICE).status_code == 201
+    assert reassign(client, event_id, BOB).status_code == 200
+    assert client.get(path, headers=headers("coordinator")).status_code == 404
+    assert reassign(client, event_id, ALICE).status_code == 200
+    assert client.get(path, headers=headers("coordinator")).status_code == 200
+    assert client.get(path, headers=headers("coordinator-b")).status_code == 404
+
+
+def test_tc_spl_64_18_dual_role_manager_organiser_cannot_read_the_coordinator_detail(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+    path = f"/api/event-requests/assigned/{event_id}"
+
+    for token in ("manager-and-organiser", "venue-staff"):
+        response = client.get(path, headers=headers(token))
+        assert response.status_code == 403
+        assert "Harbour Summit" not in response.get_data(as_text=True)
+
+
+def test_tc_spl_64_19_deactivated_coordinator_cannot_read_the_detail(app, client):
+    event_id = add_request(app)
+    assert assign(client, event_id, ALICE).status_code == 201
+    deactivate(app, ALICE)
+
+    response = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    )
+
+    assert response.status_code == 403
+    assert "Harbour Summit" not in response.get_data(as_text=True)
+
+
+def test_tc_spl_64_20_long_and_unicode_text_round_trips(app, client):
+    event_id = add_request(app)
+    long_text = "Café 会议 ✓ " * 400
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        event.description = long_text
+        event.venue_notes = "<script>alert(1)</script>"
+        session.commit()
+    assert assign(client, event_id, ALICE).status_code == 201
+
+    response = client.get(
+        f"/api/event-requests/assigned/{event_id}", headers=headers("coordinator")
+    )
+
+    assert response.mimetype == "application/json"
+    assert response.json["event"]["description"] == long_text
+    assert response.json["event"]["venue_notes"] == "<script>alert(1)</script>"
 
 
 def test_tc_e05_s4_05_empty_and_role_boundaries(app, client):

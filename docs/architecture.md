@@ -55,6 +55,9 @@ operation requires the Event Operations Manager role through `require_roles`.
   that was read **and** the event is still in a reassignable status; both conditions live in the
   statement, so a concurrent terminal transition cannot slip between the read and the write.
   `is_assigned_coordinator()` is the check later coordinator-only operations must reuse.
+  `GET /api/event-requests/assigned/<id>` returns the complete read-only request (CS-E06-S1); its
+  query joins the assignment, so a missing request and another coordinator's request both answer
+  the same 404 and disclose nothing.
   `backend/tests/test_coordinator_concurrency_postgres.py` proves both races with real
   interleaved PostgreSQL transactions under `npm run integration`.
 - `event_coordinator_history` appends every assignment and reassignment (previous coordinator,

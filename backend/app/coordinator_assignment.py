@@ -12,7 +12,7 @@ from typing import Any
 from flask import Flask, abort, g, jsonify, request
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.authorization import require_roles
 from app.event_requests import SINGAPORE
@@ -28,6 +28,9 @@ from app.models import (
 
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
+# event_requests.id is a 32-bit integer; a larger path id cannot name a request, and binding it
+# would overflow the driver instead of answering "not found".
+MAX_EVENT_REQUEST_ID = 2**31 - 1
 NON_REASSIGNABLE_STATUSES = frozenset({"completed", "cancelled", "rejected", "withdrawn"})
 # CS-E07-S1 owns the vocabulary; fail at import if a value used here ever leaves it.
 assert {SUBMITTED, UNDER_REVIEW} | NON_REASSIGNABLE_STATUSES <= set(EVENT_REQUEST_STATUSES)
@@ -57,6 +60,8 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
     @app.get("/api/event-requests/assigned/<int:event_request_id>")
     @require_roles(Role.EVENT_COORDINATOR)
     def get_my_assigned_event(event_request_id: int):
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
         with Session(app.extensions["engine"]) as session:
             event = session.scalar(
                 select(EventRequest)
@@ -65,10 +70,18 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                     EventRequest.id == event_request_id,
                     EventCoordinatorAssignment.coordinator_account_id == g.user_id,
                 )
+                .options(
+                    selectinload(EventRequest.equipment_requirements),
+                    joinedload(EventRequest.organisation),
+                    joinedload(EventRequest.organiser),
+                    joinedload(EventRequest.venue),
+                )
             )
+            # One refusal for a missing request and another coordinator's request, so the
+            # response never confirms that a protected request exists.
             if event is None:
                 abort(404, "Assigned event not found.")
-            return jsonify(event=_serialize_assigned_event(event))
+            return jsonify(event=_serialize_assigned_event_detail(event))
 
     @app.get("/api/event-requests/awaiting-assignment")
     @require_roles(Role.EVENT_OPERATIONS_MANAGER)
@@ -346,6 +359,39 @@ def _serialize_assigned_event(event: EventRequest) -> dict[str, Any]:
         "status": event.status,
         "status_label": status_label(event.status),
         "proposed_date": _date(event.proposed_date),
+    }
+
+
+def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
+    """Every event-request form field for the assigned coordinator (CS-E06-S1), read-only."""
+
+    return {
+        **_serialize_assigned_event(event),
+        "purpose": event.purpose,
+        "description": event.description,
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "expected_attendance": event.expected_attendance,
+        "venue_name": event.venue.name if event.venue else None,
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": event.required_facilities,
+        "facilities_notes": event.facilities_notes,
+        "accessibility_needs": event.accessibility_needs,
+        "location_preference": event.location_preference,
+        "venue_notes": event.venue_notes,
+        "equipment_requirements": [
+            {
+                "equipment_type": line.equipment_type,
+                "quantity": line.quantity,
+                "notes": line.notes,
+            }
+            for line in event.equipment_requirements
+        ],
+        "registration_required": event.registration_required,
+        "registration_notes": event.registration_notes,
+        "client_organisation": event.organisation.name,
+        "responsible_organiser": event.organiser.display_name,
+        "submitted_at": _timestamp(event.submitted_at),
     }
 
 

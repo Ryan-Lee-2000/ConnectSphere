@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .models import AccountRole, Role
+from .models import Account, AccountRole, Role
 
 View = TypeVar("View", bound=Callable[..., Any])
 _POLICY_ATTRIBUTE = "__connectsphere_role_policy__"
@@ -42,13 +42,19 @@ def require_roles(*roles: Role) -> Callable[[View], View]:
 
 
 def associate_account_roles(engine: Any, view: Callable[..., Any] | None) -> None:
-    """Load server-owned roles and enforce the operation's explicit policy."""
+    """Load server-owned roles and enforce the operation's explicit policy.
+
+    A deactivated account keeps its role rows but holds no roles here, so every role-protected
+    operation refuses it, while authenticated-only identity operations still work.
+    """
 
     try:
         with Session(engine) as session:
             roles = frozenset(
                 session.scalars(
-                    select(AccountRole.role).where(AccountRole.account_id == g.user_id)
+                    select(AccountRole.role)
+                    .join(Account, Account.id == AccountRole.account_id)
+                    .where(AccountRole.account_id == g.user_id, Account.is_active.is_(True))
                 ).all()
             )
     except SQLAlchemyError:
