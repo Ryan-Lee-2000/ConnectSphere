@@ -252,7 +252,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <p className="venue-search-page__event-name">Searching for <strong>{event.name}</strong></p>
         <EventBrief event={event} />
         <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
-          initialDate={event.proposed_date} initialSlots={event.mapped_slots} request={api} />
+          initialDate={event.proposed_date} initialSlots={event.mapped_slots}
+          expectedAttendance={event.expected_attendance} preferredRoomLayout={event.preferred_room_layout} request={api} />
       </>}
     </section>;
   }

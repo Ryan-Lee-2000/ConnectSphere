@@ -4,10 +4,11 @@ import { AnimatePresence, m } from 'motion/react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import { SLOTS, type SlotKey } from './slots';
 
-type AvailableVenue = { id: number; name: string; location: string | null; maximum_layout_capacity: number | null };
+type MatchingLayout = { layout: string; capacity: number };
+type AvailableVenue = { id: number; name: string; location: string | null; maximum_layout_capacity: number | null; matching_layouts: MatchingLayout[] };
 
-export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, initialSlots, request }: {
-  accessToken: string; eventId: number; initialDate: string | null; initialSlots?: string[]; request?: ApiRequest;
+export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, request }: {
+  accessToken: string; eventId: number; initialDate: string | null; initialSlots?: string[]; expectedAttendance: number | null; preferredRoomLayout: string | null; request?: ApiRequest;
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [accessToken, request]);
   const selectableSlots = (slots: string[]) => slots.filter((slot): slot is SlotKey => SLOTS.some(candidate => candidate.key === slot));
@@ -48,6 +49,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const selectedVenue = venues?.find(venue => venue.id === selectedVenueId) || null;
   const selectedIndex = selectedVenue ? venues?.findIndex(venue => venue.id === selectedVenue.id) ?? -1 : -1;
   const detailOrder = selectedIndex < 0 ? 0 : (selectedIndex % 2 === 0 && selectedIndex < (venues?.length || 0) - 1 ? selectedIndex + 1 : selectedIndex) * 2 + 1;
+  const layoutLabel = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
   return <section className="venue-availability" aria-labelledby="venue-availability-title">
     <div className="venue-availability__heading"><div><p className="eyebrow">Venue availability</p><h2 id="venue-availability-title">Find available venues</h2></div><p>Searches are read-only. A result is not a booking or a hold.</p></div>
     <div className="venue-availability__controls"><label className="field"><span>Singapore date</span><input aria-label="Singapore date" onChange={event => setSearchDate(event.target.value)} type="date" value={searchDate} /></label>
@@ -59,10 +61,10 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
       {venues?.length === 0 ? <div className="organisation-events__empty" role="status"><strong>No venues are available for this search.</strong><span>Keep the date and slots, then adjust them to explore another option.</span></div> : <div className="venue-availability__marketplace venue-marketplace" aria-label="Available venue results">
         {venues?.map((venue, index) => <m.button type="button" key={venue.id} className={`venue-card venue-availability__card palette-${index % 3}${selectedVenueId === venue.id ? ' selected' : ''}`} style={{ order: index * 2 }} onClick={() => setSelectedVenueId(current => current === venue.id ? null : venue.id)} aria-expanded={selectedVenueId === venue.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .16, ease: 'easeOut', delay: Math.min(index * .04, .16) }} whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
           <span className="venue-card-art" aria-hidden="true"><span className="venue-card-index">{String(index + 1).padStart(2, '0')}</span><Building2 size={32} /><span className="venue-card-grid" /></span>
-          <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Up to {venue.maximum_layout_capacity ?? '—'} guests</span><span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
+          <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Fits {expectedAttendance ?? '—'} guests</span><span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
         </m.button>)}
         <AnimatePresence initial={false}>{selectedVenue && <m.div className="venue-card-details venue-availability__detail" key={selectedVenue.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}>
-          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue can accommodate the selected date and every required slot, including any recorded preparation time.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Location</dt><dd>{selectedVenue.location || 'Not recorded'}</dd></div><div><dt>Maximum layout capacity</dt><dd>{selectedVenue.maximum_layout_capacity ?? 'Not recorded'}{selectedVenue.maximum_layout_capacity !== null ? ' guests' : ''}</dd></div></dl></section>
+          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing and capacity confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue meets the event’s attendance requirement and is available for the selected date, every required slot and any recorded preparation time.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Expected attendance</dt><dd>{expectedAttendance ?? 'Not recorded'}{expectedAttendance !== null ? ' guests' : ''}</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Preferred layout</dt><dd>{preferredRoomLayout ? layoutLabel(preferredRoomLayout) : 'Any supported layout'}</dd></div></dl></section>
         </m.div>}</AnimatePresence>
       </div>}
     </div>}

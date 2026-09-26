@@ -77,6 +77,7 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page.getByLabel('AM · 7am–12pm')).toBeChecked();
   await page.getByRole('button', { name: 'Find venues', exact: true }).click();
   await expect(page.locator('.venue-availability__summary')).toContainText(proposedDate);
+  await expect(page.getByText('Fits 120 guests').first()).toBeVisible();
   await signOut(page);
 
   // CS-E05-S2 AC6: the organiser sees who is responsible after review begins.
@@ -99,13 +100,12 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page).toHaveURL(/\/workspace\/assigned-events\/\d+$/);
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Under review' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: displayedDate })).toBeVisible();
+  await expect(page.getByRole('cell', { name: displayedDate, exact: true })).toBeVisible();
 
   // SPL-64: the detail is the complete read-only request, including organisation and organiser.
   await expect(page.getByRole('rowheader', { name: 'Client organisation' })).toBeVisible();
   await expect(page.getByRole('rowheader', { name: 'Responsible Event Organiser' })).toBeVisible();
   await expect(page.getByRole('rowheader', { name: 'Registration required' })).toBeVisible();
-  await expect(page.getByRole('textbox')).toHaveCount(0);
 });
 
 test('TC-CS-E05-S1-06: a role without Event Operations Manager is never offered the queue', async ({

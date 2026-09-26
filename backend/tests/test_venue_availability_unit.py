@@ -3,7 +3,8 @@
 from datetime import date
 
 import pytest
-from app.venue_availability import SearchParameterError, parse_search_parameters
+from app.models import VenueLayout
+from app.venue_availability import SearchParameterError, parse_search_parameters, qualifying_layouts
 
 
 # TC-SPL-71-07: valid equivalence partitions for each fixed operating slot.
@@ -39,3 +40,32 @@ def test_tc_spl_71_07_normalises_each_valid_fixed_slot_in_operational_order(
 def test_tc_spl_71_08_refuses_each_invalid_search_partition(raw_date, raw_slots, message):
     with pytest.raises(SearchParameterError, match=f"^{message}$"):
         parse_search_parameters(raw_date, raw_slots)
+
+
+@pytest.mark.parametrize(
+    ("expected_attendance", "preferred_layout", "expected"),
+    [
+        (80, None, [("theatre", 80), ("classroom", 120)]),
+        (81, None, [("classroom", 120)]),
+        (80, "Theatre", [("theatre", 80)]),
+        (121, "classroom", []),
+        (80, "banquet", []),
+    ],
+)
+def test_tc_spl_72_03_applies_capacity_boundary_and_preferred_layout_partitions(
+    expected_attendance, preferred_layout, expected
+):
+    layouts = [
+        VenueLayout(layout="theatre", capacity=80),
+        VenueLayout(layout="classroom", capacity=120),
+    ]
+
+    qualified = qualifying_layouts(layouts, expected_attendance, preferred_layout)
+
+    assert [(layout.layout, layout.capacity) for layout in qualified] == expected
+
+
+def test_tc_spl_72_04_requires_event_level_expected_attendance():
+    layouts = [VenueLayout(layout="theatre", capacity=80)]
+
+    assert qualifying_layouts(layouts, None, None) == []

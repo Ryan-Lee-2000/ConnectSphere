@@ -151,6 +151,7 @@ def test_tc_spl_71_01_finds_only_venues_available_for_every_selected_slot(app, c
                 "name": "Atlas Hall",
                 "location": "Singapore",
                 "maximum_layout_capacity": 180,
+                "matching_layouts": [{"layout": "theatre", "capacity": 180}],
             }
         ],
     }
@@ -284,3 +285,52 @@ def test_tc_spl_71_05_enforces_assigned_coordinator_access(app, client):
         f"/api/event-requests/{event_id}/available-venues?date=2026-10-12&slot=AM"
     )
     assert unauthenticated.status_code == 401
+
+
+def test_tc_spl_72_01_filters_available_venues_by_any_layout_with_sufficient_capacity(app, client):
+    too_small = add_venue(app, "Studio", capacity=79)
+    qualifies = add_venue(app, "Atlas Hall", capacity=80)
+    with Session(app.extensions["engine"]) as session:
+        flexible = Venue(name="Flexible Hall", location="Singapore", operating_slots=["AM"])
+        flexible.layouts = [
+            VenueLayout(layout="boardroom", capacity=24),
+            VenueLayout(layout="theatre", capacity=160),
+        ]
+        session.add(flexible)
+        session.commit()
+        flexible_id = flexible.id
+
+    response = search(client, app.config["TEST_EVENT_ID"], "date=2026-10-12&slot=AM")
+
+    assert response.status_code == 200
+    assert [venue["id"] for venue in response.json["venues"]] == [qualifies, flexible_id]
+    assert response.json["venues"][0]["matching_layouts"] == [{"layout": "theatre", "capacity": 80}]
+    assert response.json["venues"][1]["matching_layouts"] == [
+        {"layout": "theatre", "capacity": 160}
+    ]
+    assert too_small not in [venue["id"] for venue in response.json["venues"]]
+
+
+def test_tc_spl_72_02_requires_the_saved_preferred_layout_to_meet_attendance(app, client):
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        event.preferred_room_layout = "Theatre"
+        other_layout = Venue(name="Classroom Hall", location="Singapore", operating_slots=["AM"])
+        other_layout.layouts = [VenueLayout(layout="classroom", capacity=120)]
+        matching_layout = Venue(name="Theatre Hall", location="Singapore", operating_slots=["AM"])
+        matching_layout.layouts = [
+            VenueLayout(layout="theatre", capacity=80),
+            VenueLayout(layout="classroom", capacity=180),
+        ]
+        too_small = Venue(name="Small Theatre", location="Singapore", operating_slots=["AM"])
+        too_small.layouts = [VenueLayout(layout="theatre", capacity=79)]
+        session.add_all([other_layout, matching_layout, too_small])
+        session.commit()
+        matching_id = matching_layout.id
+
+    response = search(client, app.config["TEST_EVENT_ID"], "date=2026-10-12&slot=AM")
+
+    assert response.status_code == 200
+    assert [venue["id"] for venue in response.json["venues"]] == [matching_id]
+    assert response.json["venues"][0]["matching_layouts"] == [{"layout": "theatre", "capacity": 80}]
