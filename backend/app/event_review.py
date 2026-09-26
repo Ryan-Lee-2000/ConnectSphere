@@ -1,4 +1,4 @@
-"""Assigned-coordinator review workflow for SPL-70, SPL-65 and SPL-67 (approval)."""
+"""Assigned-coordinator review workflow: SPL-70, SPL-65, SPL-67 (approve) and SPL-68 (reject)."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
-from app.event_requests import SINGAPORE, serialize_approval, serialize_clarifications
+from app.event_requests import (
+    SINGAPORE,
+    serialize_approval,
+    serialize_clarifications,
+    serialize_rejection,
+)
 from app.event_statuses import status_label
 from app.models import (
     Account,
@@ -25,11 +30,14 @@ from app.slots import slots_for_range
 BEGIN_REVIEW = "begin_review"
 REQUEST_CLARIFICATION = "request_clarification"
 APPROVE = "approve"
+REJECT = "reject"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
 PLANNING = "planning"
+REJECTED = "rejected"
 MAX_CLARIFICATION_LENGTH = 2000
+MAX_REJECTION_REASON_LENGTH = 2000
 
 
 @dataclass(frozen=True)
@@ -51,6 +59,11 @@ TRANSITION_RULES = {
     APPROVE: TransitionRule(
         previous_status=UNDER_REVIEW,
         resulting_status=PLANNING,
+    ),
+    # Rejection is final (Q67): nothing leaves Rejected, so a new request is needed to proceed.
+    REJECT: TransitionRule(
+        previous_status=UNDER_REVIEW,
+        resulting_status=REJECTED,
     ),
 }
 
@@ -186,6 +199,51 @@ def register_event_review_routes(app: Flask) -> None:
                 message="Request approved. Event planning can begin.",
             )
 
+    @app.post("/api/event-requests/<int:event_request_id>/reject")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def reject_event_request(event_request_id: int):
+        reason = _rejection_reason()
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Assigned event not found.")
+            now = datetime.now(SINGAPORE)
+            try:
+                audit = transition_event_status(
+                    session,
+                    event_request_id=event_request_id,
+                    action=REJECT,
+                    actor_account_id=g.user_id,
+                    changed_at=now,
+                )
+            except InvalidStatusTransition:
+                session.rollback()
+                abort(409, "Only an event under review can be rejected.")
+            session.execute(
+                update(EventRequest)
+                .where(EventRequest.id == event_request_id)
+                .values(rejected_by_account_id=g.user_id, rejected_at=now, rejection_reason=reason)
+                .execution_options(synchronize_session=False)
+            )
+            session.commit()
+            actor = session.get(Account, g.user_id)
+            session.expire_all()
+            event = session.get(EventRequest, event_request_id)
+            return jsonify(
+                event={**_serialize_event(event), **serialize_rejection(event)},
+                transition=_serialize_transition(audit, actor),
+                message="Request rejected. The Event Organiser can see your reason.",
+            )
+
 
 def transition_event_status(
     session: Session,
@@ -243,6 +301,21 @@ def _clarification_message() -> str:
     if len(message) > MAX_CLARIFICATION_LENGTH:
         abort(400, f"Keep the clarification to {MAX_CLARIFICATION_LENGTH} characters or fewer.")
     return message
+
+
+def _rejection_reason() -> str:
+    """The reason and nothing else, so the target status stays server-owned."""
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {"reason"}:
+        abort(400, "Send only a rejection reason.")
+    reason = data["reason"]
+    if not isinstance(reason, str) or not reason.strip():
+        abort(400, "Enter a reason for rejecting the request.")
+    reason = reason.strip()
+    if len(reason) > MAX_REJECTION_REASON_LENGTH:
+        abort(400, f"Keep the reason to {MAX_REJECTION_REASON_LENGTH} characters or fewer.")
+    return reason
 
 
 def _serialize_event(event: EventRequest) -> dict[str, Any]:

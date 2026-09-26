@@ -596,7 +596,7 @@ def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
     rule = TRANSITION_RULES[APPROVE]
     assert (rule.previous_status, rule.resulting_status) == (UNDER_REVIEW, PLANNING)
     assert (UNDER_REVIEW, PLANNING) == ("under_review", "planning")
-    assert set(TRANSITION_RULES) == {BEGIN_REVIEW, REQUEST_CLARIFICATION, APPROVE}
+    assert set(TRANSITION_RULES) == {BEGIN_REVIEW, REQUEST_CLARIFICATION, APPROVE, "reject"}
 
 
 def test_qa_spl67_036_the_policy_function_applies_the_rule_and_records_evidence(world, client):
@@ -1198,9 +1198,10 @@ def test_qa_spl67_078_the_migration_extends_the_clarification_head_as_the_only_h
     config = Config()
     config.set_main_option("script_location", str(migrations))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["s2_event_approval"]
+    assert script.get_heads() == ["s2_event_rejection"]
     revision = script.get_revision("s2_event_approval")
     assert revision.down_revision == "s2_clarification_requests"
+    assert script.get_revision("s2_event_rejection").down_revision == "s2_event_approval"
 
 
 def test_qa_spl67_079_the_migration_source_adds_and_removes_both_columns(client):

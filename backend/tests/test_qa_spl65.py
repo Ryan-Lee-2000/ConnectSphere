@@ -986,7 +986,12 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
         "under_review",
         "returned_for_clarification",
     )
-    assert set(TRANSITION_RULES) == {"begin_review", "request_clarification", "approve"}
+    assert set(TRANSITION_RULES) == {
+        "begin_review",
+        "request_clarification",
+        "approve",
+        "reject",
+    }
     assert TRANSITION_RULES["begin_review"].resulting_status == "under_review"
 
 
