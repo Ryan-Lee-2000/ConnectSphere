@@ -9,7 +9,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
-from app.models import Account, EquipmentRequirement, EventRequest, Role, Venue
+from app.models import (
+    Account,
+    ClarificationRequest,
+    EquipmentRequirement,
+    EventRequest,
+    Role,
+    Venue,
+)
 from app.slots import slots_for_range
 from app.venue_operational_blocks import operational_block_for_slot
 
@@ -207,7 +214,12 @@ def register_event_request_routes(app: Flask) -> None:
                 and event.organiser_account_id != g.user_id
             ):
                 abort(404, "Event request not found.")
-            return jsonify(event_request=_serialize_event_request(event))
+            return jsonify(
+                event_request={
+                    **_serialize_event_request(event),
+                    "clarifications": serialize_clarifications(event),
+                }
+            )
 
     @app.get("/api/organisation/events")
     @require_roles(Role.EVENT_ORGANISER)
@@ -243,7 +255,12 @@ def register_event_request_routes(app: Flask) -> None:
                     EventRequest.organisation_id == account.organisation_id,
                     EventRequest.status != "draft",
                 )
-                .options(selectinload(EventRequest.organiser))
+                .options(
+                    selectinload(EventRequest.organiser),
+                    selectinload(EventRequest.clarification_requests).joinedload(
+                        ClarificationRequest.author
+                    ),
+                )
             )
             if event is None:
                 abort(404, "Event not found.")
@@ -516,6 +533,9 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
         .options(
             selectinload(EventRequest.equipment_requirements),
             selectinload(EventRequest.coordinator_assignment),
+            selectinload(EventRequest.clarification_requests).joinedload(
+                ClarificationRequest.author
+            ),
         )
     )
     if event is None:
@@ -553,7 +573,33 @@ def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
         "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
         "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
         "expected_attendance": event.expected_attendance,
+        "status": event.status,
+        "status_label": status_label(event.status),
+        "status_explanation": status_explanation(event.status),
+        "clarifications": serialize_clarifications(event),
     }
+
+
+def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
+    """Every clarification asked of this request, newest first (CS-E06-S2)."""
+
+    return [
+        {
+            "id": row.id,
+            "message": row.message,
+            "author": {"id": row.author.id, "name": row.author.display_name},
+            "created_at": _singapore_time(row.created_at),
+        }
+        for row in event.clarification_requests
+    ]
+
+
+def _singapore_time(value: datetime) -> str:
+    """The same instant in Singapore time, whether the database returned UTC or no offset."""
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=SINGAPORE)
+    return value.astimezone(SINGAPORE).isoformat()
 
 
 def _submitted_at(value: datetime | None) -> str | None:

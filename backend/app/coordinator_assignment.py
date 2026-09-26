@@ -15,11 +15,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.authorization import require_roles
-from app.event_requests import SINGAPORE
+from app.event_requests import SINGAPORE, serialize_clarifications
 from app.event_statuses import EVENT_REQUEST_STATUSES, status_label
 from app.models import (
     Account,
     AccountRole,
+    ClarificationRequest,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
@@ -73,6 +74,9 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                 )
                 .options(
                     selectinload(EventRequest.equipment_requirements),
+                    selectinload(EventRequest.clarification_requests).joinedload(
+                        ClarificationRequest.author
+                    ),
                     joinedload(EventRequest.organisation),
                     joinedload(EventRequest.organiser),
                     joinedload(EventRequest.venue),
@@ -409,6 +413,7 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         "client_organisation": event.organisation.name,
         "responsible_organiser": event.organiser.display_name,
         "submitted_at": _timestamp(event.submitted_at),
+        "clarifications": serialize_clarifications(event),
     }
 
 

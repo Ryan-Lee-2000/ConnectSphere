@@ -1,4 +1,4 @@
-"""Assigned-coordinator review workflow for CS-E07-S2 / SPL-70."""
+"""Assigned-coordinator review workflow for CS-E07-S2 / SPL-70 and CS-E06-S2 / SPL-65."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -9,10 +9,12 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
-from app.event_requests import SINGAPORE
+from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
+from app.event_requests import SINGAPORE, serialize_clarifications
 from app.event_statuses import status_label
 from app.models import (
     Account,
+    ClarificationRequest,
     EventCoordinatorAssignment,
     EventRequest,
     EventStatusHistory,
@@ -21,8 +23,11 @@ from app.models import (
 from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
+REQUEST_CLARIFICATION = "request_clarification"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
+RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
+MAX_CLARIFICATION_LENGTH = 2000
 
 
 @dataclass(frozen=True)
@@ -35,7 +40,11 @@ TRANSITION_RULES = {
     BEGIN_REVIEW: TransitionRule(
         previous_status=SUBMITTED,
         resulting_status=UNDER_REVIEW,
-    )
+    ),
+    REQUEST_CLARIFICATION: TransitionRule(
+        previous_status=UNDER_REVIEW,
+        resulting_status=RETURNED_FOR_CLARIFICATION,
+    ),
 }
 
 
@@ -77,6 +86,52 @@ def register_event_review_routes(app: Flask) -> None:
             return jsonify(
                 event=_serialize_event(event),
                 transition=_serialize_transition(audit, actor),
+            )
+
+    @app.post("/api/event-requests/<int:event_request_id>/request-clarification")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def request_clarification(event_request_id: int):
+        message = _clarification_message()
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Assigned event not found.")
+            now = datetime.now(SINGAPORE)
+            try:
+                audit = transition_event_status(
+                    session,
+                    event_request_id=event_request_id,
+                    action=REQUEST_CLARIFICATION,
+                    actor_account_id=g.user_id,
+                    changed_at=now,
+                )
+            except InvalidStatusTransition:
+                session.rollback()
+                abort(409, "Clarification can only be requested while the event is under review.")
+            session.add(
+                ClarificationRequest(
+                    event_request_id=event_request_id,
+                    message=message,
+                    author_account_id=g.user_id,
+                    created_at=now,
+                )
+            )
+            session.commit()
+            actor = session.get(Account, g.user_id)
+            event = session.get(EventRequest, event_request_id)
+            return jsonify(
+                event=_serialize_event(event),
+                transition=_serialize_transition(audit, actor),
+                clarifications=serialize_clarifications(event),
             )
 
 
@@ -121,6 +176,21 @@ def _require_action_without_parameters() -> None:
         return
     if not request.is_json or request.get_json(silent=True) != {}:
         abort(400, "Begin review does not accept a target status or other parameters.")
+
+
+def _clarification_message() -> str:
+    """The message and nothing else, so the target status stays server-owned."""
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {"message"}:
+        abort(400, "Send only a clarification message.")
+    message = data["message"]
+    if not isinstance(message, str) or not message.strip():
+        abort(400, "Enter a clarification message.")
+    message = message.strip()
+    if len(message) > MAX_CLARIFICATION_LENGTH:
+        abort(400, f"Keep the clarification to {MAX_CLARIFICATION_LENGTH} characters or fewer.")
+    return message
 
 
 def _serialize_event(event: EventRequest) -> dict[str, Any]:
