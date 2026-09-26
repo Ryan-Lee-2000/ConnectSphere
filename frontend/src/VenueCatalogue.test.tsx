@@ -40,8 +40,7 @@ it('shows a coordinator the catalogue as read-only', async () => {
   expect(screen.getByText('Projector')).toBeTruthy();
   expect(screen.getByText('Step-free access')).toBeTruthy();
   expect(screen.getByText('180')).toBeTruthy();
-  expect(screen.getByText('Yes — one full slot immediately before an event')).toBeTruthy();
-  expect(screen.getByText('Yes — one full slot immediately after an event')).toBeTruthy();
+  expect(screen.getAllByText('Required')).toHaveLength(2);
   expect(screen.getByText('Night · 7pm–12am')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Edit venue' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Add venue' })).toBeNull();

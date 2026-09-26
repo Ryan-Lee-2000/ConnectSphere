@@ -36,7 +36,7 @@ async function submitRequest(page: Page, name: string) {
   return tomorrow;
 }
 
-test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, assigned, and shown to its organiser', async ({
+test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted request is queued, assigned, searched, and shown to its organiser', async ({
   page,
 }) => {
   const name = `E2E Assignment ${Date.now()}`;
@@ -61,7 +61,25 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01 and AC6: a submitted request is queued, a
   await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0);
   await signOut(page);
 
-  // CS-E05-S2 AC6: the organiser sees who is responsible, and that review has begun.
+  // SPL-70: assigning a coordinator does not begin review. The coordinator explicitly starts it.
+  await signIn(page, coordinator);
+  await page.getByRole('link', { name: 'My assigned events' }).click();
+  const coordinatorAssigned = page.getByRole('row').filter({ hasText: name });
+  await coordinatorAssigned.getByRole('link', { name }).click();
+  await page.getByRole('button', { name: 'Begin review' }).click();
+  await expect(page.getByText('Review started.')).toBeVisible();
+  await expect(page.getByText('Under review')).toBeVisible();
+
+  // TC-SPL-71-11: the assigned event carries its server-owned date and slots into read-only search.
+  await page.getByRole('button', { name: 'Find venues', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Find available venues' })).toBeVisible();
+  await expect(page.getByLabel('Singapore date')).toHaveValue(proposedDate);
+  await expect(page.getByLabel('AM · 7am–12pm')).toBeChecked();
+  await page.getByRole('button', { name: 'Find venues', exact: true }).click();
+  await expect(page.locator('.venue-availability__summary')).toContainText(proposedDate);
+  await signOut(page);
+
+  // CS-E05-S2 AC6: the organiser sees who is responsible after review begins.
   await signIn(page, organiser, 'Event Organiser');
   await page.getByRole('link', { name: 'My requests' }).click();
   const organiserRow = page.getByRole('row').filter({ hasText: name });

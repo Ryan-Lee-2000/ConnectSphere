@@ -7,6 +7,9 @@ afterEach(cleanup);
 const assigned = {
   id: 12, name: 'Community Forum', status: 'submitted',
   status_label: 'Submitted', proposed_date: '2026-10-12',
+  mapped_slots: ['AM', 'PM'], expected_attendance: 120, preferred_room_layout: 'theatre',
+  required_facilities: ['Projector', 'PA system'], accessibility_needs: ['Step-free access'],
+  location_preference: 'Marina Centre',
 };
 
 it('shows an assigned event with status and proposed date, then opens its route', async () => {
@@ -26,6 +29,10 @@ it('opens the selected event using the assigned-only detail endpoint', async () 
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
   expect(await screen.findByRole('heading', { name: 'Community Forum' })).toBeTruthy();
   expect(screen.getByText('Submitted')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Requirements to consider' })).toBeTruthy();
+  expect(screen.getByText('AM, PM')).toBeTruthy();
+  expect(screen.getByText('Projector, PA system')).toBeTruthy();
+  expect(screen.getByText('Step-free access')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/12');
 });
 
@@ -160,6 +167,27 @@ it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and
     'Core details', 'Venue requirements', 'Equipment requirements', 'Registration needs', 'Organisation and submission',
   ]);
   expect(screen.queryAllByRole('button').filter(b => b.textContent !== 'Begin review')).toEqual([]);
+});
+
+it('opens a dedicated event-scoped venue search instead of expanding search controls in the detail view', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
+  const onNavigate = vi.fn();
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={onNavigate} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Find venues' }));
+
+  expect(onNavigate).toHaveBeenCalledWith('/workspace/assigned-events/12/venue-search');
+  expect(screen.queryByRole('heading', { name: 'Venue availability' })).toBeNull();
+});
+
+it('shows the selected event context on the dedicated venue-search page', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, mapped_slots: ['AM'] } }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} view="venue-search" />);
+
+  expect(await screen.findByRole('heading', { name: 'Find available venues' })).toBeTruthy();
+  expect(screen.getByText('Community Forum')).toBeTruthy();
+  expect(screen.getByText('12 Oct 2026')).toBeTruthy();
+  expect(screen.getByText('Marina Centre')).toBeTruthy();
 });
 
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
