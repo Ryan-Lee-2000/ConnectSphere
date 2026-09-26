@@ -128,7 +128,7 @@ it('TC-SPL-89-06 lets venue staff record operational unavailability for a select
     if (path === '/api/venues/1' && !init?.method) return response({ venue, capabilities: { can_manage: true } });
     if (path === '/api/venues/1/operational-blocks' && init?.method === 'POST') {
       blocks = [createdBlock];
-      return response({ operational_block: createdBlock }, 201);
+      return response({ operational_block: createdBlock, affected_booking_count: 2 }, 201);
     }
     if (path === '/api/venues/1/operational-blocks/9' && init?.method === 'DELETE') {
       blocks = [];
@@ -158,6 +158,7 @@ it('TC-SPL-89-06 lets venue staff record operational unavailability for a select
     reason: 'Annual fire-safety inspection',
   });
   expect(await screen.findByText('Annual fire-safety inspection')).toBeTruthy();
+  expect(screen.getByText('Operational unavailability recorded. 2 active bookings require review.')).toBeTruthy();
   expect(screen.getByText('5 Oct 2026 – 7 Oct 2026')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Remove Annual fire-safety inspection' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues/1/operational-blocks/9', { method: 'DELETE' }));

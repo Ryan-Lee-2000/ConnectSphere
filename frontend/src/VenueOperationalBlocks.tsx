@@ -71,13 +71,19 @@ export function VenueOperationalBlocks({ venue, api }: { venue: Venue; api: ApiR
       setSaving(false);
       return;
     }
-    const body = await response.json() as { operational_block: OperationalBlock };
+    const body = await response.json() as {
+      operational_block: OperationalBlock;
+      affected_booking_count?: number;
+    };
     setBlocks(current => [...current, body.operational_block]);
     setStartDate('');
     setEndDate('');
     setSlots([]);
     setReason('');
-    setNotice('Operational unavailability recorded.');
+    const affected = body.affected_booking_count ?? 0;
+    setNotice(affected > 0
+      ? `Operational unavailability recorded. ${affected} active ${affected === 1 ? 'booking requires' : 'bookings require'} review.`
+      : 'Operational unavailability recorded.');
     setSaving(false);
   };
 

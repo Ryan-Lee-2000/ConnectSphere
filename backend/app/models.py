@@ -246,6 +246,16 @@ class VenueBooking(Base):
         ForeignKey("venues.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(String(40), nullable=False)
+    requires_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    review_trigger_block_id: Mapped[int | None] = mapped_column(
+        ForeignKey("venue_operational_blocks.id", ondelete="SET NULL")
+    )
+    review_marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_marked_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(

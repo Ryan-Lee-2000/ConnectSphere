@@ -141,10 +141,11 @@ conflict-prevention stories. It deliberately centralises the active/date/slot ru
 each consumer to interpret block records itself. The table has RLS enabled and grants revoked from
 browser roles; Venue Staff create, list and remove blocks only through Flask.
 
-SPL-89's affected-booking review marker cannot be attached until SPL-83 supplies the shared venue
-booking and occupancy model. The operational-block foundation is therefore implemented without
-inventing a competing booking schema; the story remains incomplete until that dependency is
-integrated. SPL-77 will later consume SPL-83's model when it creates booking requests.
+With SPL-83's shared booking occupancy available, block creation also marks every intersecting
+Requested or Approved booking for review in the same transaction. The marker records the triggering
+block, trusted Venue Staff actor and timestamp without changing booking status or details. Terminal
+and non-overlapping bookings remain unmarked. Clearing markers, notifications and a review queue are
+separate future work; SPL-77 and SPL-81 consume the shared model for their own workflows.
 
 ## Venue booking conflict boundary
 

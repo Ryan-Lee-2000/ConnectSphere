@@ -15,9 +15,10 @@ unavailable so that venue availability reflects when the venue cannot be used.
 3. **Remove a block — implemented.** Removal is soft and active reads immediately exclude the row.
 4. **Audit and atomic refusal — implemented.** Creation and removal record the trusted actor and
    timezone-aware timestamp. Validation and role checks occur before a transaction is committed.
-5. **Mark overlapping Requested/Approved bookings for review — blocked by SPL-83.** The repository
-   does not yet contain the shared venue-booking and occupancy model. This branch does not invent
-   one. SPL-77 will consume that model later when it creates booking requests.
+5. **Mark overlapping Requested/Approved bookings for review — implemented.** Creating a block
+   marks each active booking whose persisted occupancy intersects the selected venue, inclusive
+   date range and slots. The booking keeps its status and details. Terminal and non-overlapping
+   bookings are not marked, and the block plus every marker commit atomically.
 
 ## Public interfaces
 
@@ -26,6 +27,8 @@ unavailable so that venue availability reflects when the venue cannot be used.
 - `DELETE /api/venues/<venue_id>/operational-blocks/<block_id>` (audited soft removal)
 - `operational_block_for_slot(session, venue_id, day, slot)` for server-side availability consumers
 - Venue Staff manage active blocks from the selected venue in the venue catalogue.
+- The create response reports `affected_booking_count`; the interface tells Venue Staff how many
+  active bookings now require review.
 
 Identity and role are always derived from the verified session. The request body cannot choose the
 actor. React accesses the records only through Flask.
@@ -40,6 +43,8 @@ actor. React accesses the records only through Flask.
 | TC-SPL-89-04 | Inclusive active blocks feed the shared availability boundary | `backend/tests/test_venue_operational_blocks.py` |
 | TC-SPL-89-05 | A submitted event request cannot select an actively blocked venue slot | `backend/tests/test_event_requests.py` |
 | TC-SPL-89-06 | Venue Staff create and remove a block through the interface | `frontend/src/VenueCatalogue.test.tsx` |
+| TC-SPL-89-07 | Overlapping Requested/Approved bookings gain an audited marker without status/detail mutation; alternatives remain unmarked | `backend/tests/test_venue_operational_blocks.py` |
+| TC-SPL-89-08 | A refused block creates neither a block nor a booking marker | `backend/tests/test_venue_operational_blocks.py` |
 
 ## Migration and security
 
@@ -47,10 +52,13 @@ Migration `s2_venue_operational_blocks.py` follows `s2_event_status_history`. It
 table and availability index, enables PostgreSQL RLS, and revokes table and sequence privileges from
 PUBLIC, `anon` and `authenticated`. Business access remains exclusively through Flask.
 
-## Remaining dependency
+After SPL-83 introduced the shared booking model, additive migration
+`s2_booking_review_marker.py` follows `s2_venue_booking_occupancy.py` and adds the persisted marker,
+triggering block, marking actor and timestamp to `venue_bookings`. No merged migration is edited.
 
-PR #28 is a mergeable enabling increment for SPL-83, but merging it does not make SPL-89 Done. Keep
-SPL-89 In Progress until SPL-83's shared booking/occupancy model is on `main` and acceptance
-criterion 5 has tests proving that overlapping Requested/Approved bookings are preserved, keep their
-status/details, and gain a persisted review marker. Clearing that marker, notifications and a review
-queue remain out of scope.
+## Completed dependency
+
+PR #28 delivered the operational-block foundation. SPL-83 is now on `main`, and the follow-up uses
+its shared occupancy rows to complete acceptance criterion 5. Clearing a marker, notifications and
+a review queue remain out of scope; SPL-77 and SPL-81 will expose booking-request and approval
+workflows without duplicating this rule.

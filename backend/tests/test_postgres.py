@@ -61,6 +61,15 @@ def test_empty_baseline_migration_is_rerunnable():
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         assert len(heads) == 1, "Resolve competing migration heads before merging"
         assert set(inspect(engine).get_table_names()) == PRODUCT_TABLES | {"alembic_version"}
+        booking_columns = {
+            column["name"]: column for column in inspect(engine).get_columns("venue_bookings")
+        }
+        assert booking_columns["requires_review"]["nullable"] is False
+        assert {
+            "review_trigger_block_id",
+            "review_marked_at",
+            "review_marked_by_account_id",
+        } <= set(booking_columns)
         with engine.connect() as conn:
             assert set(
                 conn.execute(text("select version_num from alembic_version")).scalars()
