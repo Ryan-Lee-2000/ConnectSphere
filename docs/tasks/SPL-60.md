@@ -16,7 +16,8 @@ submitted event so that they can start planning it.
 3. An event that already has an assigned coordinator cannot be assigned again.
 4. The event records which Event Coordinator is assigned to it, with no
    acceptance step required from the coordinator.
-5. On assignment the event status changes from Submitted to Under Review.
+5. On assignment the event remains Submitted; SPL-70 owns the coordinator's explicit transition
+   to Under Review. This supersedes the original combined assignment/status interpretation.
 6. The Event Organiser sees the assigned coordinator's name when they view
    the event.
 7. The event's history records who assigned, who was assigned, and when —
@@ -60,17 +61,16 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 
 - `GET /api/event-requests/<id>/coordinator-options` — active Event Coordinators, or
   `unavailable_reason` when none exist (AC1, AC8).
-- `POST /api/event-requests/<id>/coordinator` — assigns immediately and moves the
-  request from Submitted to Under Review (AC2–5, AC9). The one-row-per-request key
-  plus a conditional status update make the first of two concurrent
-  assignments win (TC-CS-E05-S2-04, proved on PostgreSQL).
+- `POST /api/event-requests/<id>/coordinator` — assigns immediately while leaving the request
+  Submitted (AC2–5, AC9). The one-row-per-request key makes the first of two concurrent
+  assignments win (TC-CS-E05-S2-04, proved on PostgreSQL). SPL-70 separately starts review.
 - `GET /api/event-requests/<id>/coordinator-history` — who assigned whom and when (AC7).
 - Workspace queue has an inline assignment panel (no modal).
 - **AC6 is met.** The organiser's own request view (CS-E07-S1) now names the coordinator
   responsible, or says none is assigned yet. Reads there are already scoped to the organiser's
   own requests, so nothing is disclosed across organisations.
-- **Status vocabulary:** CS-E07-S1 owns it in `app.event_statuses`; this story reads that module
-  and stamps `status_changed_at` when it moves a request to Under Review.
+- **Status vocabulary:** CS-E07-S1 owns it in `app.event_statuses`; this story reads that module.
+  Assignment does not stamp `status_changed_at`; SPL-70 does so when review begins.
 - **Needs team agreement:** the picker is filtered by a new `accounts.is_active`
   flag, which no story manages yet. Coordinator names come from
   `accounts.display_name`, which SPL-45 now owns and makes non-null, so only
@@ -80,7 +80,7 @@ Shared design notes: [architecture](../architecture.md#coordinator-assignment).
 
 | ID | AC | Scenario | Pre-conditions | Steps | Test data | Expected result | Level |
 |---|---|---|---|---|---|---|---|
-| TC-CS-E05-S2-01 | 1,4,5,6,7 | Happy path — assign coordinator | Signed in as EOM; 1 Submitted event, no coordinator; 2 active Event Coordinators exist | Select event, pick a coordinator, confirm | Coordinator "Alice" | Status → Under Review; coordinator = Alice; Organiser sees "Alice"; history records assigner, Alice, timestamp; no pending/acceptance state | E2E |
+| TC-CS-E05-S2-01 | 1,4,5,6,7 | Happy path — assign coordinator | Signed in as EOM; 1 Submitted event, no coordinator; 2 active Event Coordinators exist | Select event, pick a coordinator, confirm | Coordinator "Alice" | Status remains Submitted; coordinator = Alice; Organiser sees "Alice"; history records assigner, Alice, timestamp; no pending/acceptance state | E2E |
 | TC-CS-E05-S2-02 | 1 | Picker shows only active Event Coordinators | 2 active Coordinators, 1 inactive Coordinator, 1 active Venue Staff | Open the coordinator picker | — | Only the 2 active Coordinators listed; inactive and other-role users excluded | Integration |
 | TC-CS-E05-S2-03 | 3 | Cannot assign an already-assigned event | Event already has a coordinator | Attempt to assign again | — | Refused; existing coordinator unchanged; no duplicate history entry | Integration |
 | TC-CS-E05-S2-04 | 3 | Concurrency — two EOMs assign the same event simultaneously | 1 unassigned Submitted event; 2 EOM sessions | Both submit an assignment for the same event near-simultaneously | 2 different coordinators picked | Exactly one assignment succeeds; the other is refused as "already assigned"; no split-brain state | Integration |

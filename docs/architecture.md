@@ -68,13 +68,26 @@ operation requires the Event Operations Manager role through `require_roles`.
   to edit it, so ownership of `is_active` still needs a decision.
 - **Status vocabulary.** CS-E07-S1 owns it in `app.event_statuses`; assignment reads that module
   rather than restating the values, and an import-time check fails loudly if the statuses this
-  story depends on ever leave the vocabulary. Assignment is the first operation to move a request
-  off `submitted`, so it stamps `status_changed_at` as well, which CS-E07-S1 reads.
+  story depends on ever leave the vocabulary. Assignment leaves the request `submitted`; SPL-70's
+  assigned-coordinator action is the first operation to move it to `under_review` and stamp
+  `status_changed_at`.
 - **Ordering.** The queue is oldest submission first, using CS-E03-S5's `submitted_at`. Requests
   stored before that story carry no submission time and sort last by id, because PostgreSQL and
   SQLite disagree on where NULLs fall.
 - **Client organisation.** SPL-45 now supplies `organisations` and a non-null
   `event_requests.organisation_id`, so the queue names the requesting client organisation.
+
+## Event review transitions
+
+SPL-70 introduces the first explicit workflow action at
+`POST /api/event-requests/<id>/begin-review`. The route verifies that the caller is the currently
+assigned Event Coordinator; clients never submit a target status. `event_review.TRANSITION_RULES`
+is the server-owned before/after policy that later workflow actions extend.
+
+`transition_event_status()` conditionally updates the expected current status and appends an
+`event_status_history` row in the caller's transaction. The history records the named action,
+previous and resulting statuses, actor, and timestamp. A competing or repeated action updates no
+row and therefore writes no audit evidence.
 
 ## Event-request submission foundation
 
@@ -102,6 +115,52 @@ SPL-45 adds the minimal trusted organisation relationship needed for same-client
   organisation. A cross-client identifier and a draft identifier both produce the same generic
   not-found response.
 - The existing own-request API retains its narrower draft-management contract.
+
+## Venue preparation occupancy
+
+SPL-87 establishes the shared, database-free rule for turning dated event slots into complete venue
+occupancy. `app.slots.derive_venue_occupancy()` orders event slots using the fixed AM, PM and Night
+sequence, derives at most one directly adjacent setup and turnaround slot from a venue's catalogue
+requirements, and rolls adjacency across Singapore calendar days. Its immutable result identifies
+each slot as event, setup or turnaround occupancy.
+
+The calculation deliberately creates no booking record and exposes no endpoint or interface.
+Venue search, booking, calendars and conflict prevention consume this rule in their own approved
+stories, preventing each workflow from implementing a different interpretation of preparation time.
+
+## Venue operational unavailability
+
+SPL-89 adds `venue_operational_blocks` as the audited Venue Staff input for dates and operating
+slots when a catalogue venue cannot be used. Blocks use an inclusive Singapore date range, one or
+more of that venue's configured AM/PM/Night slots, and a required reason. Removal is a soft lifecycle
+transition: `removed_by_account_id` and `removed_at` preserve who removed the block and when, while
+active availability reads ignore removed rows.
+
+`operational_block_for_slot()` is the shared read boundary for venue search, suitability and
+conflict-prevention stories. It deliberately centralises the active/date/slot rule instead of asking
+each consumer to interpret block records itself. The table has RLS enabled and grants revoked from
+browser roles; Venue Staff create, list and remove blocks only through Flask.
+
+With SPL-83's shared booking occupancy available, block creation also marks every intersecting
+Requested or Approved booking for review in the same transaction. The marker records the triggering
+block, trusted Venue Staff actor and timestamp without changing booking status or details. Terminal
+and non-overlapping bookings remain unmarked. Clearing markers, notifications and a review queue are
+separate future work; SPL-77 and SPL-81 consume the shared model for their own workflows.
+
+## Venue booking conflict boundary
+
+SPL-83 adds the minimal shared `venue_bookings` aggregate and active
+`venue_booking_occupancy` claims needed before the request and approval interfaces exist. A claim
+derives all event, setup and turnaround slots through SPL-87, refuses any matching active SPL-89
+operational block, and writes the complete batch in a nested transaction. The database uniqueness
+constraint on venue, Singapore date and operating slot is the final concurrency boundary: even when
+two transactions pass the readable pre-check together, at most one can retain the claim.
+
+Requested and Approved bookings own occupancy rows. Moving a booking to Rejected, Withdrawn or
+Cancelled deletes its active claims, while moving to Approved rechecks operational blocks before
+changing status. Conflict errors identify the occupied date and slot. SPL-77 and SPL-81 will call
+this module inside their own transactions; they remain responsible for rolling back their booking
+write when the policy refuses it. Product tables retain RLS with no browser-role grants.
 
 ## Boundaries for future stories
 

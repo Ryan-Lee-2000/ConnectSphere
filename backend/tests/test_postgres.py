@@ -20,6 +20,10 @@ PRODUCT_TABLES = {
     "equipment_requirements",
     "event_coordinator_assignments",
     "event_coordinator_history",
+    "event_status_history",
+    "venue_operational_blocks",
+    "venue_bookings",
+    "venue_booking_occupancy",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 
@@ -57,6 +61,15 @@ def test_empty_baseline_migration_is_rerunnable():
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         assert len(heads) == 1, "Resolve competing migration heads before merging"
         assert set(inspect(engine).get_table_names()) == PRODUCT_TABLES | {"alembic_version"}
+        booking_columns = {
+            column["name"]: column for column in inspect(engine).get_columns("venue_bookings")
+        }
+        assert booking_columns["requires_review"]["nullable"] is False
+        assert {
+            "review_trigger_block_id",
+            "review_marked_at",
+            "review_marked_by_account_id",
+        } <= set(booking_columns)
         with engine.connect() as conn:
             assert set(
                 conn.execute(text("select version_num from alembic_version")).scalars()
@@ -81,7 +94,7 @@ def test_empty_baseline_migration_is_rerunnable():
                 )
             ).all()
             assert browser_grants == []
-            # SPL-60 must be able to move a request out of 'submitted'.
+            # SPL-70 must be able to move a request out of 'submitted'.
             allowed = conn.execute(
                 text(
                     "select pg_get_constraintdef(oid) from pg_constraint "

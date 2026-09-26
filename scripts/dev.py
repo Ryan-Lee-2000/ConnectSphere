@@ -165,6 +165,7 @@ def main():
             "pytest",
             "backend/tests/test_postgres.py",
             "backend/tests/test_coordinator_concurrency_postgres.py",
+            "backend/tests/test_venue_conflicts_postgres.py",
             "-q",
         )
     elif cmd == "dev":

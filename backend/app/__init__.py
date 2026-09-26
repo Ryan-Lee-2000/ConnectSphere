@@ -9,6 +9,8 @@ from sqlalchemy import create_engine, text
 from .authorization import associate_account_roles, authenticated_only
 from .coordinator_assignment import register_coordinator_assignment_routes
 from .event_requests import register_event_request_routes
+from .event_review import register_event_review_routes
+from .venue_operational_blocks import register_venue_operational_block_routes
 from .venues import register_venue_routes
 
 
@@ -93,8 +95,10 @@ def create_app(test_config=None):
         return jsonify(roles=sorted(g.account_roles))
 
     register_venue_routes(app)
+    register_venue_operational_block_routes(app)
     register_event_request_routes(app)
     register_coordinator_assignment_routes(app)
+    register_event_review_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")
