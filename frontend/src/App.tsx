@@ -48,6 +48,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
+  if (/^\/workspace\/assigned-events\/\d+\/venue-search$/.test(requestedPath)) {
+    return role === 'event_coordinator';
+  }
   if (/^\/workspace\/assigned-events(?:\/\d+)?$/.test(requestedPath)) {
     return role === 'event_coordinator';
   }
@@ -370,11 +373,15 @@ function Workspace({
     : undefined;
   const assignedEventMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)$/);
   const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
+  const venueSearchMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/venue-search$/);
+  const venueSearchEventId = venueSearchMatch ? Number(venueSearchMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
     : safePath === '/workspace/assignments'
       ? 'Coordinator assignment workspace'
-    : safePath.startsWith('/workspace/assigned-events')
+    : venueSearchEventId !== undefined
+      ? 'Venue availability search workspace'
+      : safePath.startsWith('/workspace/assigned-events')
       ? 'Assigned events workspace'
       : safePath.startsWith('/workspace/organisation-events')
         ? 'Organisation event workspace'
@@ -490,6 +497,14 @@ function Workspace({
             eventId={organisationEventId}
             key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
             onNavigate={navigate}
+          />
+        ) : venueSearchEventId !== undefined ? (
+          <AssignedEvents
+            accessToken={session.access_token}
+            eventId={venueSearchEventId}
+            key={`${activeRole}:venue-search:${venueSearchEventId}`}
+            onNavigate={navigate}
+            view="venue-search"
           />
         ) : safePath.startsWith('/workspace/assigned-events') ? (
           <AssignedEvents

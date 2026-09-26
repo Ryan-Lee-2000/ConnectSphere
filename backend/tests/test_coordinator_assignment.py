@@ -133,6 +133,10 @@ def add_request(
             start_time=time(9, 0),
             end_time=time(12, 0),
             expected_attendance=120,
+            preferred_room_layout="theatre",
+            required_facilities=["Projector", "PA system"],
+            accessibility_needs=["Step-free access"],
+            location_preference="Marina Centre",
             status=status,
             submitted_at=submitted_at,
         )
@@ -225,6 +229,12 @@ def test_tc_e05_s4_01_02_04_lists_only_current_coordinator_assignments(app, clie
             "status": SUBMITTED,
             "status_label": "Submitted",
             "proposed_date": "2026-10-12",
+            "mapped_slots": ["AM"],
+            "expected_attendance": 120,
+            "preferred_room_layout": "theatre",
+            "required_facilities": ["Projector", "PA system"],
+            "accessibility_needs": ["Step-free access"],
+            "location_preference": "Marina Centre",
         }
     ]
     bob = client.get("/api/event-requests/assigned", headers=headers("coordinator-b"))
@@ -284,6 +294,7 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "status": SUBMITTED,
         "status_label": "Submitted",
         "proposed_date": "2026-10-12",
+        "mapped_slots": ["AM"],
         "purpose": "Client showcase",
         "description": "Annual client forum",
         "start_time": "09:00",
@@ -318,8 +329,8 @@ def test_tc_spl_64_02_empty_optional_fields_are_returned_empty(app, client):
 
     assert event["description"] is None
     assert event["venue_name"] is None
-    assert event["required_facilities"] == []
-    assert event["accessibility_needs"] == []
+    assert event["required_facilities"] == ["Projector", "PA system"]
+    assert event["accessibility_needs"] == ["Step-free access"]
     assert event["equipment_requirements"] == []
     assert event["registration_required"] is False
 

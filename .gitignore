@@ -6,6 +6,7 @@ node_modules/
 frontend/dist/
 __pycache__/
 .pytest_cache/
+.coverage
 .pytest-run/
 .pytest-*/
 .ruff_cache/
@@ -24,3 +25,7 @@ Project Specifications/
 .pnpm-store/
 debug.log
 *.db
+
+# Personal local development reference. Never commit fixture-account notes.
+LOCAL_DEVELOPER_CHEATSHEET.md
+scripts/local_refresh_demo.py

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
+import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
+import { slotLabel } from './slots';
 
 type AssignedEvent = {
   id: number;
@@ -8,6 +10,12 @@ type AssignedEvent = {
   status: string;
   status_label: string;
   proposed_date: string | null;
+  mapped_slots: string[];
+  expected_attendance?: number | null;
+  preferred_room_layout?: string | null;
+  required_facilities?: string[];
+  accessibility_needs?: string[];
+  location_preference?: string | null;
 };
 
 type EquipmentLine = { equipment_type: string; quantity: number; notes: string | null };
@@ -98,11 +106,40 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
   ];
 }
 
-export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
+function labelLayout(value: string | null | undefined) {
+  return value ? value.replace(/\b\w/g, character => character.toUpperCase()) : 'No preference recorded';
+}
+
+function listValue(values: string[] | undefined) {
+  return values?.length ? values.join(', ') : 'No preference recorded';
+}
+
+function EventBrief({ event }: { event: AssignedEvent }) {
+  const slots = event.mapped_slots.length
+    ? event.mapped_slots.map(slot => slotLabel(slot).split(' · ')[0]).join(', ')
+    : 'No slots recorded';
+  return <section className="event-brief" aria-labelledby="event-brief-title">
+    <header className="event-brief__header"><div><p className="eyebrow">Assigned event</p><h2 id="event-brief-title">Requirements to consider</h2></div><span className="event-brief__status">{event.status_label}</span></header>
+    <dl className="event-brief__overview">
+      <div><dt>Event date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
+      <div><dt>Required slots</dt><dd>{slots}</dd></div>
+      <div><dt>Expected attendance</dt><dd>{event.expected_attendance ?? 'Not recorded'}</dd></div>
+    </dl>
+    <dl className="event-brief__requirements">
+      <div><dt>Room layout</dt><dd>{labelLayout(event.preferred_room_layout)}</dd></div>
+      <div><dt>Required facilities</dt><dd>{listValue(event.required_facilities)}</dd></div>
+      <div><dt>Accessibility needs</dt><dd>{listValue(event.accessibility_needs)}</dd></div>
+      <div><dt>Location preference</dt><dd>{event.location_preference || 'No preference recorded'}</dd></div>
+    </dl>
+  </section>;
+}
+
+export function AssignedEvents({ accessToken, eventId, onNavigate, request, view = 'detail' }: {
   accessToken: string;
   eventId?: number;
   onNavigate: (path: string) => void;
   request?: ApiRequest;
+  view?: 'detail' | 'venue-search';
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
   const [events, setEvents] = useState<AssignedEvent[] | null>(null);
@@ -204,42 +241,71 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
   const back = <a className="organisation-events__back" href="/workspace/assigned-events"
     onClick={click => follow(click, '/workspace/assigned-events')}>Back to my assigned events</a>;
 
-  return <section className="organisation-events" aria-labelledby="assigned-events-title">
+  if (view === 'venue-search') {
+    return <section className="organisation-events venue-search-page" aria-labelledby="venue-search-title">
+      {back}
+      <p className="eyebrow">Event Coordinator · Venue planning</p>
+      <h1 id="venue-search-title">Find available venues</h1>
+      {error && <p className="error" role="alert">{error}</p>}
+      {!error && !event && <p role="status">Loading the assigned event…</p>}
+      {event && <>
+        <p className="venue-search-page__event-name">Searching for <strong>{event.name}</strong></p>
+        <EventBrief event={event} />
+        <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
+          initialDate={event.proposed_date} initialSlots={event.mapped_slots} request={api} />
+      </>}
+    </section>;
+  }
+
+  return <section className={`organisation-events${eventId !== undefined ? ' organisation-events--detail' : ''}`} aria-labelledby="assigned-events-title">
     {eventId !== undefined && back}
-    <p className="eyebrow">Event Coordinator</p>
-    <h1 id="assigned-events-title">{event ? event.name : 'My assigned events'}</h1>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {!error && events === null && event === null && <p role="status">Loading assigned events…</p>}
-    {event && <div className="organisation-events__table-wrap">
-      <table className="organisation-events__table organisation-events__detail-table">
-        <caption className="visually-hidden">Submitted request details for {event.name}</caption>
-        {detailRows(event).map(([key, heading, rows]) => <tbody key={key}>
-          <tr><th scope="colgroup" colSpan={2}>{heading}</th></tr>
-          {rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th><td>{value}</td></tr>)}
-        </tbody>)}
-      </table>
-    </div>}
-    {event?.status === 'submitted' && <div className="organisation-events__actions">
-      <button type="button" className="button button--primary" disabled={transitioning}
-        onClick={() => { void beginReview(); }}>
-        {transitioning ? 'Beginning review…' : 'Begin review'}
-      </button>
-    </div>}
-    {event?.status === 'under_review' && <form className="request-form clarification-form"
-      onSubmit={submit => { submit.preventDefault(); void requestClarification(); }}>
-      <div className="field">
-        <label htmlFor="clarification-message">Clarification for the Event Organiser</label>
-        <textarea id="clarification-message" rows={4} maxLength={2000} value={clarification}
-          onChange={change => setClarification(change.target.value)} />
+    {!event && <><p className="eyebrow">Event Coordinator</p><h1 id="assigned-events-title">My assigned events</h1></>}
+    {event && <article className="organisation-events__detail-shell">
+      <header className="organisation-events__detail-header">
+        <p className="eyebrow">Event Coordinator</p>
+        <h1 id="assigned-events-title">{event.name}</h1>
+      </header>
+      <EventBrief event={event} />
+      <div className="organisation-events__table-wrap">
+        <table className="organisation-events__table organisation-events__detail-table">
+          <caption className="visually-hidden">Submitted request details for {event.name}</caption>
+          {detailRows(event).map(([key, heading, rows]) => <tbody key={key}>
+            <tr><th scope="colgroup" colSpan={2}>{heading}</th></tr>
+            {rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th><td>{value}</td></tr>)}
+          </tbody>)}
+        </table>
       </div>
-      <div className="organisation-events__actions">
-        <button type="submit" className="button button--primary" disabled={transitioning}>
-          {transitioning ? 'Requesting clarification…' : 'Request clarification'}
+      {event.status === 'submitted' && <div className="organisation-events__actions">
+        <button type="button" className="button button--primary" disabled={transitioning}
+          onClick={() => { void beginReview(); }}>
+          {transitioning ? 'Beginning review…' : 'Begin review'}
+        </button>
+      </div>}
+      {event.status === 'under_review' && <form className="request-form clarification-form"
+        onSubmit={submit => { submit.preventDefault(); void requestClarification(); }}>
+        <div className="field">
+          <label htmlFor="clarification-message">Clarification for the Event Organiser</label>
+          <textarea id="clarification-message" rows={4} maxLength={2000} value={clarification}
+            onChange={change => setClarification(change.target.value)} />
+        </div>
+        <div className="organisation-events__actions">
+          <button type="submit" className="button button--primary" disabled={transitioning}>
+            {transitioning ? 'Requesting clarification…' : 'Request clarification'}
+          </button>
+        </div>
+      </form>}
+      {event.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
+      <div className="organisation-events__actions organisation-events__actions--planning">
+        <div><span className="organisation-events__planning-label">Next step</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>
+        <button type="button" className="button button--primary"
+          onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/venue-search`)}>
+          Find venues
         </button>
       </div>
-    </form>}
-    {event?.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
+    </article>}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">
       <strong>No events assigned to you yet.</strong>
       <span>Events appear here when an Event Operations Manager assigns them to you.</span>

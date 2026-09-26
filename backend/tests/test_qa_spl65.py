@@ -1223,6 +1223,13 @@ def test_qa_spl65_062_success_response_contract(world, client):
         "status",
         "status_label",
         "proposed_date",
+        # SPL-71 added the coordinator's saved search context to every assigned-event summary.
+        "mapped_slots",
+        "expected_attendance",
+        "preferred_room_layout",
+        "required_facilities",
+        "accessibility_needs",
+        "location_preference",
     }
     assert set(response.json["transition"]) == {
         "action",

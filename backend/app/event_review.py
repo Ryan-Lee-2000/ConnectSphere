@@ -20,6 +20,7 @@ from app.models import (
     EventStatusHistory,
     Role,
 )
+from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
 REQUEST_CLARIFICATION = "request_clarification"
@@ -199,6 +200,19 @@ def _serialize_event(event: EventRequest) -> dict[str, Any]:
         "status": event.status,
         "status_label": status_label(event.status),
         "proposed_date": _date(event.proposed_date),
+        # Keep the response compatible with the assigned-event detail after its
+        # server-owned status transition. These are persisted event fields, not
+        # values supplied by the browser.
+        "mapped_slots": (
+            slots_for_range(event.start_time, event.end_time)
+            if event.start_time and event.end_time
+            else []
+        ),
+        "expected_attendance": event.expected_attendance,
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": event.required_facilities,
+        "accessibility_needs": event.accessibility_needs,
+        "location_preference": event.location_preference,
     }
 
 

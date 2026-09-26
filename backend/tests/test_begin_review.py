@@ -138,6 +138,12 @@ def test_tc_spl_70_01_assigned_coordinator_begins_review_and_records_audit_evide
         "status": "under_review",
         "status_label": "Under review",
         "proposed_date": "2026-10-12",
+        "mapped_slots": ["AM"],
+        "expected_attendance": 120,
+        "preferred_room_layout": None,
+        "required_facilities": [],
+        "accessibility_needs": [],
+        "location_preference": None,
     }
     assert response.json["transition"]["action"] == "begin_review"
     assert response.json["transition"]["previous_status"] == "submitted"

@@ -17,7 +17,12 @@ import { OrganisationEvents } from './OrganisationEvents';
 afterEach(cleanup);
 
 const LABEL = 'Clarification for the Event Organiser';
-const summary = { id: 12, name: 'Community Forum', status: 'under_review', status_label: 'Under review', proposed_date: '2026-10-12' };
+const summary = {
+  id: 12, name: 'Community Forum', status: 'under_review', status_label: 'Under review', proposed_date: '2026-10-12',
+  mapped_slots: ['AM', 'PM'], expected_attendance: 120, preferred_room_layout: 'theatre',
+  required_facilities: ['Projector', 'PA system'], accessibility_needs: ['Step-free access'],
+  location_preference: 'Marina Centre',
+};
 const detail = { ...summary, purpose: 'Forum', clarifications: [] as unknown[] };
 const returned = { ...summary, status: 'returned_for_clarification', status_label: 'Returned for clarification' };
 const asker = { id: 'alice', name: 'Alice Tan' };
