@@ -32,7 +32,7 @@ describe('EventRequestDrafts', () => {
     const draftDetail = {
       id: 1, name: 'Early idea', purpose: null, description: null, proposed_date: null,
       start_time: null, end_time: null, expected_attendance: null, preferred_room_layout: null,
-      required_facilities: [], facilities_notes: null, accessibility_needs: null,
+      required_facilities: [], facilities_notes: null, accessibility_needs: [],
       location_preference: null, venue_notes: null, venue_id: null,
       registration_required: false, registration_notes: null,
       last_saved_at: '2026-09-18T10:00:00+00:00', equipment_requirements: [],

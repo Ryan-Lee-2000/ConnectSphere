@@ -24,7 +24,7 @@ type EventRequestDetail = {
   preferred_room_layout: string | null;
   required_facilities: string[];
   facilities_notes: string | null;
-  accessibility_needs: string | null;
+  accessibility_needs: string[];
   location_preference: string | null;
   venue_notes: string | null;
   venue_id: number | null;
@@ -40,6 +40,16 @@ const DRAFT_LOAD_FALLBACK = "We couldn't load this draft. Refresh the page or tr
 
 function listFromText(value: string) {
   return value.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+const OTHERS = 'others';
+
+function toggleInList(list: string[], value: string) {
+  return list.includes(value) ? list.filter(item => item !== value) : [...list, value];
+}
+
+function partition(list: string[], allowed: string[]): [string[], string[]] {
+  return [list.filter(item => allowed.includes(item)), list.filter(item => !allowed.includes(item))];
 }
 
 function slotBounds(key: SlotKey) {
@@ -72,10 +82,15 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
   const [proposedDate, setProposedDate] = useState('');
   const [slot, setSlot] = useState<SlotKey | null>(null);
   const [expectedAttendance, setExpectedAttendance] = useState('');
-  const [preferredRoomLayout, setPreferredRoomLayout] = useState('');
-  const [requiredFacilities, setRequiredFacilities] = useState('');
+  const [layoutChoice, setLayoutChoice] = useState('');
+  const [layoutOtherText, setLayoutOtherText] = useState('');
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [facilitiesOthersEnabled, setFacilitiesOthersEnabled] = useState(false);
+  const [facilitiesOthersText, setFacilitiesOthersText] = useState('');
   const [facilitiesNotes, setFacilitiesNotes] = useState('');
-  const [accessibilityNeeds, setAccessibilityNeeds] = useState('');
+  const [selectedAccessibilityNeeds, setSelectedAccessibilityNeeds] = useState<string[]>([]);
+  const [accessibilityOthersEnabled, setAccessibilityOthersEnabled] = useState(false);
+  const [accessibilityOthersText, setAccessibilityOthersText] = useState('');
   const [locationPreference, setLocationPreference] = useState('');
   const [venueNotes, setVenueNotes] = useState('');
   const [venues, setVenues] = useState<VenueSummary[]>([]);
@@ -107,6 +122,19 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
   const availableSlots = selectedVenue
     ? SLOTS.filter(item => selectedVenue.operating_slots.includes(item.key))
     : SLOTS;
+
+  const venueLayoutOptions = selectedVenue ? selectedVenue.layouts.map(item => item.layout) : [];
+  const venueFacilityOptions = selectedVenue ? selectedVenue.facilities : [];
+  const venueAccessibilityOptions = selectedVenue ? selectedVenue.accessibility_features : [];
+  const preferredRoomLayout = layoutChoice === OTHERS ? layoutOtherText.trim() : layoutChoice;
+  const requiredFacilities = [
+    ...selectedFacilities,
+    ...(facilitiesOthersEnabled ? listFromText(facilitiesOthersText) : []),
+  ];
+  const accessibilityNeeds = [
+    ...selectedAccessibilityNeeds,
+    ...(accessibilityOthersEnabled ? listFromText(accessibilityOthersText) : []),
+  ];
 
   useEffect(() => {
     if (!api) return;
@@ -143,6 +171,56 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
 
+  // Venue-scoped choices only make sense against the currently selected venue. The very first
+  // time a venue resolves (covers reopening a draft/event that already has a venue and saved
+  // choices) reconciles rather than clears: values matching the venue's own lists become the
+  // selected checkboxes/option, and anything else is preserved as "Others" text instead of being
+  // silently dropped, so previously saved data is genuinely pulled back onto the page. Only a
+  // later, real venue change (the organiser picking a different venue) clears choices that no
+  // longer belong to it, per the confirmed "venue selection comes first" behaviour.
+  const venueReconciledOnce = useRef(false);
+  useEffect(() => {
+    if (!selectedVenue) return;
+    if (!venueReconciledOnce.current) {
+      venueReconciledOnce.current = true;
+      setLayoutChoice(current => {
+        if (!current || current === OTHERS || venueLayoutOptions.includes(current)) return current;
+        setLayoutOtherText(current);
+        return OTHERS;
+      });
+      setSelectedFacilities(current => {
+        const [known, custom] = partition(current, venueFacilityOptions);
+        if (custom.length) {
+          setFacilitiesOthersEnabled(true);
+          setFacilitiesOthersText(custom.join(', '));
+        }
+        return known;
+      });
+      setSelectedAccessibilityNeeds(current => {
+        const [known, custom] = partition(current, venueAccessibilityOptions);
+        if (custom.length) {
+          setAccessibilityOthersEnabled(true);
+          setAccessibilityOthersText(custom.join(', '));
+        }
+        return known;
+      });
+      return;
+    }
+    setLayoutChoice(current =>
+      current && current !== OTHERS && !venueLayoutOptions.includes(current) ? '' : current
+    );
+    setLayoutOtherText('');
+    setSelectedFacilities(current => current.filter(item => venueFacilityOptions.includes(item)));
+    setFacilitiesOthersEnabled(false);
+    setFacilitiesOthersText('');
+    setSelectedAccessibilityNeeds(current =>
+      current.filter(item => venueAccessibilityOptions.includes(item))
+    );
+    setAccessibilityOthersEnabled(false);
+    setAccessibilityOthersText('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVenue]);
+
   // Load an existing draft's fields once, when this form is opened to resume it.
   useEffect(() => {
     if (!draftId || !api) { initialSnapshot.current = snapshot(); return; }
@@ -168,10 +246,15 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
     setProposedDate(detail.proposed_date || '');
     setSlot(slotForTimes(detail.start_time, detail.end_time));
     setExpectedAttendance(detail.expected_attendance !== null ? String(detail.expected_attendance) : '');
-    setPreferredRoomLayout(detail.preferred_room_layout || '');
-    setRequiredFacilities(detail.required_facilities.join(', '));
+    setLayoutChoice(detail.preferred_room_layout || '');
+    setLayoutOtherText('');
+    setSelectedFacilities(detail.required_facilities);
+    setFacilitiesOthersEnabled(false);
+    setFacilitiesOthersText('');
     setFacilitiesNotes(detail.facilities_notes || '');
-    setAccessibilityNeeds(detail.accessibility_needs || '');
+    setSelectedAccessibilityNeeds(detail.accessibility_needs);
+    setAccessibilityOthersEnabled(false);
+    setAccessibilityOthersText('');
     setLocationPreference(detail.location_preference || '');
     setVenueNotes(detail.venue_notes || '');
     setVenueId(detail.venue_id);
@@ -184,8 +267,11 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
 
   function snapshot() {
     return JSON.stringify({
-      name, purpose, description, proposedDate, slot, expectedAttendance, preferredRoomLayout,
-      requiredFacilities, facilitiesNotes, accessibilityNeeds, locationPreference, venueNotes,
+      name, purpose, description, proposedDate, slot, expectedAttendance,
+      layoutChoice, layoutOtherText,
+      selectedFacilities, facilitiesOthersEnabled, facilitiesOthersText, facilitiesNotes,
+      selectedAccessibilityNeeds, accessibilityOthersEnabled, accessibilityOthersText,
+      locationPreference, venueNotes,
       venueId, registrationRequired, registrationNotes, equipmentLines,
     });
   }
@@ -194,8 +280,11 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
     if (initialSnapshot.current === null) return;
     onUnsavedChanges?.(!submitted && snapshot() !== initialSnapshot.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, purpose, description, proposedDate, slot, expectedAttendance, preferredRoomLayout,
-    requiredFacilities, facilitiesNotes, accessibilityNeeds, locationPreference, venueNotes,
+  }, [name, purpose, description, proposedDate, slot, expectedAttendance,
+    layoutChoice, layoutOtherText,
+    selectedFacilities, facilitiesOthersEnabled, facilitiesOthersText, facilitiesNotes,
+    selectedAccessibilityNeeds, accessibilityOthersEnabled, accessibilityOthersText,
+    locationPreference, venueNotes,
     venueId, registrationRequired, registrationNotes, equipmentLines, submitted]);
 
   if (!accessToken) return <section className="catalogue-auth" aria-labelledby="event-request-heading">
@@ -233,9 +322,9 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
       ...(slot ? slotBounds(slot) : { start_time: null, end_time: null }),
       expected_attendance: Number.isInteger(attendance) && attendance > 0 ? attendance : null,
       preferred_room_layout: preferredRoomLayout || null,
-      required_facilities: listFromText(requiredFacilities),
+      required_facilities: requiredFacilities,
       facilities_notes: facilitiesNotes || null,
-      accessibility_needs: accessibilityNeeds || null,
+      accessibility_needs: accessibilityNeeds,
       location_preference: locationPreference || null,
       venue_notes: venueNotes || null,
       venue_id: venueId,
@@ -269,9 +358,9 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
       ...slotBounds(slot),
       expected_attendance: attendance,
       preferred_room_layout: preferredRoomLayout || null,
-      required_facilities: listFromText(requiredFacilities),
+      required_facilities: requiredFacilities,
       facilities_notes: facilitiesNotes || null,
-      accessibility_needs: accessibilityNeeds || null,
+      accessibility_needs: accessibilityNeeds,
       location_preference: locationPreference || null,
       venue_notes: venueNotes || null,
       venue_id: venueId,
@@ -314,17 +403,78 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
       <label>Expected attendance<input type="number" min="1" step="1" value={expectedAttendance} onChange={event => setExpectedAttendance(event.target.value)} required /></label>
 
       <div className="detail-heading"><div><p className="eyebrow">Venue requirements (optional)</p><h3>Where would this work best?</h3></div></div>
-      <label>Preferred room layout<input value={preferredRoomLayout} onChange={event => setPreferredRoomLayout(event.target.value)} /></label>
-      <label>Required facilities <span className="hint">Separate items with commas</span><input value={requiredFacilities} onChange={event => setRequiredFacilities(event.target.value)} /></label>
-      <label>Facilities notes<textarea value={facilitiesNotes} onChange={event => setFacilitiesNotes(event.target.value)} rows={2} /></label>
-      <label>Accessibility needs<textarea value={accessibilityNeeds} onChange={event => setAccessibilityNeeds(event.target.value)} rows={2} /></label>
-      <label>Location preference<input value={locationPreference} onChange={event => setLocationPreference(event.target.value)} /></label>
-      <label>Venue <span className="hint">Selecting a venue may restrict which time slots are available</span>
+      <label>Venue <span className="hint">Choose a venue to see its layout, facility and accessibility options</span>
         <select value={venueId ?? ''} onChange={event => setVenueId(event.target.value ? Number(event.target.value) : null)}>
           <option value="">No preference</option>
           {venues.map(venue => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
         </select>
       </label>
+      <label>Preferred room layout
+        <select
+          value={layoutChoice}
+          disabled={!selectedVenue}
+          onChange={event => setLayoutChoice(event.target.value)}
+        >
+          <option value="">No preference</option>
+          {venueLayoutOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          <option value={OTHERS}>Others</option>
+        </select>
+      </label>
+      {layoutChoice === OTHERS && <label>Custom room layout
+        <input value={layoutOtherText} onChange={event => setLayoutOtherText(event.target.value)} disabled={!selectedVenue} />
+      </label>}
+      <fieldset disabled={!selectedVenue}>
+        <legend>Required facilities</legend>
+        {!selectedVenue && <p className="hint">Select a venue first to choose its facilities.</p>}
+        {venueFacilityOptions.map(option => <label key={option}>
+          <input
+            type="checkbox"
+            checked={selectedFacilities.includes(option)}
+            onChange={() => setSelectedFacilities(current => toggleInList(current, option))}
+          />
+          {option}
+        </label>)}
+        <label>
+          <input
+            type="checkbox"
+            checked={facilitiesOthersEnabled}
+            onChange={event => setFacilitiesOthersEnabled(event.target.checked)}
+          />
+          Others
+        </label>
+        {facilitiesOthersEnabled && <input
+          placeholder="Separate items with commas"
+          value={facilitiesOthersText}
+          onChange={event => setFacilitiesOthersText(event.target.value)}
+        />}
+      </fieldset>
+      <label>Facilities notes<textarea value={facilitiesNotes} onChange={event => setFacilitiesNotes(event.target.value)} rows={2} /></label>
+      <fieldset disabled={!selectedVenue}>
+        <legend>Accessibility needs</legend>
+        {!selectedVenue && <p className="hint">Select a venue first to choose its accessibility options.</p>}
+        {venueAccessibilityOptions.map(option => <label key={option}>
+          <input
+            type="checkbox"
+            checked={selectedAccessibilityNeeds.includes(option)}
+            onChange={() => setSelectedAccessibilityNeeds(current => toggleInList(current, option))}
+          />
+          {option}
+        </label>)}
+        <label>
+          <input
+            type="checkbox"
+            checked={accessibilityOthersEnabled}
+            onChange={event => setAccessibilityOthersEnabled(event.target.checked)}
+          />
+          Others
+        </label>
+        {accessibilityOthersEnabled && <input
+          placeholder="Separate items with commas"
+          value={accessibilityOthersText}
+          onChange={event => setAccessibilityOthersText(event.target.value)}
+        />}
+      </fieldset>
+      <label>Location preference<input value={locationPreference} onChange={event => setLocationPreference(event.target.value)} /></label>
       <fieldset>
         <legend>Time slot</legend>
         <div className="slot-options">

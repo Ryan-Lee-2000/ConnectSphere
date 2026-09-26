@@ -32,7 +32,6 @@ _OPTIONAL_TEXT_FIELDS = (
     "description",
     "preferred_room_layout",
     "facilities_notes",
-    "accessibility_needs",
     "location_preference",
     "venue_notes",
     "registration_notes",
@@ -45,6 +44,7 @@ _REQUEST_FIELDS = {
     "end_time",
     "expected_attendance",
     "required_facilities",
+    "accessibility_needs",
     "registration_required",
     "equipment_requirements",
     "venue_id",
@@ -299,6 +299,9 @@ def _event_request_attributes(
         "required_facilities": _string_list(
             data.get("required_facilities", []), "Required facilities"
         ),
+        "accessibility_needs": _string_list(
+            data.get("accessibility_needs", []), "Accessibility needs"
+        ),
         "registration_required": _boolean(
             data.get("registration_required", False), "Registration required"
         ),
@@ -369,6 +372,10 @@ def _draft_attributes(
         attributes["required_facilities"] = _string_list(
             data["required_facilities"], "Required facilities"
         )
+    if "accessibility_needs" in data:
+        attributes["accessibility_needs"] = _string_list(
+            data["accessibility_needs"], "Accessibility needs"
+        )
     if "registration_required" in data:
         attributes["registration_required"] = _boolean(
             data["registration_required"], "Registration required"
@@ -395,6 +402,7 @@ def _editable_data(event: EventRequest) -> dict[str, Any]:
         "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
         "expected_attendance": event.expected_attendance,
         "required_facilities": event.required_facilities,
+        "accessibility_needs": event.accessibility_needs,
         "registration_required": event.registration_required,
         "venue_id": event.venue_id,
         "equipment_requirements": [
