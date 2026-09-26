@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.slots import VenueOccupancySlot, derive_venue_occupancy
 from app.venue_operational_blocks import operational_block_for_slot
+from app.venue_slot_locks import lock_venue_slots
 
 
 class VenueOccupancyConflict(Exception):
@@ -45,6 +46,11 @@ def claim_venue_occupancy(
         event_slots,
         setup_buffer_slots=venue.setup_buffer_slots,
         turnaround_buffer_slots=venue.turnaround_buffer_slots,
+    )
+    lock_venue_slots(
+        session,
+        booking.venue_id,
+        ((occupied.date, occupied.slot) for occupied in required),
     )
     for occupied in required:
         if operational_block_for_slot(session, booking.venue_id, occupied.date, occupied.slot):

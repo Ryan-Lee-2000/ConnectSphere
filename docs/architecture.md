@@ -147,14 +147,21 @@ block, trusted Venue Staff actor and timestamp without changing booking status o
 and non-overlapping bookings remain unmarked. Clearing markers, notifications and a review queue are
 separate future work; SPL-77 and SPL-81 consume the shared model for their own workflows.
 
+Booking claims and block creation acquire the same ordered PostgreSQL transaction advisory locks
+for every affected venue/date/slot before reading or writing availability. The shared lock prevents
+a booking transaction and a block transaction from both passing their separate table checks against
+stale committed state. After waiting, the second transaction sees either the committed block and
+refuses the booking or the committed occupancy and marks that booking for review.
+
 ## Venue booking conflict boundary
 
 SPL-83 adds the minimal shared `venue_bookings` aggregate and active
 `venue_booking_occupancy` claims needed before the request and approval interfaces exist. A claim
 derives all event, setup and turnaround slots through SPL-87, refuses any matching active SPL-89
-operational block, and writes the complete batch in a nested transaction. The database uniqueness
-constraint on venue, Singapore date and operating slot is the final concurrency boundary: even when
-two transactions pass the readable pre-check together, at most one can retain the claim.
+operational block, and writes the complete batch in a nested transaction. A database uniqueness
+constraint on venue, Singapore date and operating slot prevents two bookings from retaining the
+same claim. The shared transaction advisory locks described above coordinate booking occupancy with
+operational blocks, which live in a different table and cannot share that uniqueness constraint.
 
 Requested and Approved bookings own occupancy rows. Moving a booking to Rejected, Withdrawn or
 Cancelled deletes its active claims, while moving to Approved rechecks operational blocks before
