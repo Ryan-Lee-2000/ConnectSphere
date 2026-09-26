@@ -19,6 +19,9 @@ type RequestSummary = {
   last_saved_at: string | null;
   // CS-E05-S2 AC6 and CS-E05-S3 AC6: who is responsible, once a coordinator has been assigned.
   coordinator: { id: string; name: string } | null;
+  // CS-E06-S4: who approved the request and when; null until it is approved.
+  approved_by?: { id: string; name: string } | null;
+  approved_at?: string | null;
 };
 
 function mostRecentFirst(rows: RequestSummary[]) {
@@ -146,6 +149,9 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
             <td>
               <span className="event-request-status__label">{item.status_label}</span>
               <span className="event-request-status__explanation">{item.status_explanation}</span>
+              {item.approved_by && <span className="event-request-status__explanation">
+                Approved by {item.approved_by.name}{item.approved_at ? ` on ${new Date(item.approved_at).toLocaleString()}` : ''}
+              </span>}
             </td>
             <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>
             <td>{item.status_changed_at ? new Date(item.status_changed_at).toLocaleString() : 'Not recorded'}</td>

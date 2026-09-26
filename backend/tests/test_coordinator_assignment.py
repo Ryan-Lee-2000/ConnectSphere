@@ -316,6 +316,8 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "responsible_organiser": "Olivia Organiser",
         "submitted_at": SUBMITTED_AT.isoformat(),
         "clarifications": [],
+        "approved_by": None,
+        "approved_at": None,
     }
 
 

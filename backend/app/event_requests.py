@@ -580,6 +580,19 @@ def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
     }
 
 
+def serialize_approval(event: EventRequest) -> dict[str, Any]:
+    """Who approved the request and when (CS-E06-S4); both are null until it is approved."""
+
+    return {
+        "approved_by": (
+            {"id": event.approver.id, "name": event.approver.display_name}
+            if event.approver
+            else None
+        ),
+        "approved_at": _singapore_time(event.approved_at) if event.approved_at else None,
+    }
+
+
 def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
     """Every clarification asked of this request, newest first (CS-E06-S2)."""
 
@@ -672,6 +685,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         # request is still waiting to be assigned. Reads are already scoped to the organiser's
         # own requests, so this discloses nothing beyond their own event.
         "coordinator": _coordinator(event),
+        **serialize_approval(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

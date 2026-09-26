@@ -1,4 +1,4 @@
-"""Assigned-coordinator review workflow for CS-E07-S2 / SPL-70 and CS-E06-S2 / SPL-65."""
+"""Assigned-coordinator review workflow for SPL-70, SPL-65 and SPL-67 (approval)."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
-from app.event_requests import SINGAPORE, serialize_clarifications
+from app.event_requests import SINGAPORE, serialize_approval, serialize_clarifications
 from app.event_statuses import status_label
 from app.models import (
     Account,
@@ -24,9 +24,11 @@ from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
 REQUEST_CLARIFICATION = "request_clarification"
+APPROVE = "approve"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
+PLANNING = "planning"
 MAX_CLARIFICATION_LENGTH = 2000
 
 
@@ -44,6 +46,11 @@ TRANSITION_RULES = {
     REQUEST_CLARIFICATION: TransitionRule(
         previous_status=UNDER_REVIEW,
         resulting_status=RETURNED_FOR_CLARIFICATION,
+    ),
+    # Approval lets planning begin; it books nothing and confirms nothing (Q80).
+    APPROVE: TransitionRule(
+        previous_status=UNDER_REVIEW,
+        resulting_status=PLANNING,
     ),
 }
 
@@ -134,6 +141,51 @@ def register_event_review_routes(app: Flask) -> None:
                 clarifications=serialize_clarifications(event),
             )
 
+    @app.post("/api/event-requests/<int:event_request_id>/approve")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def approve_event_request(event_request_id: int):
+        _require_action_without_parameters("Approval")
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Assigned event not found.")
+            now = datetime.now(SINGAPORE)
+            try:
+                audit = transition_event_status(
+                    session,
+                    event_request_id=event_request_id,
+                    action=APPROVE,
+                    actor_account_id=g.user_id,
+                    changed_at=now,
+                )
+            except InvalidStatusTransition:
+                session.rollback()
+                abort(409, "Only an event under review can be approved.")
+            session.execute(
+                update(EventRequest)
+                .where(EventRequest.id == event_request_id)
+                .values(approved_by_account_id=g.user_id, approved_at=now)
+                .execution_options(synchronize_session=False)
+            )
+            session.commit()
+            actor = session.get(Account, g.user_id)
+            session.expire_all()
+            event = session.get(EventRequest, event_request_id)
+            return jsonify(
+                event={**_serialize_event(event), **serialize_approval(event)},
+                transition=_serialize_transition(audit, actor),
+                message="Request approved. Event planning can begin.",
+            )
+
 
 def transition_event_status(
     session: Session,
@@ -169,13 +221,13 @@ def transition_event_status(
     return audit
 
 
-def _require_action_without_parameters() -> None:
+def _require_action_without_parameters(action: str = "Begin review") -> None:
     """Keep the server-owned target status out of the client request."""
 
     if request.content_length in (None, 0):
         return
     if not request.is_json or request.get_json(silent=True) != {}:
-        abort(400, "Begin review does not accept a target status or other parameters.")
+        abort(400, f"{action} does not accept a target status or other parameters.")
 
 
 def _clarification_message() -> str:

@@ -64,7 +64,9 @@ class Account(Base):
         ForeignKey("organisations.id"), nullable=True, index=True
     )
     organisation: Mapped[Organisation | None] = relationship(back_populates="accounts")
-    event_requests: Mapped[list["EventRequest"]] = relationship(back_populates="organiser")
+    event_requests: Mapped[list["EventRequest"]] = relationship(
+        back_populates="organiser", foreign_keys="EventRequest.organiser_account_id"
+    )
 
 
 class AccountRole(Base):
@@ -206,7 +208,15 @@ class EventRequest(Base):
     )
     registration_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     registration_notes: Mapped[str | None] = mapped_column(Text)
-    organiser: Mapped[Account] = relationship(back_populates="event_requests")
+    # CS-E06-S4. Who approved the request and when; both stay null until it is approved.
+    approved_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    organiser: Mapped[Account] = relationship(
+        back_populates="event_requests", foreign_keys=[organiser_account_id]
+    )
+    approver: Mapped[Account | None] = relationship(foreign_keys=[approved_by_account_id])
     venue: Mapped["Venue | None"] = relationship()
     organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(

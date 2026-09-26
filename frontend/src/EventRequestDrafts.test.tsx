@@ -64,4 +64,13 @@ describe('EventRequestDrafts', () => {
     expect(await screen.findByText('Alice Tan')).toBeTruthy();
     expect(screen.getByText('Not assigned yet')).toBeTruthy();
   });
+
+  // CS-E06-S4 AC4
+  it('[TC-SPL-67-13] shows the organiser who approved the request', async () => {
+    const request = vi.fn(async () => response({ event_requests: [
+      { id: 1, name: 'Forum', status: 'planning', status_label: 'In planning', status_explanation: 'Approved.', status_changed_at: null, last_saved_at: null, proposed_date: null, coordinator: { id: 'alice', name: 'Alice Tan' }, approved_by: { id: 'alice', name: 'Alice Tan' }, approved_at: '2026-09-27T10:00:00+08:00' },
+    ] }));
+    render(<EventRequestDrafts accessToken="token" request={request} />);
+    expect(await screen.findByText(/Approved by Alice Tan on/)).toBeTruthy();
+  });
 });

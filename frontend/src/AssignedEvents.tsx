@@ -41,6 +41,8 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   responsible_organiser: string;
   submitted_at: string | null;
   clarifications: Clarification[];
+  approved_by: { id: string; name: string } | null;
+  approved_at: string | null;
 }>;
 
 const NOT_PROVIDED = 'Not provided';
@@ -76,6 +78,7 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
   return [
     ['core', 'Core details', [
       ['Status', event.status_label],
+      ...(event.approved_by ? [['Approved by', `${event.approved_by.name}, ${formatTimestamp(event.approved_at)}`] as [string, ReactNode]] : []),
       ['Purpose', formatText(event.purpose)],
       ['Description', formatText(event.description)],
       ['Proposed date', formatDate(event.proposed_date)],
@@ -207,6 +210,29 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     }
   }
 
+  async function approve() {
+    if (!event || event.status !== 'under_review' || transitioning) return;
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/approve`, { method: 'POST' });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not approve the request. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event }));
+        setNotice(body.message || 'Request approved. Event planning can begin.');
+      } else {
+        setError('Could not approve the request. Try again.');
+      }
+    } catch {
+      setError('Could not approve the request. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   async function requestClarification() {
     if (!event || event.status !== 'under_review' || transitioning) return;
     if (!clarification.trim()) {
@@ -282,6 +308,12 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <button type="button" className="button button--primary" disabled={transitioning}
           onClick={() => { void beginReview(); }}>
           {transitioning ? 'Beginning review…' : 'Begin review'}
+        </button>
+      </div>}
+      {event.status === 'under_review' && <div className="organisation-events__actions">
+        <button type="button" className="button button--primary" disabled={transitioning}
+          onClick={() => { void approve(); }}>
+          {transitioning ? 'Working…' : 'Approve request'}
         </button>
       </div>}
       {event.status === 'under_review' && <form className="request-form clarification-form"
