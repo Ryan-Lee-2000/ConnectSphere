@@ -106,6 +106,7 @@ class Venue(Base):
     operational_blocks: Mapped[list["VenueOperationalBlock"]] = relationship(
         back_populates="venue", cascade="all, delete-orphan", order_by="VenueOperationalBlock.id"
     )
+    bookings: Mapped[list["VenueBooking"]] = relationship(back_populates="venue")
 
 
 class VenueLayout(Base):
@@ -217,6 +218,74 @@ class EventRequest(Base):
     coordinator_assignment: Mapped["EventCoordinatorAssignment | None"] = relationship(
         back_populates="event_request", cascade="all, delete-orphan", uselist=False
     )
+    venue_bookings: Mapped[list["VenueBooking"]] = relationship(
+        back_populates="event_request", cascade="all, delete-orphan"
+    )
+
+
+BOOKING_STATUSES = ("requested", "approved", "rejected", "withdrawn", "cancelled")
+ACTIVE_BOOKING_STATUSES = ("requested", "approved")
+
+
+class VenueBooking(Base):
+    """Minimal booking aggregate shared by conflict-policy consumers."""
+
+    __tablename__ = "venue_bookings"
+    __table_args__ = (
+        CheckConstraint(
+            "status in (" + ", ".join(repr(status) for status in BOOKING_STATUSES) + ")",
+            name="ck_venue_bookings_known_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    venue_id: Mapped[int] = mapped_column(
+        ForeignKey("venues.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
+    venue: Mapped[Venue] = relationship(back_populates="bookings")
+    occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="VenueBookingOccupancy.id",
+    )
+
+
+class VenueBookingOccupancy(Base):
+    """One active event or preparation slot claimed by a venue booking."""
+
+    __tablename__ = "venue_booking_occupancy"
+    __table_args__ = (
+        CheckConstraint(
+            "slot in ('AM', 'PM', 'NIGHT')", name="ck_venue_booking_occupancy_known_slot"
+        ),
+        CheckConstraint(
+            "kind in ('event', 'setup', 'turnaround')",
+            name="ck_venue_booking_occupancy_known_kind",
+        ),
+        UniqueConstraint(
+            "venue_id",
+            "occupancy_date",
+            "slot",
+            name="uq_venue_booking_occupancy_venue_date_slot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("venue_bookings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    venue_id: Mapped[int] = mapped_column(
+        ForeignKey("venues.id", ondelete="RESTRICT"), nullable=False
+    )
+    day: Mapped[date] = mapped_column("occupancy_date", Date, nullable=False)
+    slot: Mapped[str] = mapped_column(String(10), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    booking: Mapped[VenueBooking] = relationship(back_populates="occupancy")
 
 
 class EquipmentRequirement(Base):

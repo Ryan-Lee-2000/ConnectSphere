@@ -22,6 +22,8 @@ PRODUCT_TABLES = {
     "event_coordinator_history",
     "event_status_history",
     "venue_operational_blocks",
+    "venue_bookings",
+    "venue_booking_occupancy",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

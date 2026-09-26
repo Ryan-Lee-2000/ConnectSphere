@@ -146,6 +146,21 @@ booking and occupancy model. The operational-block foundation is therefore imple
 inventing a competing booking schema; the story remains incomplete until that dependency is
 integrated. SPL-77 will later consume SPL-83's model when it creates booking requests.
 
+## Venue booking conflict boundary
+
+SPL-83 adds the minimal shared `venue_bookings` aggregate and active
+`venue_booking_occupancy` claims needed before the request and approval interfaces exist. A claim
+derives all event, setup and turnaround slots through SPL-87, refuses any matching active SPL-89
+operational block, and writes the complete batch in a nested transaction. The database uniqueness
+constraint on venue, Singapore date and operating slot is the final concurrency boundary: even when
+two transactions pass the readable pre-check together, at most one can retain the claim.
+
+Requested and Approved bookings own occupancy rows. Moving a booking to Rejected, Withdrawn or
+Cancelled deletes its active claims, while moving to Approved rechecks operational blocks before
+changing status. Conflict errors identify the occupied date and slot. SPL-77 and SPL-81 will call
+this module inside their own transactions; they remain responsible for rolling back their booking
+write when the policy refuses it. Product tables retain RLS with no browser-role grants.
+
 ## Boundaries for future stories
 
 React may call Supabase directly only for authentication. All business operations go through Flask.
