@@ -87,7 +87,7 @@ def event_payload(**overrides):
         "preferred_room_layout": "Theatre",
         "required_facilities": ["Projector", "Step-free access"],
         "facilities_notes": "Two wireless microphones",
-        "accessibility_needs": "Reserved wheelchair spaces",
+        "accessibility_needs": ["Reserved wheelchair spaces"],
         "location_preference": "Central",
         "venue_notes": "Near public transport",
         "registration_required": True,
@@ -245,6 +245,8 @@ def test_draft_lifecycle_preserves_id_and_last_saved_time(client):
     assert draft["status"] == "draft"
     assert draft["purpose"] is None
     assert draft["last_saved_at"]
+    assert draft["required_facilities"] == []
+    assert draft["accessibility_needs"] == []
 
     saved_response = client.patch(
         f"/api/event-requests/drafts/{draft['id']}",
@@ -346,6 +348,7 @@ def test_reopened_draft_retains_optional_fields_and_replaces_equipment_lines(cli
     assert reopened["description"] == "Revised description"
     assert reopened["preferred_room_layout"] is None
     assert reopened["required_facilities"] == ["Projector", "Step-free access"]
+    assert reopened["accessibility_needs"] == ["Reserved wheelchair spaces"]
     assert reopened["registration_required"] is True
     assert len(reopened["equipment_requirements"]) == 1
     assert reopened["equipment_requirements"][0]["equipment_type"] == "Projector"
@@ -382,6 +385,10 @@ def test_event_request_routes_enforce_declared_roles(client):
         (
             {"required_facilities": ["Projector", " "]},
             "Required facilities must contain only non-empty text values.",
+        ),
+        (
+            {"accessibility_needs": ["Wheelchair access", " "]},
+            "Accessibility needs must contain only non-empty text values.",
         ),
         (
             {"registration_required": "yes"},

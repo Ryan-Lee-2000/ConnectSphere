@@ -198,7 +198,7 @@ class EventRequest(Base):
     preferred_room_layout: Mapped[str | None] = mapped_column(Text)
     required_facilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     facilities_notes: Mapped[str | None] = mapped_column(Text)
-    accessibility_needs: Mapped[str | None] = mapped_column(Text)
+    accessibility_needs: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     location_preference: Mapped[str | None] = mapped_column(Text)
     venue_notes: Mapped[str | None] = mapped_column(Text)
     venue_id: Mapped[int | None] = mapped_column(
