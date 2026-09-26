@@ -55,7 +55,7 @@ def test_qa_spl52_001_every_venue_requirement_field_round_trips_exactly(client):
         preferred_room_layout="Theatre",
         required_facilities=["Projector", "Step-free access"],
         facilities_notes="Two wireless microphones",
-        accessibility_needs="Reserved wheelchair spaces",
+        accessibility_needs=["Reserved wheelchair spaces"],
         location_preference="Central",
         venue_notes="Near public transport",
     )
@@ -63,7 +63,7 @@ def test_qa_spl52_001_every_venue_requirement_field_round_trips_exactly(client):
     assert created["preferred_room_layout"] == "Theatre"
     assert created["required_facilities"] == ["Projector", "Step-free access"]
     assert created["facilities_notes"] == "Two wireless microphones"
-    assert created["accessibility_needs"] == "Reserved wheelchair spaces"
+    assert created["accessibility_needs"] == ["Reserved wheelchair spaces"]
     assert created["location_preference"] == "Central"
     assert created["venue_notes"] == "Near public transport"
 
@@ -90,7 +90,7 @@ def test_qa_spl52_007_every_venue_requirement_field_is_optional_at_creation(clie
     assert created["preferred_room_layout"] is None
     assert created["required_facilities"] == []
     assert created["facilities_notes"] is None
-    assert created["accessibility_needs"] is None
+    assert created["accessibility_needs"] == []
     assert created["location_preference"] is None
     assert created["venue_notes"] is None
     assert created["venue_id"] is None
