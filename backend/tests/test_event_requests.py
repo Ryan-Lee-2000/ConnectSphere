@@ -1,8 +1,17 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role, Venue
+from app.models import (
+    Account,
+    AccountRole,
+    Base,
+    EventRequest,
+    Organisation,
+    Role,
+    Venue,
+    VenueOperationalBlock,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -449,6 +458,40 @@ def test_venue_id_is_rejected_when_the_time_falls_outside_its_operating_slots(cl
 
     assert response.status_code == 400
     assert response.json == {"error": "Selected time is not available for this venue."}
+
+
+def test_tc_spl_89_05_active_block_makes_event_request_slot_unavailable(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["AM"])
+    proposed_date = date.today() + timedelta(days=7)
+    with Session(event_app.extensions["engine"]) as session:
+        session.add(
+            VenueOperationalBlock(
+                venue_id=venue_id,
+                start_date=proposed_date,
+                end_date=proposed_date,
+                slots=["AM"],
+                reason="Inspection",
+                created_by_account_id=ORGANISER_ONE,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        "/api/event-requests",
+        json=event_payload(
+            proposed_date=proposed_date.isoformat(),
+            start_time="07:00",
+            end_time="12:00",
+            venue_id=venue_id,
+        ),
+        headers=headers(),
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Selected time is not available for this venue."}
+    with Session(event_app.extensions["engine"]) as session:
+        assert session.scalars(select(EventRequest)).all() == []
 
 
 def test_null_venue_id_bypasses_the_slot_availability_check(client):
