@@ -68,7 +68,7 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await coordinatorAssigned.getByRole('link', { name }).click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await expect(page.getByText('Review started.')).toBeVisible();
-  await expect(page.getByText('Under review')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Requirements to consider' }).getByText('Under review')).toBeVisible();
 
   // TC-SPL-71-11: the assigned event carries its server-owned date and slots into read-only search.
   await page.getByRole('button', { name: 'Find venues', exact: true }).click();
@@ -98,8 +98,8 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await assigned.getByRole('link', { name }).click();
   await expect(page).toHaveURL(/\/workspace\/assigned-events\/\d+$/);
   await expect(page.getByRole('heading', { name })).toBeVisible();
-  await expect(page.getByText('Under review')).toBeVisible();
-  await expect(page.getByText(displayedDate)).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Under review' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: displayedDate })).toBeVisible();
 
   // SPL-64: the detail is the complete read-only request, including organisation and organiser.
   await expect(page.getByRole('rowheader', { name: 'Client organisation' })).toBeVisible();

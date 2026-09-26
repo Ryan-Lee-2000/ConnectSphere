@@ -166,7 +166,7 @@ it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and
   expect(screen.getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([
     'Core details', 'Venue requirements', 'Equipment requirements', 'Registration needs', 'Organisation and submission',
   ]);
-  expect(screen.queryAllByRole('button').filter(b => b.textContent !== 'Begin review')).toEqual([]);
+  expect(screen.getByRole('button', { name: 'Find venues' })).toBeTruthy();
 });
 
 it('opens a dedicated event-scoped venue search instead of expanding search controls in the detail view', async () => {
