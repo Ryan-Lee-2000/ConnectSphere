@@ -11,6 +11,7 @@ from app.authorization import require_roles
 from app.event_statuses import status_explanation, status_label
 from app.models import Account, EquipmentRequirement, EventRequest, Role, Venue
 from app.slots import slots_for_range
+from app.venue_operational_blocks import operational_block_for_slot
 
 # CS-E03-S5. Every ConnectSphere venue is in Singapore (Q36), so submissions are stamped in
 # a single zone. A fixed offset avoids depending on the platform time-zone database.
@@ -301,14 +302,20 @@ def _event_request_attributes(
         "registration_required": _boolean(
             data.get("registration_required", False), "Registration required"
         ),
-        "venue_id": _venue_id(data.get("venue_id"), start_time, end_time, session),
+        "venue_id": _venue_id(data.get("venue_id"), proposed_date, start_time, end_time, session),
     }
     for field in _OPTIONAL_TEXT_FIELDS:
         attributes[field] = _optional_text(data.get(field), field.replace("_", " ").title())
     return attributes, _equipment_lines(data.get("equipment_requirements", []))
 
 
-def _venue_id(value: Any, start_time: time, end_time: time, session: Session) -> int | None:
+def _venue_id(
+    value: Any,
+    proposed_date: date,
+    start_time: time,
+    end_time: time,
+    session: Session,
+) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
@@ -318,6 +325,8 @@ def _venue_id(value: Any, start_time: time, end_time: time, session: Session) ->
         abort(400, "Venue not found.")
     matching_slots = slots_for_range(start_time, end_time)
     if len(matching_slots) != 1 or matching_slots[0] not in venue.operating_slots:
+        abort(400, "Selected time is not available for this venue.")
+    if operational_block_for_slot(session, venue.id, proposed_date, matching_slots[0]):
         abort(400, "Selected time is not available for this venue.")
     return value
 

@@ -109,6 +109,62 @@ it('requires a venue name and at least one operating slot before saving', async 
   expect(save).toHaveProperty('disabled', false);
 });
 
+it('TC-SPL-89-06 lets venue staff record operational unavailability for a selected venue', async () => {
+  const createdBlock = {
+    id: 9,
+    venue_id: 1,
+    start_date: '2026-10-05',
+    end_date: '2026-10-07',
+    slots: ['AM', 'PM'],
+    reason: 'Annual fire-safety inspection',
+    created_by_account_id: 'venue-staff-id',
+    created_at: '2026-09-26T10:00:00+08:00',
+    removed_by_account_id: null,
+    removed_at: null,
+  };
+  let blocks: typeof createdBlock[] = [];
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/venues' && !init?.method) return response({ venues: [{ id: 1, name: 'Harbour Hall', location: 'Marina Centre' }], capabilities: { can_manage: true } });
+    if (path === '/api/venues/1' && !init?.method) return response({ venue, capabilities: { can_manage: true } });
+    if (path === '/api/venues/1/operational-blocks' && init?.method === 'POST') {
+      blocks = [createdBlock];
+      return response({ operational_block: createdBlock }, 201);
+    }
+    if (path === '/api/venues/1/operational-blocks/9' && init?.method === 'DELETE') {
+      blocks = [];
+      return response({ operational_block: { ...createdBlock, removed_by_account_id: 'venue-staff-id', removed_at: '2026-09-26T10:05:00+08:00' } });
+    }
+    if (path === '/api/venues/1/operational-blocks') return response({ operational_blocks: blocks });
+    throw new Error(`Unexpected request: ${path}`);
+  });
+
+  render(<VenueCatalogue accessToken="token" request={request} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Harbour Hall/ }));
+  expect(await screen.findByRole('heading', { name: 'Operational unavailability' })).toBeTruthy();
+
+  fireEvent.change(screen.getByLabelText('Unavailable from'), { target: { value: '2026-10-05' } });
+  fireEvent.change(screen.getByLabelText('Unavailable through'), { target: { value: '2026-10-07' } });
+  fireEvent.click(screen.getByLabelText('AM · 7am–12pm unavailable'));
+  fireEvent.click(screen.getByLabelText('PM · 1pm–6pm unavailable'));
+  fireEvent.change(screen.getByLabelText('Reason for unavailability'), { target: { value: 'Annual fire-safety inspection' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Record unavailability' }));
+
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues/1/operational-blocks', expect.objectContaining({ method: 'POST' })));
+  const createCall = request.mock.calls.find(([path, init]) => path === '/api/venues/1/operational-blocks' && init?.method === 'POST');
+  expect(JSON.parse(createCall?.[1]?.body as string)).toEqual({
+    start_date: '2026-10-05',
+    end_date: '2026-10-07',
+    slots: ['AM', 'PM'],
+    reason: 'Annual fire-safety inspection',
+  });
+  expect(await screen.findByText('Annual fire-safety inspection')).toBeTruthy();
+  expect(screen.getByText('5 Oct 2026 – 7 Oct 2026')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Annual fire-safety inspection' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues/1/operational-blocks/9', { method: 'DELETE' }));
+  expect(screen.queryByText('Annual fire-safety inspection')).toBeNull();
+  expect(await screen.findByText('Operational unavailability removed.')).toBeTruthy();
+});
+
 it('sends not-required preparation values when neither requirement is selected', async () => {
   const created = { ...venue, id: 2, name: 'Orchid Room', setup_buffer_slots: 0, turnaround_buffer_slots: 0 };
   const request = vi.fn(async (path: string, init?: RequestInit) => {

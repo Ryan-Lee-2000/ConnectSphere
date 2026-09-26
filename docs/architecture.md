@@ -128,6 +128,23 @@ The calculation deliberately creates no booking record and exposes no endpoint o
 Venue search, booking, calendars and conflict prevention consume this rule in their own approved
 stories, preventing each workflow from implementing a different interpretation of preparation time.
 
+## Venue operational unavailability
+
+SPL-89 adds `venue_operational_blocks` as the audited Venue Staff input for dates and operating
+slots when a catalogue venue cannot be used. Blocks use an inclusive Singapore date range, one or
+more of that venue's configured AM/PM/Night slots, and a required reason. Removal is a soft lifecycle
+transition: `removed_by_account_id` and `removed_at` preserve who removed the block and when, while
+active availability reads ignore removed rows.
+
+`operational_block_for_slot()` is the shared read boundary for venue search, suitability and
+conflict-prevention stories. It deliberately centralises the active/date/slot rule instead of asking
+each consumer to interpret block records itself. The table has RLS enabled and grants revoked from
+browser roles; Venue Staff create, list and remove blocks only through Flask.
+
+SPL-89's affected-booking review marker cannot be attached until SPL-77 supplies the approved venue
+booking aggregate. The operational-block foundation is therefore implemented without inventing a
+competing booking schema; the story remains incomplete until that dependency is integrated.
+
 ## Boundaries for future stories
 
 React may call Supabase directly only for authentication. All business operations go through Flask.

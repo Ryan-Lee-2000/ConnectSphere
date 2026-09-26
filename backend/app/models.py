@@ -103,6 +103,9 @@ class Venue(Base):
     layouts: Mapped[list["VenueLayout"]] = relationship(
         back_populates="venue", cascade="all, delete-orphan", order_by="VenueLayout.id"
     )
+    operational_blocks: Mapped[list["VenueOperationalBlock"]] = relationship(
+        back_populates="venue", cascade="all, delete-orphan", order_by="VenueOperationalBlock.id"
+    )
 
 
 class VenueLayout(Base):
@@ -118,6 +121,31 @@ class VenueLayout(Base):
     layout: Mapped[str] = mapped_column(Text, nullable=False)
     capacity: Mapped[int] = mapped_column(Integer, nullable=False)
     venue: Mapped[Venue] = relationship(back_populates="layouts")
+
+
+class VenueOperationalBlock(Base):
+    """A Venue Staff record that removes dated operating slots from availability."""
+
+    __tablename__ = "venue_operational_blocks"
+    __table_args__ = (CheckConstraint("end_date >= start_date", name="ck_venue_blocks_date_order"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    venue_id: Mapped[int] = mapped_column(
+        ForeignKey("venues.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    slots: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    removed_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    venue: Mapped[Venue] = relationship(back_populates="operational_blocks")
 
 
 class EventRequest(Base):

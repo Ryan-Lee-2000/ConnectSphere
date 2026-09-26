@@ -14,6 +14,7 @@ import {
 import { AnimatePresence, m } from 'motion/react';
 import type { AccountRole } from './roles';
 import { SLOTS, slotLabel } from './slots';
+import { VenueOperationalBlocks } from './VenueOperationalBlocks';
 
 export type VenueLayout = { id: number; layout: string; capacity: number };
 type LayoutDraft = { id?: number; layout: string; customLayout: string; capacity: string };
@@ -163,7 +164,7 @@ export function VenueCatalogue({
       {!editor && venues.length > 0 && <div className="venue-marketplace" aria-label="Venue catalogue results">
         {venues.map((venue, index) => <VenueCard key={venue.id} venue={venue} index={index} selected={selected?.id === venue.id} onSelect={() => toggleVenue(venue.id)} order={index * 2} />)}
         <AnimatePresence initial={false}>
-          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails venue={selected} canManage={canManage} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
+          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails venue={selected} canManage={canManage} api={api} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
         </AnimatePresence>
       </div>}
       {!editor && venues.length === 0 && <div className="catalogue-empty"><Building2 size={28} /><h3>No venues to browse yet</h3><p>{canManage ? 'Build the catalogue by creating the first venue profile.' : 'Venue profiles will appear here when Venue Staff add them.'}</p>{canManage && <button type="button" className="primary icon-button" onClick={() => setEditor('create')}><Plus size={18} />Create first venue</button>}</div>}
@@ -181,7 +182,7 @@ function VenueCard({ venue, index, selected, onSelect, order }: { venue: VenueSu
   </m.button>;
 }
 
-function VenueDetails({ venue, canManage, onEdit }: { venue: Venue; canManage: boolean; onEdit: () => void }) {
+function VenueDetails({ venue, canManage, api, onEdit }: { venue: Venue; canManage: boolean; api?: ApiRequest; onEdit: () => void }) {
   return <article aria-labelledby="venue-name">
     <div className="detail-heading"><div><p className="eyebrow">Venue details</p><h3 id="venue-name">{venue.name}</h3><p className="location"><MapPin size={16} />{venue.location || 'Location not recorded'}</p></div>{canManage && <button type="button" className="icon-button" onClick={onEdit}><Pencil size={16} />Edit venue</button>}</div>
     {venue.description && <p>{venue.description}</p>}
@@ -192,6 +193,7 @@ function VenueDetails({ venue, canManage, onEdit }: { venue: Venue; canManage: b
       <section className="preparation-card"><h4><CalendarClock size={18} />Preparation requirements</h4><dl><div><dt>Setup required</dt><dd>{venue.setup_buffer_slots ? 'Yes — one full slot immediately before an event' : 'No'}</dd></div><div><dt>Turnaround required</dt><dd>{venue.turnaround_buffer_slots ? 'Yes — one full slot immediately after an event' : 'No'}</dd></div></dl><p className="hint">These are stored venue requirements. Calendar availability and booking will apply the directly adjacent slots in a later story.</p></section>
     </div>
     <LayoutList layouts={venue.layouts} />
+    {canManage && api && <VenueOperationalBlocks venue={venue} api={api} />}
   </article>;
 }
 
