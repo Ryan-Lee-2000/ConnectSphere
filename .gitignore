@@ -24,3 +24,6 @@ Project Specifications/
 .pnpm-store/
 debug.log
 *.db
+
+# Personal local development reference. Never commit fixture-account notes.
+LOCAL_DEVELOPER_CHEATSHEET.md
