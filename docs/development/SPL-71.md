@@ -29,8 +29,9 @@ appropriate options before making a venue booking request.
 - The search is strictly read-only: it creates neither a venue booking nor a tentative hold.
   Booking request/decision and suitability requirements remain owned by their later stories.
 - The assigned-event detail presents a read-only event brief before its single **Find venues** action.
-  The dedicated search page repeats that context, pre-fills date and slots, and still allows the
-  coordinator to explore another date/slot combination without changing the saved event.
+  The dedicated catalogue search pre-fills the event date, slots, attendance and layout, then lets
+  the coordinator explore another combination without changing the saved event. The original event
+  requirements remain visible in a reference panel beside the filters.
 - Available results use the existing marketplace-card pattern. Opening one confirms timing only;
   non-available venues remain excluded, and suitability is deliberately reserved for SPL-75.
 

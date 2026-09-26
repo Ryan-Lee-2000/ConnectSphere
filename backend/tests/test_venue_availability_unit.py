@@ -3,7 +3,8 @@
 from datetime import date
 
 import pytest
-from app.venue_availability import SearchParameterError, parse_search_parameters
+from app.models import VenueLayout
+from app.venue_availability import SearchParameterError, parse_search_parameters, qualifying_layouts
 
 
 # TC-SPL-71-07: valid equivalence partitions for each fixed operating slot.
@@ -22,6 +23,8 @@ def test_tc_spl_71_07_normalises_each_valid_fixed_slot_in_operational_order(
     assert parse_search_parameters("2026-10-12", raw_slots) == (
         date(2026, 10, 12),
         expected_slots,
+        None,
+        None,
     )
 
 
@@ -39,3 +42,52 @@ def test_tc_spl_71_07_normalises_each_valid_fixed_slot_in_operational_order(
 def test_tc_spl_71_08_refuses_each_invalid_search_partition(raw_date, raw_slots, message):
     with pytest.raises(SearchParameterError, match=f"^{message}$"):
         parse_search_parameters(raw_date, raw_slots)
+
+
+def test_tc_spl_72_07_normalises_optional_catalogue_capacity_and_layout_filters():
+    assert parse_search_parameters(
+        "2026-10-12",
+        ["AM"],
+        "80",
+        " classroom ",
+        attendance_supplied=True,
+        layout_supplied=True,
+    ) == (date(2026, 10, 12), ["AM"], 80, "classroom")
+
+
+@pytest.mark.parametrize("raw_attendance", ["", "0", "12.5", "-1", "many"])
+def test_tc_spl_72_08_refuses_invalid_catalogue_attendance_filter(raw_attendance):
+    with pytest.raises(
+        SearchParameterError,
+        match="^Expected attendance must be a positive whole number.$",
+    ):
+        parse_search_parameters("2026-10-12", ["AM"], raw_attendance, attendance_supplied=True)
+
+
+@pytest.mark.parametrize(
+    ("expected_attendance", "preferred_layout", "expected"),
+    [
+        (80, None, [("theatre", 80), ("classroom", 120)]),
+        (81, None, [("classroom", 120)]),
+        (80, "Theatre", [("theatre", 80)]),
+        (121, "classroom", []),
+        (80, "banquet", []),
+    ],
+)
+def test_tc_spl_72_03_applies_capacity_boundary_and_preferred_layout_partitions(
+    expected_attendance, preferred_layout, expected
+):
+    layouts = [
+        VenueLayout(layout="theatre", capacity=80),
+        VenueLayout(layout="classroom", capacity=120),
+    ]
+
+    qualified = qualifying_layouts(layouts, expected_attendance, preferred_layout)
+
+    assert [(layout.layout, layout.capacity) for layout in qualified] == expected
+
+
+def test_tc_spl_72_04_requires_event_level_expected_attendance():
+    layouts = [VenueLayout(layout="theatre", capacity=80)]
+
+    assert qualifying_layouts(layouts, None, None) == []
