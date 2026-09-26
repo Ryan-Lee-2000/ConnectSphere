@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AssignedEvents } from './AssignedEvents';
 
@@ -28,11 +28,12 @@ it('opens the selected event using the assigned-only detail endpoint', async () 
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
   expect(await screen.findByRole('heading', { name: 'Community Forum' })).toBeTruthy();
-  expect(screen.getByText('Submitted')).toBeTruthy();
+  const brief = within(screen.getByRole('region', { name: 'Requirements to consider' }));
+  expect(brief.getByText('Submitted')).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Requirements to consider' })).toBeTruthy();
-  expect(screen.getByText('AM, PM')).toBeTruthy();
-  expect(screen.getByText('Projector, PA system')).toBeTruthy();
-  expect(screen.getByText('Step-free access')).toBeTruthy();
+  expect(brief.getByText('AM, PM')).toBeTruthy();
+  expect(brief.getByText('Projector, PA system')).toBeTruthy();
+  expect(brief.getByText('Step-free access')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/12');
 });
 
@@ -82,7 +83,7 @@ it('[TC-SPL-64-06] keeps the full detail visible after begin review returns the 
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
   expect(await screen.findByText('Review started.')).toBeTruthy();
-  expect(screen.getByText('Under review')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Under review')).toBeTruthy();
   expect(screen.getByText('Harbour Hall')).toBeTruthy();
 });
 
@@ -200,7 +201,7 @@ it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
 
   expect(await screen.findByText('Review started.')).toBeTruthy();
-  expect(screen.getByText('Under review')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Under review')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Begin review' })).toBeNull();
   expect(request).toHaveBeenLastCalledWith(
     '/api/event-requests/12/begin-review',
@@ -217,7 +218,7 @@ it('[TC-SPL-70-05] keeps the submitted status available when begin review is ref
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
 
   expect((await screen.findByRole('alert')).textContent).toContain('Only a submitted event can begin review.');
-  expect(screen.getByText('Submitted')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Submitted')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Begin review' })).toBeTruthy();
 });
 
