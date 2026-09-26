@@ -29,6 +29,139 @@ it('opens the selected event using the assigned-only detail endpoint', async () 
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/12');
 });
 
+const fullDetail = {
+  ...assigned,
+  purpose: 'Client showcase', description: null, start_time: '09:00', end_time: '12:00',
+  expected_attendance: 120, venue_name: 'Harbour Hall', preferred_room_layout: 'Theatre',
+  required_facilities: ['Projector', 'Microphone'], facilities_notes: null,
+  accessibility_needs: [], location_preference: null, venue_notes: null,
+  equipment_requirements: [{ equipment_type: 'Podium', quantity: 2, notes: 'Lockable' }],
+  registration_required: true, registration_notes: 'Ticketed',
+  client_organisation: 'Northstar Community Partners', responsible_organiser: 'Olivia Organiser',
+  submitted_at: '2026-09-01T09:00:00+08:00',
+};
+
+it('[TC-SPL-64-01, TC-SPL-64-02] shows every request field in a table, marking empty ones', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: fullDetail }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  const row = async (label: string) => (await screen.findByRole('rowheader', { name: label })).closest('tr')!;
+  expect((await row('Purpose')).textContent).toContain('Client showcase');
+  expect((await row('Time')).textContent).toContain('09:00–12:00');
+  expect((await row('Venue')).textContent).toContain('Harbour Hall');
+  expect((await row('Required facilities')).textContent).toContain('Projector, Microphone');
+  expect((await row('Equipment')).textContent).toContain('Podium × 2 (Lockable)');
+  expect((await row('Registration required')).textContent).toContain('Yes');
+  expect((await row('Client organisation')).textContent).toContain('Northstar Community Partners');
+  expect((await row('Responsible Event Organiser')).textContent).toContain('Olivia Organiser');
+  expect((await row('Submission date and time')).textContent).toContain('1 Sept 2026');
+  expect((await row('Description')).textContent).toContain('Not provided');
+  expect((await row('Accessibility needs')).textContent).toContain('Not provided');
+  expect(screen.queryByRole('textbox')).toBeNull();
+});
+
+it('[TC-SPL-64-03] shows only the unavailable message when the request cannot be retrieved', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'Assigned event not found.' }) });
+  render(<AssignedEvents accessToken="token" eventId={99} request={request} onNavigate={vi.fn()} />);
+  expect((await screen.findByRole('alert')).textContent).toBe('This assigned event is unavailable.');
+  expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('[TC-SPL-64-06] keeps the full detail visible after begin review returns the summary shape', async () => {
+  const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: fullDetail }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReview }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
+  expect(await screen.findByText('Review started.')).toBeTruthy();
+  expect(screen.getByText('Under review')).toBeTruthy();
+  expect(screen.getByText('Harbour Hall')).toBeTruthy();
+});
+
+function renderDetail(event: Record<string, unknown>) {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+  return async (label: string) => (await screen.findByRole('rowheader', { name: label })).closest('tr')!.textContent!;
+}
+
+it('[TC-SPL-64-10] renders registration as No when false and Not provided when the field is absent', async () => {
+  const row = renderDetail({ ...fullDetail, registration_required: false });
+  expect(await row('Registration required')).toContain('No');
+  cleanup();
+  const absent = renderDetail(assigned);
+  expect(await absent('Registration required')).toContain('Not provided');
+});
+
+it('[TC-SPL-64-11] shows Not provided for every empty value and an empty equipment list', async () => {
+  const row = renderDetail({ ...assigned, proposed_date: null, description: '', equipment_requirements: [], required_facilities: [], submitted_at: null });
+  expect(await row('Proposed date')).toContain('Not provided');
+  expect(await row('Description')).toContain('Not provided');
+  expect(await row('Equipment')).toContain('Not provided');
+  expect(await row('Required facilities')).toContain('Not provided');
+  expect(await row('Submission date and time')).toContain('Not provided');
+  expect(await row('Time')).toContain('Not provided');
+});
+
+it('[TC-SPL-64-12] shows Time only when both a start and an end are present', async () => {
+  const row = renderDetail({ ...fullDetail, end_time: null });
+  expect(await row('Time')).toContain('Not provided');
+});
+
+it('[TC-SPL-64-13] lists several equipment lines and omits empty notes', async () => {
+  const row = renderDetail({
+    ...fullDetail,
+    equipment_requirements: [
+      { equipment_type: 'Podium', quantity: 2, notes: 'Lockable' },
+      { equipment_type: 'Lamp', quantity: 1, notes: null },
+    ],
+  });
+  const text = await row('Equipment');
+  expect(text).toContain('Podium × 2 (Lockable)');
+  expect(text).toContain('Lamp × 1');
+  expect(text).not.toContain('Lamp × 1 (');
+});
+
+it('[TC-SPL-64-14] keeps zero attendance rather than treating it as empty', async () => {
+  const row = renderDetail({ ...fullDetail, expected_attendance: 0 });
+  expect(await row('Expected attendance')).toContain('0');
+  expect(await row('Expected attendance')).not.toContain('Not provided');
+});
+
+it('[TC-SPL-64-15] shows the submission time in Singapore time whatever offset arrives', async () => {
+  const row = renderDetail({ ...fullDetail, submitted_at: '2026-09-01T17:00:00Z' });
+  const text = await row('Submission date and time');
+  expect(text).toContain('2 Sept 2026');
+});
+
+it('[TC-SPL-64-16] shows a retry message when the detail response is malformed or the request throws', async () => {
+  const malformed = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={malformed} onNavigate={vi.fn()} />);
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not load your assigned events. Try again.');
+  cleanup();
+  const thrown = vi.fn().mockRejectedValue(new Error('offline'));
+  render(<AssignedEvents accessToken="token" eventId={12} request={thrown} onNavigate={vi.fn()} />);
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not load your assigned events. Try again.');
+  expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('[TC-SPL-64-17] hides Begin review once the event is under review but keeps the full detail', async () => {
+  renderDetail({ ...fullDetail, status: 'under_review', status_label: 'Under review' });
+  expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Begin review' })).toBeNull();
+});
+
+it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and row headers', async () => {
+  renderDetail(fullDetail);
+  const table = await screen.findByRole('table', { name: /Submitted request details for Community Forum/ });
+  expect(table).toBeTruthy();
+  expect(screen.getAllByRole('rowheader').length).toBeGreaterThanOrEqual(19);
+  expect(screen.getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([
+    'Core details', 'Venue requirements', 'Equipment requirements', 'Registration needs', 'Organisation and submission',
+  ]);
+  expect(screen.queryAllByRole('button').filter(b => b.textContent !== 'Begin review')).toEqual([]);
+});
+
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
   const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
   const request = vi.fn()
