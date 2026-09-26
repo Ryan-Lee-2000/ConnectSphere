@@ -75,7 +75,7 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page.getByRole('heading', { name: 'Find available venues' })).toBeVisible();
   await expect(page.getByLabel('Singapore date')).toHaveValue(proposedDate);
   await expect(page.getByLabel('AM · 7am–12pm')).toBeChecked();
-  await page.getByRole('button', { name: 'Find venues', exact: true }).click();
+  await page.getByRole('button', { name: 'Search venues', exact: true }).click();
   await expect(page.locator('.venue-availability__summary')).toContainText(proposedDate);
   await expect(page.getByText('Fits 120 guests').first()).toBeVisible();
   await signOut(page);

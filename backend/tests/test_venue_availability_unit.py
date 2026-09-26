@@ -23,6 +23,8 @@ def test_tc_spl_71_07_normalises_each_valid_fixed_slot_in_operational_order(
     assert parse_search_parameters("2026-10-12", raw_slots) == (
         date(2026, 10, 12),
         expected_slots,
+        None,
+        None,
     )
 
 
@@ -40,6 +42,26 @@ def test_tc_spl_71_07_normalises_each_valid_fixed_slot_in_operational_order(
 def test_tc_spl_71_08_refuses_each_invalid_search_partition(raw_date, raw_slots, message):
     with pytest.raises(SearchParameterError, match=f"^{message}$"):
         parse_search_parameters(raw_date, raw_slots)
+
+
+def test_tc_spl_72_07_normalises_optional_catalogue_capacity_and_layout_filters():
+    assert parse_search_parameters(
+        "2026-10-12",
+        ["AM"],
+        "80",
+        " classroom ",
+        attendance_supplied=True,
+        layout_supplied=True,
+    ) == (date(2026, 10, 12), ["AM"], 80, "classroom")
+
+
+@pytest.mark.parametrize("raw_attendance", ["", "0", "12.5", "-1", "many"])
+def test_tc_spl_72_08_refuses_invalid_catalogue_attendance_filter(raw_attendance):
+    with pytest.raises(
+        SearchParameterError,
+        match="^Expected attendance must be a positive whole number.$",
+    ):
+        parse_search_parameters("2026-10-12", ["AM"], raw_attendance, attendance_supplied=True)
 
 
 @pytest.mark.parametrize(

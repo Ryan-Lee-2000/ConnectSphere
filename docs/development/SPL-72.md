@@ -7,8 +7,7 @@ consider venues with sufficient capacity.
 
 ## Acceptance criteria
 
-1. Venue search filters the existing available-venue result set using the assigned event's expected
-   attendance.
+1. Venue search filters the existing available-venue result set using the expected attendance.
    - Without a preferred layout, a venue is shown only if at least one saved supported layout has a
      stated capacity equal to or greater than expected attendance.
    - With a preferred layout, that exact saved layout must be supported and have a stated capacity
@@ -18,9 +17,11 @@ consider venues with sufficient capacity.
 
 ## Implementation
 
-- The protected Flask availability endpoint reads `expected_attendance` and
-  `preferred_room_layout` from the server-owned assigned event. The browser supplies neither
-  value as a filter or authority input.
+- The protected Flask availability endpoint starts with `expected_attendance` and
+  `preferred_room_layout` from the server-owned assigned event. The coordinator may provide
+  validated, read-only catalogue filter overrides for attendance and layout; these change neither
+  the event nor authorisation. An explicitly cleared layout means any persisted layout may qualify.
+  The browser still supplies no account, role or organisation selector.
 - `qualifying_layouts()` is a pure helper. It compares the event-level attendance requirement with
   persisted per-layout capacity; it does not estimate capacity. If a preferred layout is recorded,
   comparison is case-insensitive but the response retains the stored layout name.
@@ -49,6 +50,8 @@ consider venues with sufficient capacity.
 | TC-SPL-72-04 | Unit negative case: no event-level expected attendance yields no qualifying layout | `backend/tests/test_venue_availability_unit.py` |
 | TC-SPL-72-05 | Component result presents the trusted attendance target and matching layout | `frontend/src/VenueAvailabilitySearch.test.tsx` |
 | TC-SPL-72-06 | Authenticated browser regression: assigned event search displays the 120-guest capacity target | `e2e/coordinator-assignment.spec.ts` |
+| TC-SPL-72-07 | Coordinator can adjust prefixed attendance and layout filters without mutating the assigned event | `backend/tests/test_venue_availability.py`, `backend/tests/test_venue_availability_unit.py`, `frontend/src/VenueAvailabilitySearch.test.tsx` |
+| TC-SPL-72-08 | Invalid attendance filter values are refused before venue search | `backend/tests/test_venue_availability_unit.py` |
 
 ## Week 6 unit-test and coverage evidence
 

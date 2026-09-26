@@ -30,7 +30,14 @@ def register_venue_availability_routes(app: Flask) -> None:
         slots; it never creates a booking or reserves a candidate.
         """
 
-        day, event_slots = _search_parameters()
+        (
+            day,
+            event_slots,
+            attendance_override,
+            layout_override,
+            attendance_supplied,
+            layout_supplied,
+        ) = _search_parameters()
         with Session(app.extensions["engine"]) as session:
             if not is_assigned_coordinator(session, event_request_id, g.user_id):
                 abort(404, "Assigned event not found.")
@@ -40,13 +47,17 @@ def register_venue_availability_routes(app: Flask) -> None:
             venues = session.scalars(
                 select(Venue).options(selectinload(Venue.layouts)).order_by(Venue.name, Venue.id)
             ).all()
+            expected_attendance = (
+                attendance_override if attendance_supplied else event.expected_attendance
+            )
+            preferred_room_layout = (
+                layout_override if layout_supplied else event.preferred_room_layout
+            )
             available = [
-                _serialize_venue(venue, event.expected_attendance, event.preferred_room_layout)
+                _serialize_venue(venue, expected_attendance, preferred_room_layout)
                 for venue in venues
                 if _is_available(session, venue, day, event_slots)
-                and qualifying_layouts(
-                    venue.layouts, event.expected_attendance, event.preferred_room_layout
-                )
+                and qualifying_layouts(venue.layouts, expected_attendance, preferred_room_layout)
             ]
             return jsonify(
                 search={"date": day.isoformat(), "slots": event_slots},
@@ -54,17 +65,31 @@ def register_venue_availability_routes(app: Flask) -> None:
             )
 
 
-def _search_parameters() -> tuple[date, list[str]]:
+def _search_parameters() -> tuple[date, list[str], int | None, str | None, bool, bool]:
     try:
-        return parse_search_parameters(request.args.get("date"), request.args.getlist("slot"))
+        attendance_supplied = "expected_attendance" in request.args
+        layout_supplied = "preferred_room_layout" in request.args
+        return parse_search_parameters(
+            request.args.get("date"),
+            request.args.getlist("slot"),
+            request.args.get("expected_attendance"),
+            request.args.get("preferred_room_layout"),
+            attendance_supplied,
+            layout_supplied,
+        ) + (attendance_supplied, layout_supplied)
     except SearchParameterError as exc:
         abort(400, str(exc))
 
 
 def parse_search_parameters(
-    raw_date: str | None, raw_slots: Iterable[str]
-) -> tuple[date, list[str]]:
-    """Validate and normalise the read-only Singapore date and fixed-slot query.
+    raw_date: str | None,
+    raw_slots: Iterable[str],
+    raw_attendance: str | None = None,
+    raw_layout: str | None = None,
+    attendance_supplied: bool = False,
+    layout_supplied: bool = False,
+) -> tuple[date, list[str], int | None, str | None]:
+    """Validate and normalise a read-only venue-catalogue search.
 
     Kept free of Flask and database collaborators so the user-story rules can be
     tested quickly as unit behaviour as well as through the protected endpoint.
@@ -84,7 +109,19 @@ def parse_search_parameters(
         raise SearchParameterError("Search uses only AM, PM or NIGHT slots.")
     if len(slots) != len(set(slots)):
         raise SearchParameterError("Operating slots must not contain duplicates.")
-    return day, [slot for slot in OPERATING_SLOTS if slot in slots]
+    attendance: int | None = None
+    if attendance_supplied:
+        if not raw_attendance or not raw_attendance.isdecimal() or int(raw_attendance) < 1:
+            raise SearchParameterError("Expected attendance must be a positive whole number.")
+        attendance = int(raw_attendance)
+
+    layout: str | None = None
+    if layout_supplied:
+        layout = (raw_layout or "").strip() or None
+        if layout is not None and len(layout) > 100:
+            raise SearchParameterError("Preferred room layout must be 100 characters or fewer.")
+
+    return day, [slot for slot in OPERATING_SLOTS if slot in slots], attendance, layout
 
 
 def _is_available(session: Session, venue: Venue, day: date, event_slots: Iterable[str]) -> bool:

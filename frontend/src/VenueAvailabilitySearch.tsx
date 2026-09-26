@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Building2, MapPin } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Building2, CalendarDays, MapPin, Search, UsersRound } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import { SLOTS, type SlotKey } from './slots';
 
 type MatchingLayout = { layout: string; capacity: number };
 type AvailableVenue = { id: number; name: string; location: string | null; maximum_layout_capacity: number | null; matching_layouts: MatchingLayout[] };
+const ROOM_LAYOUT_OPTIONS = ['Theatre', 'Classroom', 'Boardroom', 'Banquet', 'Cabaret', 'U-shaped'];
 
 export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, request }: {
   accessToken: string; eventId: number; initialDate: string | null; initialSlots?: string[]; expectedAttendance: number | null; preferredRoomLayout: string | null; request?: ApiRequest;
@@ -14,6 +15,8 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const selectableSlots = (slots: string[]) => slots.filter((slot): slot is SlotKey => SLOTS.some(candidate => candidate.key === slot));
   const [searchDate, setSearchDate] = useState(initialDate || '');
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>(selectableSlots(initialSlots || []));
+  const [attendance, setAttendance] = useState(initialAttendance(expectedAttendance));
+  const [layout, setLayout] = useState(normaliseLayoutChoice(preferredRoomLayout));
   const [venues, setVenues] = useState<AvailableVenue[] | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,6 +25,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
 
   useEffect(() => {
     setSearchDate(initialDate || ''); setSelectedSlots(selectableSlots(initialSlots || []));
+    setAttendance(initialAttendance(expectedAttendance)); setLayout(normaliseLayoutChoice(preferredRoomLayout));
     setVenues(null); setSearched(false); setError(null); setSelectedVenueId(null);
   }, [eventId, initialDate, initialSlots]);
 
@@ -35,6 +39,8 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
     setLoading(true); setError(null);
     const parameters = new URLSearchParams({ date: searchDate });
     selectedSlots.forEach(slot => parameters.append('slot', slot));
+    parameters.set('expected_attendance', attendance);
+    parameters.set('preferred_room_layout', layout.trim());
     try {
       const response = await api(`/api/event-requests/${eventId}/available-venues?${parameters.toString()}`);
       if (!response.ok) { setError(await responseError(response, 'Could not search venue availability. Try again.')); return; }
@@ -44,29 +50,47 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
     } catch { setError('Could not search venue availability. Try again.'); }
     finally { setLoading(false); }
   }
-  const canSearch = Boolean(searchDate && selectedSlots.length);
+  const attendanceValue = Number(attendance);
+  const canSearch = Boolean(searchDate && selectedSlots.length && Number.isInteger(attendanceValue) && attendanceValue > 0);
   const summary = `${searchDate || 'No date'} · ${selectedSlots.map(slot => SLOTS.find(item => item.key === slot)?.label.split(' · ')[0] || slot).join(', ') || 'No slots'}`;
   const selectedVenue = venues?.find(venue => venue.id === selectedVenueId) || null;
   const selectedIndex = selectedVenue ? venues?.findIndex(venue => venue.id === selectedVenue.id) ?? -1 : -1;
   const detailOrder = selectedIndex < 0 ? 0 : (selectedIndex % 2 === 0 && selectedIndex < (venues?.length || 0) - 1 ? selectedIndex + 1 : selectedIndex) * 2 + 1;
   const layoutLabel = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
+  const layoutOptions = layout && !ROOM_LAYOUT_OPTIONS.some(option => option.toLowerCase() === layout.toLowerCase())
+    ? [layout, ...ROOM_LAYOUT_OPTIONS] : ROOM_LAYOUT_OPTIONS;
   return <section className="venue-availability" aria-labelledby="venue-availability-title">
-    <div className="venue-availability__heading"><div><p className="eyebrow">Venue availability</p><h2 id="venue-availability-title">Find available venues</h2></div><p>Searches are read-only. A result is not a booking or a hold.</p></div>
-    <div className="venue-availability__controls"><label className="field"><span>Singapore date</span><input aria-label="Singapore date" onChange={event => setSearchDate(event.target.value)} type="date" value={searchDate} /></label>
-      <fieldset className="venue-availability__slots"><legend>Required slots</legend><div>{SLOTS.map(slot => <label key={slot.key}><input checked={selectedSlots.includes(slot.key)} onChange={() => toggleSlot(slot.key)} type="checkbox" /><span>{slot.label}</span></label>)}</div></fieldset>
-      <button className="button button--primary" disabled={!canSearch || loading} onClick={() => void search()} type="button">{loading ? 'Checking availability…' : 'Find venues'}</button></div>
-    {!canSearch && <p className="venue-availability__hint" role="status">Choose a Singapore date and at least one slot to search.</p>}
+    <form className="venue-availability__panel" onSubmit={submit => { submit.preventDefault(); void search(); }}>
+      <header className="venue-availability__filter-header"><div><p className="eyebrow">Venue catalogue search</p><h2 id="venue-availability-title">Search filters</h2></div><p>Start with the event’s details, then adjust any filter to compare venue options.</p></header>
+      <div className="venue-availability__fields">
+        <label className="field venue-availability__date"><span><CalendarDays size={15} /> Singapore date</span><input aria-label="Singapore date" onChange={event => setSearchDate(event.target.value)} type="date" value={searchDate} /></label>
+        <label className="field venue-availability__attendance"><span><UsersRound size={15} /> Expected attendance</span><input aria-label="Expected attendance" min="1" onChange={event => setAttendance(event.target.value)} inputMode="numeric" type="number" value={attendance} /></label>
+        <fieldset className="venue-availability__slots"><legend>Required slots</legend><div>{SLOTS.map(slot => <label key={slot.key}><input checked={selectedSlots.includes(slot.key)} onChange={() => toggleSlot(slot.key)} type="checkbox" /><span>{slot.label}</span></label>)}</div></fieldset>
+        <label className="field venue-availability__layout"><span>Room layout <em>Optional</em></span><span className="venue-availability__layout-control"><select aria-label="Room layout" onChange={event => setLayout(event.target.value)} value={layout}><option value="">Any supported layout</option>{layoutOptions.map(option => <option key={option} value={option}>{option}</option>)}</select>{layout && <button className="venue-availability__clear-layout" onClick={() => setLayout('')} type="button">Clear</button>}</span></label>
+      </div>
+      <footer className="venue-availability__actions"><p>Searches are read-only. A result is not a booking or a hold.</p><button className="button button--primary venue-availability__submit" disabled={!canSearch || loading} type="submit"><Search size={17} />{loading ? 'Checking…' : 'Search venues'}</button></footer>
+    </form>
+    {!canSearch && <p className="venue-availability__hint" role="status">Choose a date, at least one slot and a positive expected attendance to search.</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    {searched && !error && <div className="venue-availability__results" aria-live="polite"><p className="venue-availability__summary">Availability for <strong>{summary}</strong></p>
+    {searched && !error && <div className="venue-availability__results" aria-live="polite"><p className="venue-availability__summary">Results for <strong>{summary}</strong> · <strong>{attendanceValue} guests</strong>{layout.trim() ? <> · <strong>{layoutLabel(layout.trim())}</strong></> : null}</p>
       {venues?.length === 0 ? <div className="organisation-events__empty" role="status"><strong>No venues are available for this search.</strong><span>Keep the date and slots, then adjust them to explore another option.</span></div> : <div className="venue-availability__marketplace venue-marketplace" aria-label="Available venue results">
         {venues?.map((venue, index) => <m.button type="button" key={venue.id} className={`venue-card venue-availability__card palette-${index % 3}${selectedVenueId === venue.id ? ' selected' : ''}`} style={{ order: index * 2 }} onClick={() => setSelectedVenueId(current => current === venue.id ? null : venue.id)} aria-expanded={selectedVenueId === venue.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .16, ease: 'easeOut', delay: Math.min(index * .04, .16) }} whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
           <span className="venue-card-art" aria-hidden="true"><span className="venue-card-index">{String(index + 1).padStart(2, '0')}</span><Building2 size={32} /><span className="venue-card-grid" /></span>
-          <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Fits {expectedAttendance ?? '—'} guests</span><span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
+          <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Fits {attendanceValue} guests</span><span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
         </m.button>)}
         <AnimatePresence initial={false}>{selectedVenue && <m.div className="venue-card-details venue-availability__detail" key={selectedVenue.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}>
-          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing and capacity confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue meets the event’s attendance requirement and is available for the selected date, every required slot and any recorded preparation time.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Expected attendance</dt><dd>{expectedAttendance ?? 'Not recorded'}{expectedAttendance !== null ? ' guests' : ''}</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Preferred layout</dt><dd>{preferredRoomLayout ? layoutLabel(preferredRoomLayout) : 'Any supported layout'}</dd></div></dl></section>
+          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing and capacity confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue meets the active search filters and is available for the selected date, every required slot and any recorded preparation time.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Expected attendance</dt><dd>{attendanceValue} guests</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Layout filter</dt><dd>{layout.trim() ? layoutLabel(layout.trim()) : 'Any supported layout'}</dd></div></dl></section>
         </m.div>}</AnimatePresence>
       </div>}
     </div>}
   </section>;
+}
+
+function initialAttendance(value: number | null) {
+  return value && value > 0 ? String(value) : '';
+}
+
+function normaliseLayoutChoice(value: string | null) {
+  if (!value) return '';
+  return ROOM_LAYOUT_OPTIONS.find(option => option.toLowerCase() === value.trim().toLowerCase()) || value;
 }

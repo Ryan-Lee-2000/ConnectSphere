@@ -334,3 +334,38 @@ def test_tc_spl_72_02_requires_the_saved_preferred_layout_to_meet_attendance(app
     assert response.status_code == 200
     assert [venue["id"] for venue in response.json["venues"]] == [matching_id]
     assert response.json["venues"][0]["matching_layouts"] == [{"layout": "theatre", "capacity": 80}]
+
+
+def test_tc_spl_72_07_uses_editable_catalogue_filters_without_mutating_assigned_event(app, client):
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        event.expected_attendance = 120
+        event.preferred_room_layout = "Theatre"
+        classroom = Venue(name="Classroom Hall", location="Singapore", operating_slots=["AM"])
+        classroom.layouts = [VenueLayout(layout="classroom", capacity=80)]
+        session.add(classroom)
+        session.commit()
+        classroom_id = classroom.id
+
+    response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-12&slot=AM&expected_attendance=80&preferred_room_layout=classroom",
+    )
+
+    assert response.status_code == 200
+    assert [venue["id"] for venue in response.json["venues"]] == [classroom_id]
+
+    unrestricted_response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-12&slot=AM&expected_attendance=80&preferred_room_layout=",
+    )
+    assert unrestricted_response.status_code == 200
+    assert [venue["id"] for venue in unrestricted_response.json["venues"]] == [classroom_id]
+
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        assert (event.expected_attendance, event.preferred_room_layout) == (120, "Theatre")
