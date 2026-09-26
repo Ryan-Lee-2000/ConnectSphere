@@ -304,3 +304,49 @@ it('[TC-SPL-65-11] lists the clarification history newest first', async () => {
   const items = await screen.findAllByRole('listitem');
   expect(items.map(item => item.textContent).join('|')).toMatch(/Second question.*First question/);
 });
+
+const approvedAnswer = {
+  event: {
+    ...assigned, status: 'planning', status_label: 'In planning',
+    approved_by: { id: 'a', name: 'Alice Tan' }, approved_at: '2026-09-27T10:00:00+08:00',
+  },
+  message: 'Request approved. Event planning can begin.',
+};
+
+it('[TC-SPL-67-10] shows the approve button only while the event is under review', async () => {
+  renderDetail(fullDetail);
+  expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Approve request' })).toBeNull();
+  cleanup();
+  renderDetail(underReviewDetail);
+  expect(await screen.findByRole('button', { name: 'Approve request' })).toBeTruthy();
+});
+
+it('[TC-SPL-67-11] approves, shows the message, the new status and the decision-maker', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => approvedAnswer });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve request' }));
+
+  expect(await screen.findByText('Request approved. Event planning can begin.')).toBeTruthy();
+  expect(screen.getAllByText('In planning').length).toBeGreaterThan(0);
+  expect((await screen.findByRole('rowheader', { name: 'Approved by' })).closest('tr')!.textContent).toContain('Alice Tan');
+  expect(screen.queryByRole('button', { name: 'Approve request' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Request clarification' })).toBeNull();
+  expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/approve', { method: 'POST' });
+});
+
+it('[TC-SPL-67-12] shows the server message and keeps the button when approval is refused', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Only an event under review can be approved.' }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve request' }));
+
+  expect((await screen.findByRole('alert')).textContent).toBe('Only an event under review can be approved.');
+  expect(screen.getByRole('button', { name: 'Approve request' })).toBeTruthy();
+  expect(screen.getAllByText('Under review').length).toBeGreaterThan(0);
+});

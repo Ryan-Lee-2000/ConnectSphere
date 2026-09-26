@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.authorization import require_roles
-from app.event_requests import SINGAPORE, serialize_clarifications
+from app.event_requests import SINGAPORE, serialize_approval, serialize_clarifications
 from app.event_statuses import EVENT_REQUEST_STATUSES, status_label
 from app.models import (
     Account,
@@ -414,6 +414,7 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         "responsible_organiser": event.organiser.display_name,
         "submitted_at": _timestamp(event.submitted_at),
         "clarifications": serialize_clarifications(event),
+        **serialize_approval(event),
     }
 
 
