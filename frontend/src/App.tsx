@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createAuthGateway, type AuthGateway, type AuthSession } from './auth';
+import { CoordinatorAssignmentQueue } from './CoordinatorAssignmentQueue';
 import {
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
@@ -10,10 +11,11 @@ import {
   writeActiveRole,
   type AccountRole,
 } from './roles';
+import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
-import { EventRequestCreate } from './EventRequestCreate';
 import { EventRequestDrafts } from './EventRequestDrafts';
 import { OrganisationEvents } from './OrganisationEvents';
+import { AssignedEvents } from './AssignedEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -45,6 +47,10 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
+  if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
+  if (/^\/workspace\/assigned-events(?:\/\d+)?$/.test(requestedPath)) {
+    return role === 'event_coordinator';
+  }
   if (/^\/workspace\/organisation-events(?:\/\d+)?$/.test(requestedPath)) {
     return role === 'event_organiser';
   }
@@ -357,10 +363,24 @@ function Workspace({
   const safePath = roleCanAccessPath(activeRole, path) ? path : '/workspace';
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
   const organiserRole = activeRole === 'event_organiser';
+  const managerRole = activeRole === 'event_operations_manager';
   const organisationEventMatch = safePath.match(/^\/workspace\/organisation-events\/(\d+)$/);
   const organisationEventId = organisationEventMatch
     ? Number(organisationEventMatch[1])
     : undefined;
+  const assignedEventMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)$/);
+  const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
+  const contentLabel = safePath === '/workspace/venues'
+    ? 'Venue catalogue workspace'
+    : safePath === '/workspace/assignments'
+      ? 'Coordinator assignment workspace'
+    : safePath.startsWith('/workspace/assigned-events')
+      ? 'Assigned events workspace'
+      : safePath.startsWith('/workspace/organisation-events')
+        ? 'Organisation event workspace'
+        : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests'
+          ? 'Event request workspace'
+          : undefined;
 
   return (
     <main className="workspace">
@@ -400,6 +420,16 @@ function Workspace({
           href="/workspace"
           onClick={event => { event.preventDefault(); navigate('/workspace'); }}
         >Overview</a>
+        {managerRole && <a
+          aria-current={safePath === '/workspace/assignments' ? 'page' : undefined}
+          href="/workspace/assignments"
+          onClick={event => { event.preventDefault(); navigate('/workspace/assignments'); }}
+        >Coordinator assignment</a>}
+        {activeRole === 'event_coordinator' && <a
+          aria-current={safePath.startsWith('/workspace/assigned-events') ? 'page' : undefined}
+          href="/workspace/assigned-events"
+          onClick={event => { event.preventDefault(); navigate('/workspace/assigned-events'); }}
+        >My assigned events</a>}
         {venueRole && <a
           aria-current={safePath === '/workspace/venues' ? 'page' : undefined}
           href="/workspace/venues"
@@ -438,17 +468,11 @@ function Workspace({
       )}
       <section
         className="workspace__content"
-        aria-label={safePath === '/workspace/venues'
-          ? 'Venue catalogue workspace'
-          : safePath.startsWith('/workspace/organisation-events')
-            ? 'Organisation event workspace'
-            : safePath === '/workspace/event-requests' || safePath === '/workspace/my-requests'
-              ? 'Event request workspace'
-              : undefined}
+        aria-label={contentLabel}
         aria-labelledby={safePath === '/workspace' ? 'workspace-title' : undefined}
       >
         {safePath === '/workspace/event-requests' ? (
-          <EventRequestCreate
+          <EventRequestForm
             accessToken={session.access_token}
             key={`${activeRole}:event-requests`}
             onUnsavedChanges={setHasUnsavedChanges}
@@ -467,6 +491,13 @@ function Workspace({
             key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
             onNavigate={navigate}
           />
+        ) : safePath.startsWith('/workspace/assigned-events') ? (
+          <AssignedEvents
+            accessToken={session.access_token}
+            eventId={assignedEventId}
+            key={`${activeRole}:assigned-events:${assignedEventId ?? 'list'}`}
+            onNavigate={navigate}
+          />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
             accessToken={session.access_token}
@@ -474,12 +505,18 @@ function Workspace({
             key={`${activeRole}:venues`}
             onUnsavedChanges={setHasUnsavedChanges}
           />
+        ) : safePath === '/workspace/assignments' ? (
+          <CoordinatorAssignmentQueue
+            accessToken={session.access_token}
+            key={`${activeRole}:assignments`}
+          />
         ) : (
           <>
             <p className="eyebrow">{ROLE_LABELS[activeRole]}</p>
             <h1 id="workspace-title">Workspace access confirmed</h1>
             <p>{ROLE_DESCRIPTIONS[activeRole]}</p>
             {venueRole && <p className="workspace__next-step">Use the venue catalogue to {activeRole === 'venue_staff' ? 'maintain venue information' : 'review available spaces'}.</p>}
+            {managerRole && <p className="workspace__next-step">Use coordinator assignment to give submitted events an Event Coordinator.</p>}
           </>
         )}
         {error && (

@@ -8,8 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.models import Role, Venue, VenueLayout
-
-OPERATING_SLOTS = ("AM", "PM", "NIGHT")
+from app.slots import OPERATING_SLOTS
 
 
 def register_venue_routes(app: Flask) -> None:
@@ -28,7 +27,7 @@ def register_venue_routes(app: Flask) -> None:
             return jsonify(venue=_serialize_venue(venue)), 201
 
     @app.get("/api/venues")
-    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR)
+    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR, Role.EVENT_ORGANISER)
     def list_venues():
         with Session(app.extensions["engine"]) as session:
             venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
@@ -38,7 +37,7 @@ def register_venue_routes(app: Flask) -> None:
             )
 
     @app.get("/api/venues/<int:venue_id>")
-    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR)
+    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR, Role.EVENT_ORGANISER)
     def get_venue(venue_id: int):
         with Session(app.extensions["engine"]) as session:
             venue = _find_venue(session, venue_id)

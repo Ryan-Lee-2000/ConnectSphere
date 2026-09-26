@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import type { AccountRole } from './roles';
+import { SLOTS, slotLabel } from './slots';
+import { VenueOperationalBlocks } from './VenueOperationalBlocks';
 
 export type VenueLayout = { id: number; layout: string; capacity: number };
 type LayoutDraft = { id?: number; layout: string; customLayout: string; capacity: string };
@@ -28,14 +30,9 @@ export type Venue = {
   turnaround_buffer_slots: number;
   layouts: VenueLayout[];
 };
-type VenueSummary = Pick<Venue, 'id' | 'name' | 'location'>;
+export type VenueSummary = Pick<Venue, 'id' | 'name' | 'location'>;
 export type ApiRequest = (path: string, init?: RequestInit) => Promise<Response>;
 
-const slots = [
-  ['AM', 'AM · 7am–12pm'],
-  ['PM', 'PM · 1pm–6pm'],
-  ['NIGHT', 'Night · 7pm–12am'],
-] as const;
 const standardRoomLayouts = ['classroom', 'theatre', 'boardroom', 'banquet', 'exhibition'];
 const roomLayouts = [...standardRoomLayouts, 'other'];
 
@@ -167,7 +164,7 @@ export function VenueCatalogue({
       {!editor && venues.length > 0 && <div className="venue-marketplace" aria-label="Venue catalogue results">
         {venues.map((venue, index) => <VenueCard key={venue.id} venue={venue} index={index} selected={selected?.id === venue.id} onSelect={() => toggleVenue(venue.id)} order={index * 2} />)}
         <AnimatePresence initial={false}>
-          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails venue={selected} canManage={canManage} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
+          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails venue={selected} canManage={canManage} api={api} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
         </AnimatePresence>
       </div>}
       {!editor && venues.length === 0 && <div className="catalogue-empty"><Building2 size={28} /><h3>No venues to browse yet</h3><p>{canManage ? 'Build the catalogue by creating the first venue profile.' : 'Venue profiles will appear here when Venue Staff add them.'}</p>{canManage && <button type="button" className="primary icon-button" onClick={() => setEditor('create')}><Plus size={18} />Create first venue</button>}</div>}
@@ -185,17 +182,18 @@ function VenueCard({ venue, index, selected, onSelect, order }: { venue: VenueSu
   </m.button>;
 }
 
-function VenueDetails({ venue, canManage, onEdit }: { venue: Venue; canManage: boolean; onEdit: () => void }) {
+function VenueDetails({ venue, canManage, api, onEdit }: { venue: Venue; canManage: boolean; api?: ApiRequest; onEdit: () => void }) {
   return <article aria-labelledby="venue-name">
     <div className="detail-heading"><div><p className="eyebrow">Venue details</p><h3 id="venue-name">{venue.name}</h3><p className="location"><MapPin size={16} />{venue.location || 'Location not recorded'}</p></div>{canManage && <button type="button" className="icon-button" onClick={onEdit}><Pencil size={16} />Edit venue</button>}</div>
     {venue.description && <p>{venue.description}</p>}
     <div className="detail-grid">
       <DetailList title="Facilities" icon={<Armchair size={18} />} values={venue.facilities} />
       <DetailList title="Accessibility features" icon={<Accessibility size={18} />} values={venue.accessibility_features} />
-      <section><h4><Clock3 size={18} />Operating slots</h4>{venue.operating_slots.length ? <ul className="chips">{venue.operating_slots.map(slot => <li key={slot}>{slot === 'NIGHT' ? 'Night · 7pm–12am' : slots.find(item => item[0] === slot)?.[1]}</li>)}</ul> : <p>None recorded</p>}</section>
+      <section><h4><Clock3 size={18} />Operating slots</h4>{venue.operating_slots.length ? <ul className="chips">{venue.operating_slots.map(slot => <li key={slot}>{slotLabel(slot)}</li>)}</ul> : <p>None recorded</p>}</section>
       <section className="preparation-card"><h4><CalendarClock size={18} />Preparation requirements</h4><dl><div><dt>Setup required</dt><dd>{venue.setup_buffer_slots ? 'Yes — one full slot immediately before an event' : 'No'}</dd></div><div><dt>Turnaround required</dt><dd>{venue.turnaround_buffer_slots ? 'Yes — one full slot immediately after an event' : 'No'}</dd></div></dl><p className="hint">These are stored venue requirements. Calendar availability and booking will apply the directly adjacent slots in a later story.</p></section>
     </div>
     <LayoutList layouts={venue.layouts} />
+    {canManage && api && <VenueOperationalBlocks venue={venue} api={api} />}
   </article>;
 }
 
@@ -268,7 +266,7 @@ function VenueEditor({ venue, api, onSaved, onCancel, onUnsavedChanges }: { venu
     <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
     <label>Facilities <span className="hint">Separate items with commas</span><input value={facilities} onChange={event => setFacilities(event.target.value)} /></label>
     <label>Accessibility features <span className="hint">Separate items with commas</span><input value={accessibility} onChange={event => setAccessibility(event.target.value)} /></label>
-    <fieldset><legend><Clock3 size={18} />Operating slots</legend><p className="hint">Select the operating slots this venue supports. Select at least one slot.</p><div className="slot-options">{slots.map(([value, label]) => <label key={value}><input type="checkbox" checked={operatingSlots.includes(value)} onChange={() => setOperatingSlots(current => current.includes(value) ? current.filter(slot => slot !== value) : [...current, value])} />{label}</label>)}</div></fieldset>
+    <fieldset><legend><Clock3 size={18} />Operating slots</legend><p className="hint">Select the operating slots this venue supports. Select at least one slot.</p><div className="slot-options">{SLOTS.map(({ key, label }) => <label key={key}><input type="checkbox" checked={operatingSlots.includes(key)} onChange={() => setOperatingSlots(current => current.includes(key) ? current.filter(slot => slot !== key) : [...current, key])} />{label}</label>)}</div></fieldset>
     <fieldset className="preparation-requirements"><legend><CalendarClock size={18} />Preparation requirements</legend><p className="hint">Select any additional venue preparation that is required around an event.</p><div className="preparation-options"><label className="preparation-option"><input type="checkbox" checked={requiresSetup} onChange={event => setRequiresSetup(event.target.checked)} /><span><strong>Setup required</strong><small>One operating slot is needed before the event.</small></span></label><label className="preparation-option"><input type="checkbox" checked={requiresTurnaround} onChange={event => setRequiresTurnaround(event.target.checked)} /><span><strong>Turnaround required</strong><small>One operating slot is needed after the event.</small></span></label></div></fieldset>
     <LayoutManager layouts={layouts} onChange={setLayouts} />
     <div className="form-actions"><button type="button" onClick={() => { onUnsavedChanges?.(false); onCancel(); }}>Cancel</button><button className="primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save venue'}</button></div>

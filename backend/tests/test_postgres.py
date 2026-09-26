@@ -10,6 +10,23 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
+PRODUCT_TABLES = {
+    "accounts",
+    "account_roles",
+    "organisations",
+    "venues",
+    "venue_layouts",
+    "event_requests",
+    "equipment_requirements",
+    "event_coordinator_assignments",
+    "event_coordinator_history",
+    "event_status_history",
+    "venue_operational_blocks",
+    "venue_bookings",
+    "venue_booking_occupancy",
+}
+PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
+
 
 @pytest.mark.skipif(
     not os.getenv("INTEGRATION_DATABASE_URL"),
@@ -43,16 +60,16 @@ def test_empty_baseline_migration_is_rerunnable():
             )
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         assert len(heads) == 1, "Resolve competing migration heads before merging"
-        assert set(inspect(engine).get_table_names()) == {
-            "accounts",
-            "account_roles",
-            "alembic_version",
-            "organisations",
-            "venues",
-            "venue_layouts",
-            "event_requests",
-            "equipment_requirements",
+        assert set(inspect(engine).get_table_names()) == PRODUCT_TABLES | {"alembic_version"}
+        booking_columns = {
+            column["name"]: column for column in inspect(engine).get_columns("venue_bookings")
         }
+        assert booking_columns["requires_review"]["nullable"] is False
+        assert {
+            "review_trigger_block_id",
+            "review_marked_at",
+            "review_marked_by_account_id",
+        } <= set(booking_columns)
         with engine.connect() as conn:
             assert set(
                 conn.execute(text("select version_num from alembic_version")).scalars()
@@ -61,34 +78,30 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(
                     text(
                         "select relname from pg_class "
-                        "where relname in ('accounts', 'account_roles', 'organisations', "
-                        "'venues', 'venue_layouts', "
-                        "'event_requests', 'equipment_requirements') "
+                        f"where relname in ({PRODUCT_TABLE_LIST}) "
                         "and relrowsecurity"
                     )
                 ).scalars()
             )
-            assert rls_tables == {
-                "accounts",
-                "account_roles",
-                "organisations",
-                "venues",
-                "venue_layouts",
-                "event_requests",
-                "equipment_requirements",
-            }
+            assert rls_tables == PRODUCT_TABLES
             browser_grants = conn.execute(
                 text(
                     "select grantee, table_name, privilege_type "
                     "from information_schema.table_privileges "
                     "where table_schema = 'public' "
-                    "and table_name in ('accounts', 'account_roles', 'organisations', "
-                    "'venues', 'venue_layouts', "
-                    "'event_requests', 'equipment_requirements') "
+                    f"and table_name in ({PRODUCT_TABLE_LIST}) "
                     "and grantee in ('PUBLIC', 'anon', 'authenticated')"
                 )
             ).all()
             assert browser_grants == []
+            # SPL-70 must be able to move a request out of 'submitted'.
+            allowed = conn.execute(
+                text(
+                    "select pg_get_constraintdef(oid) from pg_constraint "
+                    "where conname = 'ck_event_requests_known_status'"
+                )
+            ).scalar()
+            assert "under_review" in allowed
         with engine.begin() as conn:
             conn.execute(
                 text(

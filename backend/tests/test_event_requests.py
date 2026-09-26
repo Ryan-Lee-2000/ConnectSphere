@@ -1,8 +1,17 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role
+from app.models import (
+    Account,
+    AccountRole,
+    Base,
+    EventRequest,
+    Organisation,
+    Role,
+    Venue,
+    VenueOperationalBlock,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -78,10 +87,9 @@ def event_payload(**overrides):
         "preferred_room_layout": "Theatre",
         "required_facilities": ["Projector", "Step-free access"],
         "facilities_notes": "Two wireless microphones",
-        "accessibility_needs": "Reserved wheelchair spaces",
+        "accessibility_needs": ["Reserved wheelchair spaces"],
         "location_preference": "Central",
         "venue_notes": "Near public transport",
-        "preferred_venue_name": "Harbour Hall",
         "registration_required": True,
         "registration_notes": None,
         "equipment_requirements": [
@@ -237,6 +245,8 @@ def test_draft_lifecycle_preserves_id_and_last_saved_time(client):
     assert draft["status"] == "draft"
     assert draft["purpose"] is None
     assert draft["last_saved_at"]
+    assert draft["required_facilities"] == []
+    assert draft["accessibility_needs"] == []
 
     saved_response = client.patch(
         f"/api/event-requests/drafts/{draft['id']}",
@@ -338,6 +348,7 @@ def test_reopened_draft_retains_optional_fields_and_replaces_equipment_lines(cli
     assert reopened["description"] == "Revised description"
     assert reopened["preferred_room_layout"] is None
     assert reopened["required_facilities"] == ["Projector", "Step-free access"]
+    assert reopened["accessibility_needs"] == ["Reserved wheelchair spaces"]
     assert reopened["registration_required"] is True
     assert len(reopened["equipment_requirements"]) == 1
     assert reopened["equipment_requirements"][0]["equipment_type"] == "Projector"
@@ -376,6 +387,10 @@ def test_event_request_routes_enforce_declared_roles(client):
             "Required facilities must contain only non-empty text values.",
         ),
         (
+            {"accessibility_needs": ["Wheelchair access", " "]},
+            "Accessibility needs must contain only non-empty text values.",
+        ),
+        (
             {"registration_required": "yes"},
             "Registration required must be true or false.",
         ),
@@ -406,3 +421,87 @@ def test_slot_mapping_uses_the_shared_venue_windows(client):
     assert am_only["mapped_slots"] == ["AM"]
     assert night_only["mapped_slots"] == ["NIGHT"]
     assert gap_only["mapped_slots"] == []
+
+
+def _add_venue(event_app, **overrides):
+    attributes = {
+        "name": "Harbour Hall",
+        "location": "Central",
+        "operating_slots": ["AM", "PM"],
+    }
+    attributes.update(overrides)
+    with Session(event_app.extensions["engine"]) as session:
+        venue = Venue(**attributes)
+        session.add(venue)
+        session.commit()
+        return venue.id
+
+
+def test_organiser_selects_a_venue_whose_operating_slots_cover_the_request(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["AM"])
+
+    created = create_event(client, start_time="07:00", end_time="12:00", venue_id=venue_id)
+
+    assert created["venue_id"] == venue_id
+
+
+def test_unknown_venue_id_is_rejected(client):
+    response = client.post(
+        "/api/event-requests", json=event_payload(venue_id=999), headers=headers()
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Venue not found."}
+
+
+def test_venue_id_is_rejected_when_the_time_falls_outside_its_operating_slots(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["NIGHT"])
+
+    response = client.post(
+        "/api/event-requests",
+        json=event_payload(start_time="07:00", end_time="12:00", venue_id=venue_id),
+        headers=headers(),
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Selected time is not available for this venue."}
+
+
+def test_tc_spl_89_05_active_block_makes_event_request_slot_unavailable(client, event_app):
+    venue_id = _add_venue(event_app, operating_slots=["AM"])
+    proposed_date = date.today() + timedelta(days=7)
+    with Session(event_app.extensions["engine"]) as session:
+        session.add(
+            VenueOperationalBlock(
+                venue_id=venue_id,
+                start_date=proposed_date,
+                end_date=proposed_date,
+                slots=["AM"],
+                reason="Inspection",
+                created_by_account_id=ORGANISER_ONE,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        "/api/event-requests",
+        json=event_payload(
+            proposed_date=proposed_date.isoformat(),
+            start_time="07:00",
+            end_time="12:00",
+            venue_id=venue_id,
+        ),
+        headers=headers(),
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "Selected time is not available for this venue."}
+    with Session(event_app.extensions["engine"]) as session:
+        assert session.scalars(select(EventRequest)).all() == []
+
+
+def test_null_venue_id_bypasses_the_slot_availability_check(client):
+    created = create_event(client, venue_id=None)
+
+    assert created["venue_id"] is None

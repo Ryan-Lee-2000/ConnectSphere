@@ -114,6 +114,23 @@ describe('sign in', () => {
 });
 
 describe('protected access', () => {
+  it('opens the Event Coordinator assigned-events route', async () => {
+    vi.stubGlobal('fetch', vi.fn(input => {
+      if (String(input) === '/api/session') return Promise.resolve({ ok: true });
+      if (String(input) === '/api/account/roles') return Promise.resolve({
+        ok: true, json: async () => ({ roles: ['event_coordinator'] }),
+      });
+      if (String(input) === '/api/event-requests/assigned') return Promise.resolve({
+        ok: true, json: async () => ({ events: [] }),
+      });
+      return Promise.resolve({ ok: false, json: async () => ({}) });
+    }));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'My assigned events' }));
+    expect(window.location.pathname).toBe('/workspace/assigned-events');
+    expect(await screen.findByText('No events assigned to you yet.')).toBeTruthy();
+  });
+
   it('opens the permanent request form from the Event Organiser workspace', async () => {
     vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
     render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
@@ -122,8 +139,8 @@ describe('protected access', () => {
     fireEvent.click(link);
 
     expect(window.location.pathname).toBe('/workspace/event-requests');
-    expect(screen.getByRole('heading', { name: 'Submit an event request' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Submit request' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Request an event' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Submit event request' })).toBeTruthy();
   });
 
   it('does not open the organiser form for an account without that role', async () => {
@@ -136,7 +153,7 @@ describe('protected access', () => {
 
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
     expect(window.location.pathname).toBe('/workspace');
-    expect(screen.queryByRole('heading', { name: 'Submit an event request' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Request an event' })).toBeNull();
   });
 
   it('restores a stored session only after the server verifies it', async () => {
@@ -217,5 +234,41 @@ describe('sign out', () => {
     expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(
       false,
     );
+  });
+});
+
+describe('coordinator assignment', () => {
+  function managerFetch(input: RequestInfo | URL) {
+    const path = String(input);
+    if (path === '/api/session') return Promise.resolve({ ok: true });
+    if (path === '/api/account/roles') return Promise.resolve({
+      ok: true,
+      json: async () => ({ roles: ['event_operations_manager'] }),
+    });
+    if (path === '/api/event-requests/awaiting-assignment') return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ events: [], count: 0 }),
+    });
+    return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: 'Not found.' }) });
+  }
+
+  it('gives an Event Operations Manager a way into the assignment queue', async () => {
+    vi.stubGlobal('fetch', vi.fn(managerFetch));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Coordinator assignment' }));
+
+    expect(await screen.findByRole('heading', { name: 'Events awaiting a coordinator' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/workspace/assignments');
+  });
+
+  it('keeps the assignment queue out of other roles’ workspaces', async () => {
+    vi.stubGlobal('fetch', vi.fn(verifiedSessionFetch));
+    render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
+
+    expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Coordinator assignment' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Events awaiting a coordinator' })).toBeNull();
   });
 });
