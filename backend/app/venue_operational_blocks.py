@@ -1,6 +1,6 @@
 """Venue operational-unavailability routes for SPL-89."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from flask import Flask, abort, g, jsonify, request
@@ -17,6 +17,7 @@ from app.models import (
     VenueOperationalBlock,
 )
 from app.slots import OPERATING_SLOTS
+from app.venue_slot_locks import lock_venue_slots
 
 
 def operational_block_for_slot(
@@ -53,20 +54,11 @@ def register_venue_operational_block_routes(app: Flask) -> None:
             venue = _find_venue(session, venue_id)
             if unsupported := set(attributes["slots"]) - set(venue.operating_slots):
                 abort(400, f"Venue does not support operating slot: {sorted(unsupported)[0]}.")
-            marked_at = datetime.now(timezone.utc)
-            block = VenueOperationalBlock(
-                venue_id=venue_id,
-                created_by_account_id=g.user_id,
-                created_at=marked_at,
-                **attributes,
-            )
-            session.add(block)
-            session.flush()
-            affected_booking_count = _mark_overlapping_bookings_for_review(
+            block, affected_booking_count = record_operational_block(
                 session,
-                block,
-                marked_by_account_id=g.user_id,
-                marked_at=marked_at,
+                venue_id=venue_id,
+                attributes=attributes,
+                created_by_account_id=g.user_id,
             )
             session.commit()
             session.refresh(block)
@@ -111,6 +103,50 @@ def register_venue_operational_block_routes(app: Flask) -> None:
             session.commit()
             session.refresh(block)
             return jsonify(operational_block=_serialize_block(block))
+
+
+def record_operational_block(
+    session: Session,
+    *,
+    venue_id: int,
+    attributes: dict[str, Any],
+    created_by_account_id: str,
+    created_at: datetime | None = None,
+) -> tuple[VenueOperationalBlock, int]:
+    """Create a block and atomically mark overlapping active bookings."""
+
+    marked_at = created_at or datetime.now(timezone.utc)
+    lock_venue_slots(
+        session,
+        venue_id,
+        (
+            (day, slot)
+            for day in _inclusive_dates(attributes["start_date"], attributes["end_date"])
+            for slot in attributes["slots"]
+        ),
+    )
+    block = VenueOperationalBlock(
+        venue_id=venue_id,
+        created_by_account_id=created_by_account_id,
+        created_at=marked_at,
+        **attributes,
+    )
+    session.add(block)
+    session.flush()
+    affected_booking_count = _mark_overlapping_bookings_for_review(
+        session,
+        block,
+        marked_by_account_id=created_by_account_id,
+        marked_at=marked_at,
+    )
+    return block, affected_booking_count
+
+
+def _inclusive_dates(start_date: date, end_date: date):
+    day = start_date
+    while day <= end_date:
+        yield day
+        day += timedelta(days=1)
 
 
 def _request_json() -> dict[str, Any]:

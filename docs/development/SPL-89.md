@@ -45,6 +45,7 @@ actor. React accesses the records only through Flask.
 | TC-SPL-89-06 | Venue Staff create and remove a block through the interface | `frontend/src/VenueCatalogue.test.tsx` |
 | TC-SPL-89-07 | Overlapping Requested/Approved bookings gain an audited marker without status/detail mutation; alternatives remain unmarked | `backend/tests/test_venue_operational_blocks.py` |
 | TC-SPL-89-08 | A refused block creates neither a block nor a booking marker | `backend/tests/test_venue_operational_blocks.py` |
+| TC-SPL-89-09 | Concurrent booking and block writes cannot leave an unmarked overlap | `backend/tests/test_venue_conflicts_postgres.py` |
 
 ## Migration and security
 
@@ -62,3 +63,8 @@ PR #28 delivered the operational-block foundation. SPL-83 is now on `main`, and 
 its shared occupancy rows to complete acceptance criterion 5. Clearing a marker, notifications and
 a review queue remain out of scope; SPL-77 and SPL-81 will expose booking-request and approval
 workflows without duplicating this rule.
+
+Block creation and booking claims use the same ordered PostgreSQL transaction advisory locks for
+each venue/date/slot. This closes the cross-table write-skew race: the second transaction always
+observes the first transaction's committed block or occupancy before making its decision. It is a
+transaction policy change only and requires no migration.

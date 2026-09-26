@@ -33,6 +33,8 @@ promised to overlapping events.
 
 - `claim_venue_occupancy(session, booking, event_slots=...)` derives and atomically claims every
   required event/preparation slot or raises `VenueOccupancyConflict` with the date and slot.
+- Booking claims and operational-block creation share ordered PostgreSQL transaction advisory locks
+  for each venue/date/slot, preventing cross-table write skew.
 - `transition_booking_status(session, booking, resulting_status)` retains claims for active statuses,
   rechecks blocks before approval, and releases claims for terminal statuses.
 - `occupancy_for_booking(session, booking_id)` exposes the active claims to later booking/calendar
@@ -52,11 +54,12 @@ from leaving earlier slots behind, and the database unique constraint resolves c
 | TC-SPL-83-04 | 3 | Requested booking becomes Rejected, Withdrawn or Cancelled | Its active claims are released and reusable | Domain/database |
 | TC-SPL-83-05 | 1,2,3 | Approval encounters an operational block added after the request | Approval is refused without changing status or occupancy | Domain/database |
 | TC-SPL-83-06 | 2,4 | Two PostgreSQL transactions claim the same venue/date/slots together | Exactly one complete claim succeeds | PostgreSQL integration |
+| TC-SPL-89-09 | 2,4 | A booking claim and operational block are written together | No committed block overlaps an unmarked active booking | PostgreSQL integration |
 
 ## Automated traceability
 
 - TC-SPL-83-01 to TC-SPL-83-05: `backend/tests/test_venue_conflicts.py`
-- TC-SPL-83-06: `backend/tests/test_venue_conflicts_postgres.py`
+- TC-SPL-83-06 and cross-story TC-SPL-89-09: `backend/tests/test_venue_conflicts_postgres.py`
 - Migration, RLS and browser-grant denial: `backend/tests/test_postgres.py`
 
 Find all executable story cases with:
