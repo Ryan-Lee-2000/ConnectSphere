@@ -15,8 +15,9 @@ unavailable so that venue availability reflects when the venue cannot be used.
 3. **Remove a block — implemented.** Removal is soft and active reads immediately exclude the row.
 4. **Audit and atomic refusal — implemented.** Creation and removal record the trusted actor and
    timezone-aware timestamp. Validation and role checks occur before a transaction is committed.
-5. **Mark overlapping Requested/Approved bookings for review — blocked by SPL-77.** The repository
-   does not yet contain the approved venue-booking aggregate. This branch does not invent one.
+5. **Mark overlapping Requested/Approved bookings for review — blocked by SPL-83.** The repository
+   does not yet contain the shared venue-booking and occupancy model. This branch does not invent
+   one. SPL-77 will consume that model later when it creates booking requests.
 
 ## Public interfaces
 
@@ -48,6 +49,8 @@ PUBLIC, `anon` and `authenticated`. Business access remains exclusively through 
 
 ## Remaining dependency
 
-Do not move SPL-89 to QA until SPL-77 is on `main` and acceptance criterion 5 has tests proving that
-overlapping Requested/Approved bookings are preserved, keep their status/details, and gain a
-persisted review marker. Clearing that marker, notifications and a review queue remain out of scope.
+PR #28 is a mergeable enabling increment for SPL-83, but merging it does not make SPL-89 Done. Keep
+SPL-89 In Progress until SPL-83's shared booking/occupancy model is on `main` and acceptance
+criterion 5 has tests proving that overlapping Requested/Approved bookings are preserved, keep their
+status/details, and gain a persisted review marker. Clearing that marker, notifications and a review
+queue remain out of scope.

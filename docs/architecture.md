@@ -141,9 +141,10 @@ conflict-prevention stories. It deliberately centralises the active/date/slot ru
 each consumer to interpret block records itself. The table has RLS enabled and grants revoked from
 browser roles; Venue Staff create, list and remove blocks only through Flask.
 
-SPL-89's affected-booking review marker cannot be attached until SPL-77 supplies the approved venue
-booking aggregate. The operational-block foundation is therefore implemented without inventing a
-competing booking schema; the story remains incomplete until that dependency is integrated.
+SPL-89's affected-booking review marker cannot be attached until SPL-83 supplies the shared venue
+booking and occupancy model. The operational-block foundation is therefore implemented without
+inventing a competing booking schema; the story remains incomplete until that dependency is
+integrated. SPL-77 will later consume SPL-83's model when it creates booking requests.
 
 ## Boundaries for future stories
 
