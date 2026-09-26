@@ -8,7 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
-from app.models import Role, Venue, VenueOperationalBlock
+from app.models import (
+    ACTIVE_BOOKING_STATUSES,
+    Role,
+    Venue,
+    VenueBooking,
+    VenueBookingOccupancy,
+    VenueOperationalBlock,
+)
 from app.slots import OPERATING_SLOTS
 
 
@@ -46,16 +53,30 @@ def register_venue_operational_block_routes(app: Flask) -> None:
             venue = _find_venue(session, venue_id)
             if unsupported := set(attributes["slots"]) - set(venue.operating_slots):
                 abort(400, f"Venue does not support operating slot: {sorted(unsupported)[0]}.")
+            marked_at = datetime.now(timezone.utc)
             block = VenueOperationalBlock(
                 venue_id=venue_id,
                 created_by_account_id=g.user_id,
-                created_at=datetime.now(timezone.utc),
+                created_at=marked_at,
                 **attributes,
             )
             session.add(block)
+            session.flush()
+            affected_booking_count = _mark_overlapping_bookings_for_review(
+                session,
+                block,
+                marked_by_account_id=g.user_id,
+                marked_at=marked_at,
+            )
             session.commit()
             session.refresh(block)
-            return jsonify(operational_block=_serialize_block(block)), 201
+            return (
+                jsonify(
+                    operational_block=_serialize_block(block),
+                    affected_booking_count=affected_booking_count,
+                ),
+                201,
+            )
 
     @app.get("/api/venues/<int:venue_id>/operational-blocks")
     @require_roles(Role.VENUE_STAFF)
@@ -97,6 +118,37 @@ def _request_json() -> dict[str, Any]:
     if not isinstance(data, dict):
         abort(400, "A JSON object is required.")
     return data
+
+
+def _mark_overlapping_bookings_for_review(
+    session: Session,
+    block: VenueOperationalBlock,
+    *,
+    marked_by_account_id: str,
+    marked_at: datetime,
+) -> int:
+    """Persist a review marker without changing the affected booking itself."""
+
+    bookings = session.scalars(
+        select(VenueBooking)
+        .join(VenueBookingOccupancy)
+        .where(
+            VenueBooking.venue_id == block.venue_id,
+            VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
+            VenueBookingOccupancy.day >= block.start_date,
+            VenueBookingOccupancy.day <= block.end_date,
+            VenueBookingOccupancy.slot.in_(block.slots),
+        )
+        .distinct()
+        .order_by(VenueBooking.id)
+    ).all()
+    for booking in bookings:
+        booking.requires_review = True
+        booking.review_trigger_block_id = block.id
+        booking.review_marked_at = marked_at
+        booking.review_marked_by_account_id = marked_by_account_id
+    session.flush()
+    return len(bookings)
 
 
 def _block_attributes(data: dict[str, Any]) -> dict[str, Any]:

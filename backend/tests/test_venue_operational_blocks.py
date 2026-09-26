@@ -2,7 +2,18 @@ from datetime import date, datetime
 
 import pytest
 from app import create_app
-from app.models import Account, AccountRole, Base, Role, Venue
+from app.models import (
+    Account,
+    AccountRole,
+    Base,
+    EventRequest,
+    Organisation,
+    Role,
+    Venue,
+    VenueBooking,
+    VenueBookingOccupancy,
+    VenueOperationalBlock,
+)
 from app.venue_operational_blocks import operational_block_for_slot
 from sqlalchemy.orm import Session
 
@@ -26,22 +37,34 @@ def operational_block_app(tmp_path):
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add_all(Account(id=account_id) for account_id in identities.values())
+        organisation = Organisation(name="Operational Blocks Test Client")
+        venue = Venue(
+            name="Harbour Hall",
+            location="Marina Centre",
+            facilities=[],
+            accessibility_features=[],
+            operating_slots=["AM", "PM"],
+        )
         session.add_all(
             [
                 AccountRole(account_id=VENUE_STAFF_ID, role=Role.VENUE_STAFF.value),
                 AccountRole(
                     account_id=identities["coordinator"], role=Role.EVENT_COORDINATOR.value
                 ),
-                Venue(
-                    name="Harbour Hall",
-                    location="Marina Centre",
-                    facilities=[],
-                    accessibility_features=[],
-                    operating_slots=["AM", "PM"],
-                ),
+                organisation,
+                venue,
             ]
         )
+        session.flush()
+        event = EventRequest(
+            organiser_account_id=VENUE_STAFF_ID,
+            organisation_id=organisation.id,
+            name="Operations Conference",
+            status="planning",
+        )
+        session.add(event)
         session.commit()
+        app.config.update(TEST_EVENT_ID=event.id, TEST_VENUE_ID=venue.id)
     yield app
     engine.dispose()
 
@@ -185,3 +208,151 @@ def test_tc_spl_89_04_active_blocks_feed_shared_availability_for_the_inclusive_r
     client.delete(f"/api/venues/1/operational-blocks/{created['id']}", headers=headers())
     with Session(engine) as session:
         assert operational_block_for_slot(session, 1, date(2026, 10, 6), "AM") is None
+
+
+def test_tc_spl_89_07_block_marks_only_overlapping_active_bookings_without_mutating_them(
+    client, operational_block_app
+):
+    engine = operational_block_app.extensions["engine"]
+    with Session(engine) as session:
+        other_venue = Venue(name="Garden Room", operating_slots=["AM", "PM"])
+        session.add(other_venue)
+        session.flush()
+        bookings = {
+            "requested": VenueBooking(
+                event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+                venue_id=operational_block_app.config["TEST_VENUE_ID"],
+                status="requested",
+            ),
+            "approved": VenueBooking(
+                event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+                venue_id=operational_block_app.config["TEST_VENUE_ID"],
+                status="approved",
+            ),
+            "outside_range": VenueBooking(
+                event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+                venue_id=operational_block_app.config["TEST_VENUE_ID"],
+                status="requested",
+            ),
+            "other_venue": VenueBooking(
+                event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+                venue_id=other_venue.id,
+                status="approved",
+            ),
+            "rejected": VenueBooking(
+                event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+                venue_id=operational_block_app.config["TEST_VENUE_ID"],
+                status="rejected",
+            ),
+        }
+        session.add_all(bookings.values())
+        session.flush()
+        session.add_all(
+            [
+                VenueBookingOccupancy(
+                    booking_id=bookings["requested"].id,
+                    venue_id=bookings["requested"].venue_id,
+                    day=date(2026, 10, 5),
+                    slot="AM",
+                    kind="event",
+                ),
+                VenueBookingOccupancy(
+                    booking_id=bookings["approved"].id,
+                    venue_id=bookings["approved"].venue_id,
+                    day=date(2026, 10, 7),
+                    slot="PM",
+                    kind="turnaround",
+                ),
+                VenueBookingOccupancy(
+                    booking_id=bookings["outside_range"].id,
+                    venue_id=bookings["outside_range"].venue_id,
+                    day=date(2026, 10, 8),
+                    slot="AM",
+                    kind="event",
+                ),
+                VenueBookingOccupancy(
+                    booking_id=bookings["other_venue"].id,
+                    venue_id=bookings["other_venue"].venue_id,
+                    day=date(2026, 10, 5),
+                    slot="AM",
+                    kind="event",
+                ),
+            ]
+        )
+        session.commit()
+        booking_ids = {name: booking.id for name, booking in bookings.items()}
+
+    response = client.post(
+        "/api/venues/1/operational-blocks",
+        json={
+            "start_date": "2026-10-05",
+            "end_date": "2026-10-07",
+            "slots": ["AM", "PM"],
+            "reason": "Essential electrical works",
+        },
+        headers=headers(),
+    )
+
+    assert response.status_code == 201
+    assert response.json["affected_booking_count"] == 2
+    block_id = response.json["operational_block"]["id"]
+    with Session(engine) as session:
+        stored = {
+            name: session.get(VenueBooking, booking_id) for name, booking_id in booking_ids.items()
+        }
+        for name, expected_status in (("requested", "requested"), ("approved", "approved")):
+            booking = stored[name]
+            assert booking.status == expected_status
+            assert booking.requires_review is True
+            assert booking.review_trigger_block_id == block_id
+            assert booking.review_marked_by_account_id == VENUE_STAFF_ID
+            assert booking.review_marked_at is not None
+        for name in ("outside_range", "other_venue", "rejected"):
+            booking = stored[name]
+            assert booking.requires_review is False
+            assert booking.review_trigger_block_id is None
+            assert booking.review_marked_at is None
+            assert booking.review_marked_by_account_id is None
+
+
+def test_tc_spl_89_08_refused_block_creation_does_not_mark_an_existing_booking(
+    client, operational_block_app
+):
+    engine = operational_block_app.extensions["engine"]
+    with Session(engine) as session:
+        booking = VenueBooking(
+            event_request_id=operational_block_app.config["TEST_EVENT_ID"],
+            venue_id=operational_block_app.config["TEST_VENUE_ID"],
+            status="requested",
+        )
+        session.add(booking)
+        session.flush()
+        session.add(
+            VenueBookingOccupancy(
+                booking_id=booking.id,
+                venue_id=booking.venue_id,
+                day=date(2026, 10, 5),
+                slot="AM",
+                kind="event",
+            )
+        )
+        session.commit()
+        booking_id = booking.id
+
+    response = client.post(
+        "/api/venues/1/operational-blocks",
+        json={
+            "start_date": "2026-10-05",
+            "end_date": "2026-10-05",
+            "slots": ["AM"],
+            "reason": "Unauthorised maintenance block",
+        },
+        headers=headers("coordinator"),
+    )
+
+    assert response.status_code == 403
+    with Session(engine) as session:
+        booking = session.get(VenueBooking, booking_id)
+        assert booking.requires_review is False
+        assert booking.review_trigger_block_id is None
+        assert session.query(VenueOperationalBlock).count() == 0
