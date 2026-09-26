@@ -8,6 +8,7 @@
     "doctor": "node scripts/run.mjs doctor",
     "verify": "node scripts/run.mjs verify",
     "coverage:spl71": "node scripts/run.mjs coverage-spl71",
+    "coverage:spl72": "node scripts/run.mjs coverage-spl72",
     "integration": "node scripts/run.mjs integration",
     "stop": "node scripts/run.mjs stop",
     "browser:install": "node scripts/run.mjs browser-install",

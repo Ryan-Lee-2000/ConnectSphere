@@ -249,10 +249,13 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {error && <p className="error" role="alert">{error}</p>}
       {!error && !event && <p role="status">Loading the assigned event…</p>}
       {event && <>
-        <p className="venue-search-page__event-name">Searching for <strong>{event.name}</strong></p>
-        <EventBrief event={event} />
-        <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
-          initialDate={event.proposed_date} initialSlots={event.mapped_slots} request={api} />
+        <p className="venue-search-page__event-name">Explore venue options for <strong>{event.name}</strong>. The filters start with this request’s details, but do not change it.</p>
+        <div className="venue-search-page__layout">
+          <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
+            initialDate={event.proposed_date} initialSlots={event.mapped_slots}
+            expectedAttendance={event.expected_attendance ?? null} preferredRoomLayout={event.preferred_room_layout ?? null} request={api} />
+          <aside className="venue-search-page__brief" aria-label="Assigned event requirements"><EventBrief event={event} /></aside>
+        </div>
       </>}
     </section>;
   }
