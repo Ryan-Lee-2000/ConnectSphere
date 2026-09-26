@@ -43,15 +43,19 @@ test.describe('venue catalogue journeys', () => {
     await page.reload();
     await expect(page.getByRole('button', { name: new RegExp(venueName) })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(venueName) }).click();
+    const venueProfile = page.locator('.venue-profile');
     await expect(page.getByRole('heading', { name: venueName })).toBeVisible();
-    await expect(page.getByRole('article').getByText('E2E Test Location')).toBeVisible();
-    await expect(page.getByRole('article').getByText('Projector')).toBeVisible();
-    await expect(page.getByRole('article').getByText('Step-free access')).toBeVisible();
-    await expect(page.getByRole('article').getByText('AM · 7am–12pm')).toBeVisible();
-    await expect(page.getByRole('article').getByText('PM · 1pm–6pm')).toBeVisible();
-    await expect(page.getByRole('article').getByText('Night · 7pm–12am')).toBeVisible();
-    await expect(page.getByRole('article').getByText('Yes — one full slot immediately before an event')).toBeVisible();
-    await expect(page.getByRole('article').getByText('Yes — one full slot immediately after an event')).toBeVisible();
+    await expect(venueProfile.getByText('E2E Test Location')).toBeVisible();
+    await expect(venueProfile.getByText('Projector')).toBeVisible();
+    await expect(venueProfile.getByText('Step-free access')).toBeVisible();
+    const availability = venueProfile.locator('.detail-panel--slots');
+    await expect(availability.getByText('AM · 7am–12pm', { exact: true })).toBeVisible();
+    await expect(availability.getByText('PM · 1pm–6pm', { exact: true })).toBeVisible();
+    await expect(availability.getByText('Night · 7pm–12am', { exact: true })).toBeVisible();
+    const preparation = venueProfile.locator('.detail-panel--preparation');
+    await expect(preparation.getByText('Setup', { exact: true })).toBeVisible();
+    await expect(preparation.getByText('Turnaround', { exact: true })).toBeVisible();
+    await expect(preparation.getByText('Required', { exact: true })).toHaveCount(2);
   });
 
   test('Venue Staff edits a venue profile and layout', async ({ page }) => {
@@ -73,7 +77,7 @@ test.describe('venue catalogue journeys', () => {
     await page.getByRole('button', { name: 'Save venue' }).click();
     await expect(page.locator('.notice')).toContainText('Venue profile and room layouts updated.');
     await expect(page.getByRole('heading', { name: updatedName })).toBeVisible();
-    await expect(page.getByRole('article').getByRole('cell', { name: '42' })).toBeVisible();
+    await expect(page.locator('.layout-capacity-list').getByText('42', { exact: true })).toBeVisible();
   });
 
   test('Event Coordinator can browse venue details but cannot manage the catalogue', async ({ page }) => {

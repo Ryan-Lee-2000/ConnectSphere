@@ -25,6 +25,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.slots import slots_for_range
 
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
@@ -353,12 +354,28 @@ def _serialize_queue_event(event: EventRequest) -> dict[str, Any]:
 
 
 def _serialize_assigned_event(event: EventRequest) -> dict[str, Any]:
+    """Expose the assigned event's saved search context without granting edit access.
+
+    SPL-71's coordinator brief is read-only.  These values still come from the
+    assigned record selected by the trusted coordinator assignment, never from
+    browser-provided event or organisation identifiers.
+    """
     return {
         "id": event.id,
         "name": event.name,
         "status": event.status,
         "status_label": status_label(event.status),
         "proposed_date": _date(event.proposed_date),
+        "mapped_slots": (
+            slots_for_range(event.start_time, event.end_time)
+            if event.start_time and event.end_time
+            else []
+        ),
+        "expected_attendance": event.expected_attendance,
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": event.required_facilities,
+        "accessibility_needs": event.accessibility_needs,
+        "location_preference": event.location_preference,
     }
 
 

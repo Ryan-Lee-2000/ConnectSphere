@@ -3,7 +3,9 @@ import {
   Accessibility,
   ArrowUpRight,
   Armchair,
+  BadgeCheck,
   Building2,
+  CalendarDays,
   CalendarClock,
   Clock3,
   MapPin,
@@ -183,14 +185,20 @@ function VenueCard({ venue, index, selected, onSelect, order }: { venue: VenueSu
 }
 
 function VenueDetails({ venue, canManage, api, onEdit }: { venue: Venue; canManage: boolean; api?: ApiRequest; onEdit: () => void }) {
-  return <article aria-labelledby="venue-name">
-    <div className="detail-heading"><div><p className="eyebrow">Venue details</p><h3 id="venue-name">{venue.name}</h3><p className="location"><MapPin size={16} />{venue.location || 'Location not recorded'}</p></div>{canManage && <button type="button" className="icon-button" onClick={onEdit}><Pencil size={16} />Edit venue</button>}</div>
-    {venue.description && <p>{venue.description}</p>}
-    <div className="detail-grid">
+  return <article className="venue-profile" aria-labelledby="venue-name">
+    <div className="detail-heading venue-profile__heading"><div><p className="eyebrow">Venue profile</p><h3 id="venue-name">{venue.name}</h3><p className="location"><MapPin size={16} />{venue.location || 'Location not recorded'}</p></div>{canManage && <button type="button" className="icon-button" onClick={onEdit}><Pencil size={16} />Edit venue</button>}</div>
+    {venue.description && <p className="venue-profile__description">{venue.description}</p>}
+    <div className="venue-profile__operating-grid">
+      <section className="detail-panel detail-panel--slots"><div className="detail-panel__heading"><Clock3 size={18} /><div><h4>Operating availability</h4><p>Slots in which this venue can host an event.</p></div></div>
+        {venue.operating_slots.length ? <ul className="operating-slot-list">{venue.operating_slots.map(slot => <li key={slot}><BadgeCheck size={16} /><span>{slotLabel(slot)}</span><small>Available</small></li>)}</ul> : <p className="detail-panel__empty">No operating slots recorded.</p>}
+      </section>
+      <section className="detail-panel detail-panel--preparation"><div className="detail-panel__heading"><CalendarDays size={18} /><div><h4>Event preparation</h4><p>Applied automatically when availability is checked.</p></div></div>
+        <dl className="preparation-policy"><div className={venue.setup_buffer_slots ? 'is-required' : ''}><dt>Setup</dt><dd>{venue.setup_buffer_slots ? 'Required' : 'Not required'}</dd></div><div className={venue.turnaround_buffer_slots ? 'is-required' : ''}><dt>Turnaround</dt><dd>{venue.turnaround_buffer_slots ? 'Required' : 'Not required'}</dd></div></dl>
+      </section>
+    </div>
+    <div className="detail-grid venue-profile__attributes">
       <DetailList title="Facilities" icon={<Armchair size={18} />} values={venue.facilities} />
       <DetailList title="Accessibility features" icon={<Accessibility size={18} />} values={venue.accessibility_features} />
-      <section><h4><Clock3 size={18} />Operating slots</h4>{venue.operating_slots.length ? <ul className="chips">{venue.operating_slots.map(slot => <li key={slot}>{slotLabel(slot)}</li>)}</ul> : <p>None recorded</p>}</section>
-      <section className="preparation-card"><h4><CalendarClock size={18} />Preparation requirements</h4><dl><div><dt>Setup required</dt><dd>{venue.setup_buffer_slots ? 'Yes — one full slot immediately before an event' : 'No'}</dd></div><div><dt>Turnaround required</dt><dd>{venue.turnaround_buffer_slots ? 'Yes — one full slot immediately after an event' : 'No'}</dd></div></dl><p className="hint">These are stored venue requirements. Calendar availability and booking will apply the directly adjacent slots in a later story.</p></section>
     </div>
     <LayoutList layouts={venue.layouts} />
     {canManage && api && <VenueOperationalBlocks venue={venue} api={api} />}
@@ -198,7 +206,7 @@ function VenueDetails({ venue, canManage, api, onEdit }: { venue: Venue; canMana
 }
 
 function DetailList({ title, icon, values }: { title: string; icon: ReactNode; values: string[] }) {
-  return <section><h4>{icon}{title}</h4>{values.length ? <ul className="chips">{values.map(value => <li key={value}>{value}</li>)}</ul> : <p>None recorded</p>}</section>;
+  return <section className="detail-panel detail-panel--attribute"><div className="detail-panel__heading">{icon}<div><h4>{title}</h4><p>{values.length ? `${values.length} recorded` : 'Not recorded'}</p></div></div>{values.length ? <ul className="chips">{values.map(value => <li key={value}>{value}</li>)}</ul> : <p className="detail-panel__empty">No details recorded.</p>}</section>;
 }
 
 function VenueEditor({ venue, api, onSaved, onCancel, onUnsavedChanges }: { venue?: Venue; api: ApiRequest; onSaved: (venue: Venue, message: string) => void; onCancel: () => void; onUnsavedChanges?: (hasUnsavedChanges: boolean) => void }) {
@@ -274,8 +282,8 @@ function VenueEditor({ venue, api, onSaved, onCancel, onUnsavedChanges }: { venu
 }
 
 function LayoutList({ layouts }: { layouts: VenueLayout[] }) {
-  return <section className="layouts"><div className="detail-heading"><div><h4><Armchair size={18} />Supported room layouts</h4><p className="hint">Stated capacities are specific to each room arrangement.</p></div></div>
-    {layouts.length === 0 ? <p>None recorded</p> : <table><thead><tr><th>Layout</th><th>Stated capacity</th></tr></thead><tbody>{layouts.map(layout => <tr key={layout.id}><td>{layoutLabel(layout.layout)}</td><td>{layout.capacity}</td></tr>)}</tbody></table>}
+  return <section className="layouts layouts--display"><div className="detail-heading"><div><h4><Armchair size={18} />Supported room layouts</h4><p className="hint">Capacity is recorded for each specific room arrangement.</p></div></div>
+    {layouts.length === 0 ? <p className="detail-panel__empty">No supported room layouts recorded.</p> : <ul className="layout-capacity-list">{layouts.map(layout => <li key={layout.id}><span className="layout-capacity-list__name">{layoutLabel(layout.layout)}</span><span className="layout-capacity-list__value"><strong>{layout.capacity}</strong><small>guests</small></span></li>)}</ul>}
   </section>;
 }
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AssignedEvents } from './AssignedEvents';
 
@@ -7,6 +7,9 @@ afterEach(cleanup);
 const assigned = {
   id: 12, name: 'Community Forum', status: 'submitted',
   status_label: 'Submitted', proposed_date: '2026-10-12',
+  mapped_slots: ['AM', 'PM'], expected_attendance: 120, preferred_room_layout: 'theatre',
+  required_facilities: ['Projector', 'PA system'], accessibility_needs: ['Step-free access'],
+  location_preference: 'Marina Centre',
 };
 
 it('shows an assigned event with status and proposed date, then opens its route', async () => {
@@ -25,7 +28,12 @@ it('opens the selected event using the assigned-only detail endpoint', async () 
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
   expect(await screen.findByRole('heading', { name: 'Community Forum' })).toBeTruthy();
-  expect(screen.getByText('Submitted')).toBeTruthy();
+  const brief = within(screen.getByRole('region', { name: 'Requirements to consider' }));
+  expect(brief.getByText('Submitted')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Requirements to consider' })).toBeTruthy();
+  expect(brief.getByText('AM, PM')).toBeTruthy();
+  expect(brief.getByText('Projector, PA system')).toBeTruthy();
+  expect(brief.getByText('Step-free access')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/12');
 });
 
@@ -75,7 +83,7 @@ it('[TC-SPL-64-06] keeps the full detail visible after begin review returns the 
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
   expect(await screen.findByText('Review started.')).toBeTruthy();
-  expect(screen.getByText('Under review')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Under review')).toBeTruthy();
   expect(screen.getByText('Harbour Hall')).toBeTruthy();
 });
 
@@ -159,7 +167,28 @@ it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and
   expect(screen.getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([
     'Core details', 'Venue requirements', 'Equipment requirements', 'Registration needs', 'Organisation and submission',
   ]);
-  expect(screen.queryAllByRole('button').filter(b => b.textContent !== 'Begin review')).toEqual([]);
+  expect(screen.getByRole('button', { name: 'Find venues' })).toBeTruthy();
+});
+
+it('opens a dedicated event-scoped venue search instead of expanding search controls in the detail view', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
+  const onNavigate = vi.fn();
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={onNavigate} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Find venues' }));
+
+  expect(onNavigate).toHaveBeenCalledWith('/workspace/assigned-events/12/venue-search');
+  expect(screen.queryByRole('heading', { name: 'Venue availability' })).toBeNull();
+});
+
+it('shows the selected event context on the dedicated venue-search page', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, mapped_slots: ['AM'] } }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} view="venue-search" />);
+
+  expect(await screen.findByRole('heading', { name: 'Find available venues' })).toBeTruthy();
+  expect(screen.getByText('Community Forum')).toBeTruthy();
+  expect(screen.getByText('12 Oct 2026')).toBeTruthy();
+  expect(screen.getByText('Marina Centre')).toBeTruthy();
 });
 
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
@@ -172,7 +201,7 @@ it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
 
   expect(await screen.findByText('Review started.')).toBeTruthy();
-  expect(screen.getByText('Under review')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Under review')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Begin review' })).toBeNull();
   expect(request).toHaveBeenLastCalledWith(
     '/api/event-requests/12/begin-review',
@@ -189,7 +218,7 @@ it('[TC-SPL-70-05] keeps the submitted status available when begin review is ref
   fireEvent.click(await screen.findByRole('button', { name: 'Begin review' }));
 
   expect((await screen.findByRole('alert')).textContent).toContain('Only a submitted event can begin review.');
-  expect(screen.getByText('Submitted')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Requirements to consider' })).getByText('Submitted')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Begin review' })).toBeTruthy();
 });
 
