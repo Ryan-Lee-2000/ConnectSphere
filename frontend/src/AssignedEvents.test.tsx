@@ -198,3 +198,80 @@ it('shows an empty state when nothing is assigned', async () => {
   render(<AssignedEvents accessToken="token" request={request} onNavigate={vi.fn()} />);
   expect(await screen.findByText('No events assigned to you yet.')).toBeTruthy();
 });
+
+const underReviewDetail = { ...fullDetail, status: 'under_review', status_label: 'Under review', clarifications: [] };
+const clarificationAnswer = {
+  event: { ...assigned, status: 'returned_for_clarification', status_label: 'Returned for clarification' },
+  clarifications: [{
+    id: 1, message: 'Please confirm the attendance.', author: { id: 'a', name: 'Alice Tan' },
+    created_at: '2026-09-26T10:00:00+08:00',
+  }],
+};
+
+it('[TC-SPL-65-09] shows the clarification form only while the event is under review', async () => {
+  renderDetail(fullDetail);
+  expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Request clarification' })).toBeNull();
+  cleanup();
+  renderDetail(underReviewDetail);
+  expect(await screen.findByRole('button', { name: 'Request clarification' })).toBeTruthy();
+  expect(screen.getByLabelText('Clarification for the Event Organiser')).toBeTruthy();
+});
+
+it('[TC-SPL-65-09] sends the message, then shows the new status and history without the form', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => clarificationAnswer });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.change(await screen.findByLabelText('Clarification for the Event Organiser'), {
+    target: { value: 'Please confirm the attendance.' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Request clarification' }));
+
+  expect(await screen.findByText(/Clarification requested/)).toBeTruthy();
+  expect(screen.getAllByText('Returned for clarification').length).toBeGreaterThan(0);
+  expect(screen.getByText('Please confirm the attendance.')).toBeTruthy();
+  expect(screen.getByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Request clarification' })).toBeNull();
+  expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/request-clarification', {
+    method: 'POST',
+    body: JSON.stringify({ message: 'Please confirm the attendance.' }),
+  });
+});
+
+it('[TC-SPL-65-10] refuses a blank message without calling the server', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: underReviewDetail }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.change(await screen.findByLabelText('Clarification for the Event Organiser'), { target: { value: '   ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Request clarification' }));
+
+  expect((await screen.findByRole('alert')).textContent).toBe('Enter a clarification message.');
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('[TC-SPL-65-10] keeps the form and message when the server refuses the request', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Clarification can only be requested while the event is under review.' }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.change(await screen.findByLabelText('Clarification for the Event Organiser'), { target: { value: 'Why?' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Request clarification' }));
+
+  expect((await screen.findByRole('alert')).textContent).toContain('only be requested while the event is under review');
+  expect((screen.getByLabelText('Clarification for the Event Organiser') as HTMLTextAreaElement).value).toBe('Why?');
+});
+
+it('[TC-SPL-65-11] lists the clarification history newest first', async () => {
+  renderDetail({
+    ...fullDetail, status: 'returned_for_clarification', status_label: 'Returned for clarification',
+    clarifications: [
+      { id: 2, message: 'Second question', author: { id: 'a', name: 'Alice Tan' }, created_at: '2026-09-27T10:00:00+08:00' },
+      { id: 1, message: 'First question', author: { id: 'a', name: 'Alice Tan' }, created_at: '2026-09-26T10:00:00+08:00' },
+    ],
+  });
+  const items = await screen.findAllByRole('listitem');
+  expect(items.map(item => item.textContent).join('|')).toMatch(/Second question.*First question/);
+});

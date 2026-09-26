@@ -92,6 +92,11 @@ is the server-owned before/after policy that later workflow actions extend.
 previous and resulting statuses, actor, and timestamp. A competing or repeated action updates no
 row and therefore writes no audit evidence.
 
+SPL-65 adds `request_clarification` (`under_review` to `returned_for_clarification`) to the same
+rules at `POST /api/event-requests/<id>/request-clarification`. The route also appends a
+`clarification_requests` row (message, author, time) in the same transaction, so each request is
+kept as history. The organiser reads the messages with the request; replying is a later story.
+
 ## Event-request submission foundation
 
 SPL-51 adds an additive `event_requests` aggregate with zero or more child

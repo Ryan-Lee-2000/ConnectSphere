@@ -1,4 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react';
+import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 
 type EventSummary = {
   id: number;
@@ -13,6 +14,10 @@ type EventDetail = EventSummary & {
   start_time: string;
   end_time: string;
   expected_attendance: number;
+  status: string;
+  status_label: string;
+  status_explanation: string;
+  clarifications: Clarification[];
 };
 
 type OrganisationEventRequest = (path: string, init?: RequestInit) => Promise<Response>;
@@ -114,12 +119,15 @@ export function OrganisationEvents({
       <p><span>Responsible organiser</span><strong>{event.responsible_organiser}</strong></p>
     </div>
     <dl className="organisation-events__details">
+      <div><dt>Status</dt><dd>{event.status_label}</dd></div>
       <div><dt>Purpose</dt><dd>{event.purpose}</dd></div>
       <div><dt>Description</dt><dd>{event.description || 'No description provided.'}</dd></div>
       <div><dt>Proposed date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
       <div><dt>Time</dt><dd>{event.start_time} to {event.end_time}</dd></div>
       <div><dt>Expected attendance</dt><dd>{event.expected_attendance}</dd></div>
     </dl>
+    {event.status === 'returned_for_clarification' && <p className="notice" role="status">{event.status_explanation}</p>}
+    <ClarificationHistory clarifications={event.clarifications ?? []} heading="Clarification requests" />
   </section>;
 
   return <section className="organisation-events" aria-labelledby="organisation-events-title">

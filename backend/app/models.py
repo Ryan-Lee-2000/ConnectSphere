@@ -221,6 +221,11 @@ class EventRequest(Base):
     venue_bookings: Mapped[list["VenueBooking"]] = relationship(
         back_populates="event_request", cascade="all, delete-orphan"
     )
+    # CS-E06-S2. Newest first, so the latest question is the one shown and older ones remain.
+    clarification_requests: Mapped[list["ClarificationRequest"]] = relationship(
+        order_by="desc(ClarificationRequest.created_at), desc(ClarificationRequest.id)",
+        cascade="all, delete-orphan",
+    )
 
 
 BOOKING_STATUSES = ("requested", "approved", "rejected", "withdrawn", "cancelled")
@@ -376,3 +381,20 @@ class EventStatusHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ClarificationRequest(Base):
+    """One clarification an Event Coordinator asked of the organiser; rows are never edited."""
+
+    __tablename__ = "clarification_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    author_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    author: Mapped[Account] = relationship()

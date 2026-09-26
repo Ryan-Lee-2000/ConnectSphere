@@ -79,3 +79,24 @@ it('does not render protected event information after a refused detail request',
   );
   expect(screen.queryByText('Other client event')).toBeNull();
 });
+
+it('[TC-SPL-65-12] shows the returned status and the clarification message read-only', async () => {
+  const request = vi.fn().mockReturnValue(response({ event: {
+    id: 7, name: 'Community Forum', purpose: 'Bring partners together', description: null,
+    proposed_date: '2026-12-04', start_time: '09:30', end_time: '12:00', expected_attendance: 80,
+    responsible_organiser: 'Aisha Rahman', status: 'returned_for_clarification',
+    status_label: 'Returned for clarification',
+    status_explanation: 'Your Event Coordinator needs more information.',
+    clarifications: [{
+      id: 1, message: 'Please confirm the attendance.', author: { id: 'a', name: 'Alice Tan' },
+      created_at: '2026-09-26T10:00:00+08:00',
+    }],
+  } }));
+
+  render(<OrganisationEvents accessToken="token" eventId={7} onNavigate={vi.fn()} request={request} />);
+
+  expect(await screen.findByText('Returned for clarification')).toBeTruthy();
+  expect(screen.getByText('Please confirm the attendance.')).toBeTruthy();
+  expect(screen.getByText(/Alice Tan/)).toBeTruthy();
+  expect(screen.queryByRole('textbox')).toBeNull();
+});

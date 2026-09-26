@@ -4,6 +4,7 @@ from datetime import date, time
 
 import pytest
 from app import create_app
+from app.event_statuses import status_explanation
 from app.models import Account, AccountRole, Base, EventRequest, Organisation, Role
 from sqlalchemy.orm import Session
 
@@ -176,6 +177,10 @@ def test_tc_cs_e01_s3_02_opens_the_approved_read_only_detail(organisation_app, c
             "end_time": "12:00",
             "expected_attendance": 80,
             "responsible_organiser": "Marcus Tan",
+            "status": "submitted",
+            "status_label": "Submitted",
+            "status_explanation": status_explanation("submitted"),
+            "clarifications": [],
         }
     }
 

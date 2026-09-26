@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
+import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 
 type AssignedEvent = {
   id: number;
@@ -31,6 +32,7 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   client_organisation: string;
   responsible_organiser: string;
   submitted_at: string | null;
+  clarifications: Clarification[];
 }>;
 
 const NOT_PROVIDED = 'Not provided';
@@ -108,6 +110,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
+  const [clarification, setClarification] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -115,6 +118,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
     setEvent(null);
     setError(null);
     setNotice(null);
+    setClarification('');
     void (async () => {
       try {
         const response = await api(eventId === undefined
@@ -166,6 +170,37 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
     }
   }
 
+  async function requestClarification() {
+    if (!event || event.status !== 'under_review' || transitioning) return;
+    if (!clarification.trim()) {
+      setError('Enter a clarification message.');
+      return;
+    }
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/request-clarification`, {
+        method: 'POST',
+        body: JSON.stringify({ message: clarification }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not request clarification. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event, clarifications: body.clarifications ?? current?.clarifications }));
+        setClarification('');
+        setNotice('Clarification requested. The event is returned to the Event Organiser.');
+      } else {
+        setError('Could not request clarification. Try again.');
+      }
+    } catch {
+      setError('Could not request clarification. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   const back = <a className="organisation-events__back" href="/workspace/assigned-events"
     onClick={click => follow(click, '/workspace/assigned-events')}>Back to my assigned events</a>;
 
@@ -191,6 +226,20 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request }: {
         {transitioning ? 'Beginning review…' : 'Begin review'}
       </button>
     </div>}
+    {event?.status === 'under_review' && <form className="request-form clarification-form"
+      onSubmit={submit => { submit.preventDefault(); void requestClarification(); }}>
+      <div className="field">
+        <label htmlFor="clarification-message">Clarification for the Event Organiser</label>
+        <textarea id="clarification-message" rows={4} maxLength={2000} value={clarification}
+          onChange={change => setClarification(change.target.value)} />
+      </div>
+      <div className="organisation-events__actions">
+        <button type="submit" className="button button--primary" disabled={transitioning}>
+          {transitioning ? 'Requesting clarification…' : 'Request clarification'}
+        </button>
+      </div>
+    </form>}
+    {event?.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">
       <strong>No events assigned to you yet.</strong>
       <span>Events appear here when an Event Operations Manager assigns them to you.</span>

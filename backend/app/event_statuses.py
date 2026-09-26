@@ -25,6 +25,11 @@ EVENT_REQUEST_STATUSES: Final[dict[str, tuple[str, str]]] = {
         "Under review",
         "Your request is being assessed. Nothing is needed from you yet.",
     ),
+    "returned_for_clarification": (
+        "Returned for clarification",
+        "Your Event Coordinator needs more information. "
+        "Update your request with what they asked for.",
+    ),
     "approved": (
         "Approved",
         "Your request has been accepted. Planning will begin shortly.",
