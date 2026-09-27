@@ -326,7 +326,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       <h1 id="venue-search-title">Find available venues</h1>
       {error && <p className="error" role="alert">{error}</p>}
       {!error && !event && <p role="status">Loading the assigned event…</p>}
-      {event && <>
+      {event && event.status !== 'planning' && <p className="error" role="alert">Venue search is available after this request is approved and moves to Planning.</p>}
+      {event?.status === 'planning' && <>
         <p className="venue-search-page__event-name">Explore venue options for <strong>{event.name}</strong>. The filters start with this request’s details, but do not change it.</p>
         <div className="venue-search-page__layout">
           <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
@@ -416,13 +417,13 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         </div>
       </div>}
       {event.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
-      <div className="organisation-events__actions organisation-events__actions--planning">
+      {event.status === 'planning' && <div className="organisation-events__actions organisation-events__actions--planning">
         <div><span className="organisation-events__planning-label">Next step</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>
         <button type="button" className="button button--primary"
           onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/venue-search`)}>
           Find venues
         </button>
-      </div>
+      </div>}
     </article>}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">
       <strong>No events assigned to you yet.</strong>

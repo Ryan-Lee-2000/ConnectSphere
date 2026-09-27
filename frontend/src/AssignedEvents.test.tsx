@@ -160,7 +160,7 @@ it('[TC-SPL-64-17] hides Begin review once the event is under review but keeps t
 });
 
 it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and row headers', async () => {
-  renderDetail(fullDetail);
+  renderDetail({ ...fullDetail, status: 'planning', status_label: 'In planning' });
   const table = await screen.findByRole('table', { name: /Submitted request details for Community Forum/ });
   expect(table).toBeTruthy();
   expect(screen.getAllByRole('rowheader').length).toBeGreaterThanOrEqual(19);
@@ -171,7 +171,7 @@ it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and
 });
 
 it('opens a dedicated event-scoped venue search instead of expanding search controls in the detail view', async () => {
-  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, status: 'planning', status_label: 'In planning' } }) });
   const onNavigate = vi.fn();
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={onNavigate} />);
 
@@ -182,13 +182,26 @@ it('opens a dedicated event-scoped venue search instead of expanding search cont
 });
 
 it('shows the selected event context on the dedicated venue-search page', async () => {
-  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, mapped_slots: ['AM'] } }) });
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, status: 'planning', status_label: 'In planning', mapped_slots: ['AM'] } }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} view="venue-search" />);
 
   expect(await screen.findByRole('heading', { name: 'Find available venues' })).toBeTruthy();
   expect(screen.getByText('Community Forum')).toBeTruthy();
   expect(screen.getByText('12 Oct 2026')).toBeTruthy();
   expect(screen.getByText('Marina Centre', { selector: 'dd' })).toBeTruthy();
+});
+
+it('[TC-SPL-71-12] hides venue discovery before Planning and blocks a direct search URL', async () => {
+  const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
+  renderDetail(underReview);
+  expect((await screen.findAllByText('Under review')).length).toBeGreaterThan(0);
+  expect(screen.queryByRole('button', { name: 'Find venues' })).toBeNull();
+  cleanup();
+
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: underReview }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} view="venue-search" />);
+  expect((await screen.findByRole('alert')).textContent).toContain('Venue search is available after this request is approved and moves to Planning.');
+  expect(screen.queryByRole('heading', { name: 'Search filters' })).toBeNull();
 });
 
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
@@ -335,6 +348,7 @@ it('[TC-SPL-67-11] approves, shows the message, the new status and the decision-
   expect((await screen.findByRole('rowheader', { name: 'Approved by' })).closest('tr')!.textContent).toContain('Alice Tan');
   expect(screen.queryByRole('button', { name: 'Approve request' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Request clarification' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Find venues' })).toBeTruthy();
   expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/approve', { method: 'POST' });
 });
 

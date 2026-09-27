@@ -19,7 +19,9 @@ appropriate options before making a venue booking request.
 ## Implementation
 
 - `GET /api/event-requests/<event_request_id>/available-venues?date=YYYY-MM-DD&slot=AM&slot=PM`
-  is restricted to an Event Coordinator who is currently assigned to the referenced event.
+  is restricted to an Event Coordinator who is currently assigned to the referenced event while it
+  is in Planning. An Under review request must be approved through SPL-67 first; direct search URLs
+  and filter-option requests receive a conflict response rather than bypassing that hand-off.
   The server derives the trusted coordinator from the session; the browser supplies no account,
   role or organisation selector.
 - Each candidate first has to operate in every event slot. `derive_venue_occupancy()` then adds
@@ -60,6 +62,7 @@ appropriate options before making a venue booking request.
 | TC-SPL-71-09 | Setup and turnaround buffer boundaries across midnight are excluded when blocked | `backend/tests/test_venue_availability.py` |
 | TC-SPL-71-10 | A venue missing a selected event slot or a required buffer operating slot is excluded | `backend/tests/test_venue_availability.py` |
 | TC-SPL-71-11 | Browser journey carries the assigned event's date and slots into a read-only availability search | `e2e/coordinator-assignment.spec.ts` |
+| TC-SPL-71-12 | Venue discovery is unavailable before Planning, including by a direct search URL | `backend/tests/test_venue_availability.py`, `frontend/src/AssignedEvents.test.tsx` |
 
 No migration is required. The implementation reads the existing Alembic-owned tables only.
 

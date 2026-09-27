@@ -64,7 +64,7 @@ def app(tmp_path):
             start_time=time(7),
             end_time=time(18),
             expected_attendance=80,
-            status="under_review",
+            status="planning",
         )
         session.add(event)
         session.flush()
@@ -304,6 +304,34 @@ def test_tc_spl_71_05_enforces_assigned_coordinator_access(app, client):
         f"/api/event-requests/{event_id}/available-venues?date=2026-10-12&slot=AM"
     )
     assert unauthenticated.status_code == 401
+
+
+def test_tc_spl_71_12_allows_venue_discovery_only_after_review_reaches_planning(app, client):
+    event_id = app.config["TEST_EVENT_ID"]
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event is not None
+        event.status = "under_review"
+        session.commit()
+
+    blocked_search = search(client, event_id)
+    blocked_options = filter_options(client, event_id)
+
+    assert blocked_search.status_code == 409
+    assert blocked_search.json == {
+        "error": "Venue search is available only while the event is in Planning."
+    }
+    assert blocked_options.status_code == 409
+    assert blocked_options.json == blocked_search.json
+
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event is not None
+        event.status = "planning"
+        session.commit()
+
+    assert search(client, event_id).status_code == 200
+    assert filter_options(client, event_id).status_code == 200
 
 
 def test_tc_spl_72_01_filters_available_venues_by_any_layout_with_sufficient_capacity(app, client):

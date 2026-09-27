@@ -25,8 +25,7 @@ def register_venue_availability_routes(app: Flask) -> None:
         """Return trusted catalogue facets for an assigned coordinator's read-only search."""
 
         with Session(app.extensions["engine"]) as session:
-            if not is_assigned_coordinator(session, event_request_id, g.user_id):
-                abort(404, "Assigned event not found.")
+            _planning_event(session, event_request_id)
             venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
             return jsonify(filter_options=catalogue_filter_options(venues))
 
@@ -58,11 +57,7 @@ def register_venue_availability_routes(app: Flask) -> None:
             location_supplied,
         ) = _requirement_parameters()
         with Session(app.extensions["engine"]) as session:
-            if not is_assigned_coordinator(session, event_request_id, g.user_id):
-                abort(404, "Assigned event not found.")
-            event = session.get(EventRequest, event_request_id)
-            if event is None:
-                abort(404, "Assigned event not found.")
+            event = _planning_event(session, event_request_id)
             venues = session.scalars(
                 select(Venue).options(selectinload(Venue.layouts)).order_by(Venue.name, Venue.id)
             ).all()
@@ -94,6 +89,24 @@ def register_venue_availability_routes(app: Flask) -> None:
                 search={"date": day.isoformat(), "slots": event_slots},
                 venues=available,
             )
+
+
+def _planning_event(session: Session, event_request_id: int) -> EventRequest:
+    """Return the assigned event only after review has moved it into Planning.
+
+    Venue discovery is a planning activity.  Checking this on the server protects the
+    lifecycle rule even when a user reaches the search URL directly rather than through
+    the Event Coordinator screen.
+    """
+
+    if not is_assigned_coordinator(session, event_request_id, g.user_id):
+        abort(404, "Assigned event not found.")
+    event = session.get(EventRequest, event_request_id)
+    if event is None:
+        abort(404, "Assigned event not found.")
+    if event.status != "planning":
+        abort(409, "Venue search is available only while the event is in Planning.")
+    return event
 
 
 def _search_parameters() -> tuple[date, list[str], int | None, str | None, bool, bool]:
