@@ -91,11 +91,24 @@ def headers(token="coordinator"):
     return {"Authorization": f"Bearer {token}"}
 
 
-def add_venue(app, name, *, slots=("AM", "PM", "NIGHT"), setup=0, turnaround=0, capacity=100):
+def add_venue(
+    app,
+    name,
+    *,
+    slots=("AM", "PM", "NIGHT"),
+    setup=0,
+    turnaround=0,
+    capacity=100,
+    location="Singapore",
+    facilities=(),
+    accessibility=(),
+):
     with Session(app.extensions["engine"]) as session:
         venue = Venue(
             name=name,
-            location="Singapore",
+            location=location,
+            facilities=list(facilities),
+            accessibility_features=list(accessibility),
             operating_slots=list(slots),
             setup_buffer_slots=setup,
             turnaround_buffer_slots=turnaround,
@@ -109,6 +122,12 @@ def add_venue(app, name, *, slots=("AM", "PM", "NIGHT"), setup=0, turnaround=0, 
 def search(client, event_id, query="date=2026-10-12&slot=AM&slot=PM", token="coordinator"):
     return client.get(
         f"/api/event-requests/{event_id}/available-venues?{query}", headers=headers(token)
+    )
+
+
+def filter_options(client, event_id, token="coordinator"):
+    return client.get(
+        f"/api/event-requests/{event_id}/venue-filter-options", headers=headers(token)
     )
 
 
@@ -369,3 +388,127 @@ def test_tc_spl_72_07_uses_editable_catalogue_filters_without_mutating_assigned_
         event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
         assert event is not None
         assert (event.expected_attendance, event.preferred_room_layout) == (120, "Theatre")
+
+
+def test_tc_spl_73_01_requires_every_active_facility_accessibility_and_location_filter(app, client):
+    matching = add_venue(
+        app,
+        "Harbour Hall",
+        location="Marina Centre",
+        capacity=120,
+        facilities=("Projector", "PA system"),
+        accessibility=("Step-free access", "Hearing loop"),
+    )
+    add_venue(
+        app,
+        "Missing Facility Hall",
+        location="Marina Centre",
+        capacity=120,
+        facilities=("Projector",),
+        accessibility=("Step-free access", "Hearing loop"),
+    )
+    add_venue(
+        app,
+        "Different Location Hall",
+        location="Riverside",
+        capacity=120,
+        facilities=("Projector", "PA system"),
+        accessibility=("Step-free access", "Hearing loop"),
+    )
+
+    response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-12&slot=AM&required_facility=projector&required_facility=PA%20system"
+        "&accessibility_need=step-free%20access&accessibility_need=hearing%20loop"
+        "&location_preference=Marina",
+    )
+
+    assert response.status_code == 200
+    assert [venue["id"] for venue in response.json["venues"]] == [matching]
+
+
+def test_tc_spl_73_02_uses_and_can_clear_event_requirement_filters_without_mutating_event(
+    app, client
+):
+    matching = add_venue(app, "Projector Hall", capacity=100, facilities=("Projector",))
+    alternative = add_venue(app, "Plain Hall", capacity=100)
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        event.required_facilities = ["Projector"]
+        session.commit()
+
+    default_response = search(client, app.config["TEST_EVENT_ID"], "date=2026-10-12&slot=AM")
+    cleared_response = search(
+        client, app.config["TEST_EVENT_ID"], "date=2026-10-12&slot=AM&required_facility="
+    )
+
+    assert [venue["id"] for venue in default_response.json["venues"]] == [matching]
+    assert [venue["id"] for venue in cleared_response.json["venues"]] == [alternative, matching]
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, app.config["TEST_EVENT_ID"]).required_facilities == [
+            "Projector"
+        ]
+
+
+def test_tc_spl_73_09_keeps_requirement_matches_out_when_their_operating_buffer_is_impossible(
+    app, client
+):
+    available = add_venue(
+        app,
+        "Civic Gallery",
+        slots=("AM", "PM", "NIGHT"),
+        capacity=110,
+        facilities=("Track lighting", "Display plinths"),
+    )
+    add_venue(
+        app,
+        "Civic Foyer with impossible setup",
+        slots=("PM", "NIGHT"),
+        setup=1,
+        capacity=85,
+        facilities=("Track lighting", "Display plinths"),
+    )
+
+    response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-12&slot=PM&expected_attendance=50"
+        "&required_facility=Track%20lighting&required_facility=Display%20plinths",
+    )
+
+    assert response.status_code == 200
+    assert [venue["id"] for venue in response.json["venues"]] == [available]
+
+
+def test_tc_spl_73_07_returns_catalogue_backed_requirement_and_location_suggestions(app, client):
+    add_venue(
+        app,
+        "Harbour Hall",
+        location="Level 3, Marina Centre",
+        facilities=("Projector", "PA system"),
+        accessibility=("Step-free access",),
+    )
+    add_venue(
+        app,
+        "Skyline Terrace",
+        location="Rooftop, Marina Centre",
+        facilities=("PA system", "Ambient lighting"),
+        accessibility=("Lift access", "Step-free access"),
+    )
+
+    response = filter_options(client, app.config["TEST_EVENT_ID"])
+
+    assert response.status_code == 200
+    assert response.json["filter_options"] == {
+        "facilities": ["Ambient lighting", "PA system", "Projector"],
+        "accessibility_needs": ["Lift access", "Step-free access"],
+        "locations": ["Level 3, Marina Centre", "Rooftop, Marina Centre"],
+    }
+
+
+def test_tc_spl_73_08_does_not_expose_catalogue_options_to_an_unassigned_coordinator(app, client):
+    response = filter_options(client, app.config["TEST_EVENT_ID"], token="other-coordinator")
+
+    assert response.status_code == 404

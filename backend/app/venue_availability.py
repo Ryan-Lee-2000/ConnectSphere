@@ -19,6 +19,17 @@ class SearchParameterError(ValueError):
 
 
 def register_venue_availability_routes(app: Flask) -> None:
+    @app.get("/api/event-requests/<int:event_request_id>/venue-filter-options")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def venue_filter_options(event_request_id: int):
+        """Return trusted catalogue facets for an assigned coordinator's read-only search."""
+
+        with Session(app.extensions["engine"]) as session:
+            if not is_assigned_coordinator(session, event_request_id, g.user_id):
+                abort(404, "Assigned event not found.")
+            venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
+            return jsonify(filter_options=catalogue_filter_options(venues))
+
     @app.get("/api/event-requests/<int:event_request_id>/available-venues")
     @require_roles(Role.EVENT_COORDINATOR)
     def find_available_venues(event_request_id: int):
@@ -38,6 +49,14 @@ def register_venue_availability_routes(app: Flask) -> None:
             attendance_supplied,
             layout_supplied,
         ) = _search_parameters()
+        (
+            facility_override,
+            accessibility_override,
+            location_override,
+            facilities_supplied,
+            accessibility_supplied,
+            location_supplied,
+        ) = _requirement_parameters()
         with Session(app.extensions["engine"]) as session:
             if not is_assigned_coordinator(session, event_request_id, g.user_id):
                 abort(404, "Assigned event not found.")
@@ -53,11 +72,23 @@ def register_venue_availability_routes(app: Flask) -> None:
             preferred_room_layout = (
                 layout_override if layout_supplied else event.preferred_room_layout
             )
+            required_facilities = (
+                facility_override if facilities_supplied else event.required_facilities
+            )
+            accessibility_needs = (
+                accessibility_override if accessibility_supplied else event.accessibility_needs
+            )
+            location_preference = (
+                location_override if location_supplied else event.location_preference
+            )
             available = [
                 _serialize_venue(venue, expected_attendance, preferred_room_layout)
                 for venue in venues
                 if _is_available(session, venue, day, event_slots)
                 and qualifying_layouts(venue.layouts, expected_attendance, preferred_room_layout)
+                and venue_satisfies_requirements(
+                    venue, required_facilities, accessibility_needs, location_preference
+                )
             ]
             return jsonify(
                 search={"date": day.isoformat(), "slots": event_slots},
@@ -77,6 +108,30 @@ def _search_parameters() -> tuple[date, list[str], int | None, str | None, bool,
             attendance_supplied,
             layout_supplied,
         ) + (attendance_supplied, layout_supplied)
+    except SearchParameterError as exc:
+        abort(400, str(exc))
+
+
+def _requirement_parameters() -> tuple[list[str], list[str], str | None, bool, bool, bool]:
+    """Read validated, transient SPL-73 venue-requirement search filters."""
+
+    try:
+        facilities_supplied = "required_facility" in request.args
+        accessibility_supplied = "accessibility_need" in request.args
+        location_supplied = "location_preference" in request.args
+        facilities, accessibility, location = parse_requirement_filters(
+            request.args.getlist("required_facility"),
+            request.args.getlist("accessibility_need"),
+            request.args.get("location_preference"),
+        )
+        return (
+            facilities,
+            accessibility,
+            location,
+            facilities_supplied,
+            accessibility_supplied,
+            location_supplied,
+        )
     except SearchParameterError as exc:
         abort(400, str(exc))
 
@@ -122,6 +177,68 @@ def parse_search_parameters(
             raise SearchParameterError("Preferred room layout must be 100 characters or fewer.")
 
     return day, [slot for slot in OPERATING_SLOTS if slot in slots], attendance, layout
+
+
+def parse_requirement_filters(
+    raw_facilities: Iterable[str], raw_accessibility: Iterable[str], raw_location: str | None
+) -> tuple[list[str], list[str], str | None]:
+    """Normalise the read-only facility, accessibility and location search criteria."""
+
+    return (
+        _normalise_requirement_list(raw_facilities, "Required facility"),
+        _normalise_requirement_list(raw_accessibility, "Accessibility need"),
+        _normalise_location(raw_location),
+    )
+
+
+def _normalise_requirement_list(values: Iterable[str], label: str) -> list[str]:
+    normalised: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = value.strip()
+        if not cleaned:
+            continue
+        if len(cleaned) > 100:
+            raise SearchParameterError(f"{label} must be 100 characters or fewer.")
+        key = cleaned.casefold()
+        if key not in seen:
+            seen.add(key)
+            normalised.append(cleaned)
+    return normalised
+
+
+def _normalise_location(value: str | None) -> str | None:
+    location = (value or "").strip() or None
+    if location is not None and len(location) > 200:
+        raise SearchParameterError("Location preference must be 200 characters or fewer.")
+    return location
+
+
+def catalogue_filter_options(venues: Iterable[Venue]) -> dict[str, list[str]]:
+    """Build stable UI suggestions from stored venue-profile attributes only."""
+
+    facilities: list[str] = []
+    accessibility: list[str] = []
+    locations: list[str] = []
+    for venue in venues:
+        facilities.extend(venue.facilities)
+        accessibility.extend(venue.accessibility_features)
+        if venue.location:
+            locations.append(venue.location)
+    return {
+        "facilities": _sorted_unique(facilities),
+        "accessibility_needs": _sorted_unique(accessibility),
+        "locations": _sorted_unique(locations),
+    }
+
+
+def _sorted_unique(values: Iterable[str]) -> list[str]:
+    unique: dict[str, str] = {}
+    for value in values:
+        cleaned = value.strip()
+        if cleaned:
+            unique.setdefault(cleaned.casefold(), cleaned)
+    return sorted(unique.values(), key=str.casefold)
 
 
 def _is_available(session: Session, venue: Venue, day: date, event_slots: Iterable[str]) -> bool:
@@ -170,6 +287,26 @@ def qualifying_layouts(
         if layout.capacity >= expected_attendance
         and (required_layout is None or layout.layout.casefold() == required_layout)
     ]
+
+
+def venue_satisfies_requirements(
+    venue: Venue,
+    required_facilities: Iterable[str],
+    accessibility_needs: Iterable[str],
+    location_preference: str | None,
+) -> bool:
+    """Apply SPL-73's conjunctive requirement filters to one candidate venue."""
+
+    facilities = {value.strip().casefold() for value in venue.facilities}
+    accessibility = {value.strip().casefold() for value in venue.accessibility_features}
+    if not all(value.casefold() in facilities for value in required_facilities):
+        return False
+    if not all(value.casefold() in accessibility for value in accessibility_needs):
+        return False
+    if not location_preference:
+        return True
+    venue_location = (venue.location or "").casefold()
+    return location_preference.casefold() in venue_location
 
 
 def _serialize_venue(

@@ -331,7 +331,9 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <div className="venue-search-page__layout">
           <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
             initialDate={event.proposed_date} initialSlots={event.mapped_slots}
-            expectedAttendance={event.expected_attendance ?? null} preferredRoomLayout={event.preferred_room_layout ?? null} request={api} />
+            expectedAttendance={event.expected_attendance ?? null} preferredRoomLayout={event.preferred_room_layout ?? null}
+            requiredFacilities={event.required_facilities ?? []} accessibilityNeeds={event.accessibility_needs ?? []}
+            locationPreference={event.location_preference ?? null} request={api} />
           <aside className="venue-search-page__brief" aria-label="Assigned event requirements"><EventBrief event={event} /></aside>
         </div>
       </>}
