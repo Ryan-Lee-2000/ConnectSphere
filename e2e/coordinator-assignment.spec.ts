@@ -70,7 +70,12 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page.getByText('Review started.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Requirements to consider' }).getByText('Under review')).toBeVisible();
 
-  // TC-SPL-71-11: the assigned event carries its server-owned date and slots into read-only search.
+  // SPL-67: approval is the reviewed request's explicit hand-off into Planning.
+  await page.getByRole('button', { name: 'Approve request' }).click();
+  await expect(page.getByText('Request approved. Event planning can begin.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Requirements to consider' }).getByText('In planning')).toBeVisible();
+
+  // TC-SPL-71-11: a Planning event carries its server-owned date and slots into read-only search.
   await page.getByRole('button', { name: 'Find venues', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Find available venues' })).toBeVisible();
   await expect(page.getByLabel('Singapore date')).toHaveValue(proposedDate);
@@ -80,11 +85,11 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page.getByText('Fits 120 guests').first()).toBeVisible();
   await signOut(page);
 
-  // CS-E05-S2 AC6: the organiser sees who is responsible after review begins.
+  // CS-E05-S2 AC6: the organiser sees who is responsible after planning begins.
   await signIn(page, organiser, 'Event Organiser');
   await page.getByRole('link', { name: 'My requests' }).click();
   const organiserRow = page.getByRole('row').filter({ hasText: name });
-  await expect(organiserRow).toContainText('Under review');
+  await expect(organiserRow).toContainText('In planning');
   await expect(organiserRow).toContainText(coordinatorName);
   await signOut(page);
 
@@ -94,12 +99,12 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   const assigned = page.getByRole('row').filter({ hasText: name });
   const displayedDate = new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(`${proposedDate}T00:00:00Z`));
-  await expect(assigned).toContainText('Under review');
+  await expect(assigned).toContainText('In planning');
   await expect(assigned).toContainText(displayedDate);
   await assigned.getByRole('link', { name }).click();
   await expect(page).toHaveURL(/\/workspace\/assigned-events\/\d+$/);
   await expect(page.getByRole('heading', { name })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Under review' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'In planning' })).toBeVisible();
   await expect(page.getByRole('cell', { name: displayedDate, exact: true })).toBeVisible();
 
   // SPL-64: the detail is the complete read-only request, including organisation and organiser.
