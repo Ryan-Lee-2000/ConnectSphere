@@ -191,6 +191,24 @@ def main():
             ".pytest-run",
         )
         run("uv", "run", "--frozen", "coverage", "report", "--show-missing")
+    elif cmd == "coverage-spl73":
+        # Week 6 coverage diagnostic for requirement-filter rules in the shared availability module.
+        run("uv", "run", "--frozen", "coverage", "erase")
+        run(
+            "uv",
+            "run",
+            "--frozen",
+            "coverage",
+            "run",
+            "-m",
+            "pytest",
+            "backend/tests/test_venue_availability_unit.py",
+            "backend/tests/test_venue_availability.py",
+            "-q",
+            "--basetemp",
+            ".pytest-run",
+        )
+        run("uv", "run", "--frozen", "coverage", "report", "--show-missing")
     elif cmd == "integration":
         if not os.getenv("INTEGRATION_DATABASE_URL"):
             raise SystemExit("Set INTEGRATION_DATABASE_URL to a disposable PostgreSQL database.")
@@ -258,7 +276,8 @@ def main():
         run("pnpm", "exec", "supabase", "stop")
     else:
         print(
-            "Commands: doctor setup dev migrate verify coverage-spl71 coverage-spl72 integration "
+            "Commands: doctor setup dev migrate verify coverage-spl71 coverage-spl72 "
+            "coverage-spl73 integration "
             "stop browser-install e2e budget"
         )
         if cmd != "help":

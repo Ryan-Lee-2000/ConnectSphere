@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Building2, CalendarDays, MapPin, Search, UsersRound } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Accessibility, ArrowUpRight, BadgeCheck, Building2, CalendarDays, ListChecks, MapPin, Search, UsersRound, X } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import { SLOTS, type SlotKey } from './slots';
 
 type MatchingLayout = { layout: string; capacity: number };
 type AvailableVenue = { id: number; name: string; location: string | null; maximum_layout_capacity: number | null; matching_layouts: MatchingLayout[] };
+type FilterOptions = { facilities: string[]; accessibility_needs: string[]; locations: string[] };
 const ROOM_LAYOUT_OPTIONS = ['Theatre', 'Classroom', 'Boardroom', 'Banquet', 'Cabaret', 'U-shaped'];
+const EMPTY_REQUIREMENTS: string[] = [];
+const EMPTY_FILTER_OPTIONS: FilterOptions = { facilities: [], accessibility_needs: [], locations: [] };
 
-export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, request }: {
-  accessToken: string; eventId: number; initialDate: string | null; initialSlots?: string[]; expectedAttendance: number | null; preferredRoomLayout: string | null; request?: ApiRequest;
+export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, requiredFacilities = EMPTY_REQUIREMENTS, accessibilityNeeds: initialAccessibilityNeeds = EMPTY_REQUIREMENTS, locationPreference = null, request }: {
+  accessToken: string; eventId: number; initialDate: string | null; initialSlots?: string[]; expectedAttendance: number | null; preferredRoomLayout: string | null; requiredFacilities?: string[]; accessibilityNeeds?: string[]; locationPreference?: string | null; request?: ApiRequest;
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [accessToken, request]);
   const selectableSlots = (slots: string[]) => slots.filter((slot): slot is SlotKey => SLOTS.some(candidate => candidate.key === slot));
@@ -17,6 +20,10 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>(selectableSlots(initialSlots || []));
   const [attendance, setAttendance] = useState(initialAttendance(expectedAttendance));
   const [layout, setLayout] = useState(normaliseLayoutChoice(preferredRoomLayout));
+  const [facilities, setFacilities] = useState(normaliseRequirementValues(requiredFacilities));
+  const [accessibilityNeeds, setAccessibilityNeeds] = useState(normaliseRequirementValues(initialAccessibilityNeeds));
+  const [location, setLocation] = useState(locationPreference || '');
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>(EMPTY_FILTER_OPTIONS);
   const [venues, setVenues] = useState<AvailableVenue[] | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,8 +33,26 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   useEffect(() => {
     setSearchDate(initialDate || ''); setSelectedSlots(selectableSlots(initialSlots || []));
     setAttendance(initialAttendance(expectedAttendance)); setLayout(normaliseLayoutChoice(preferredRoomLayout));
+    setFacilities(normaliseRequirementValues(requiredFacilities)); setAccessibilityNeeds(normaliseRequirementValues(initialAccessibilityNeeds)); setLocation(locationPreference || '');
     setVenues(null); setSearched(false); setError(null); setSelectedVenueId(null);
-  }, [eventId, initialDate, initialSlots]);
+  }, [eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, requiredFacilities, initialAccessibilityNeeds, locationPreference]);
+
+  useEffect(() => {
+    let active = true;
+    const optionsRequest = api(`/api/event-requests/${eventId}/venue-filter-options`);
+    if (!optionsRequest) return () => { active = false; };
+    void optionsRequest.then(async response => {
+      if (!response.ok || !active) return;
+      const body = await response.json() as { filter_options?: Partial<FilterOptions> };
+      if (!active || !body.filter_options) return;
+      setFilterOptions({
+        facilities: normaliseRequirementValues(body.filter_options.facilities || []),
+        accessibility_needs: normaliseRequirementValues(body.filter_options.accessibility_needs || []),
+        locations: normaliseRequirementValues(body.filter_options.locations || []),
+      });
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [api, eventId]);
 
   function toggleSlot(slot: SlotKey) {
     setSelectedSlots(current => current.includes(slot)
@@ -41,6 +66,9 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
     selectedSlots.forEach(slot => parameters.append('slot', slot));
     parameters.set('expected_attendance', attendance);
     parameters.set('preferred_room_layout', layout.trim());
+    appendRequirementFilters(parameters, 'required_facility', facilities);
+    appendRequirementFilters(parameters, 'accessibility_need', accessibilityNeeds);
+    parameters.set('location_preference', location.trim());
     try {
       const response = await api(`/api/event-requests/${eventId}/available-venues?${parameters.toString()}`);
       if (!response.ok) { setError(await responseError(response, 'Could not search venue availability. Try again.')); return; }
@@ -59,6 +87,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const layoutLabel = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
   const layoutOptions = layout && !ROOM_LAYOUT_OPTIONS.some(option => option.toLowerCase() === layout.toLowerCase())
     ? [layout, ...ROOM_LAYOUT_OPTIONS] : ROOM_LAYOUT_OPTIONS;
+  const locationOptions = mergeOptions(filterOptions.locations, location ? [location] : []);
   return <section className="venue-availability" aria-labelledby="venue-availability-title">
     <form className="venue-availability__panel" onSubmit={submit => { submit.preventDefault(); void search(); }}>
       <header className="venue-availability__filter-header"><div><p className="eyebrow">Venue catalogue search</p><h2 id="venue-availability-title">Search filters</h2></div><p>Start with the event’s details, then adjust any filter to compare venue options.</p></header>
@@ -67,6 +96,9 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
         <label className="field venue-availability__attendance"><span><UsersRound size={15} /> Expected attendance</span><input aria-label="Expected attendance" min="1" onChange={event => setAttendance(event.target.value)} inputMode="numeric" type="number" value={attendance} /></label>
         <fieldset className="venue-availability__slots"><legend>Required slots</legend><div>{SLOTS.map(slot => <label key={slot.key}><input checked={selectedSlots.includes(slot.key)} onChange={() => toggleSlot(slot.key)} type="checkbox" /><span>{slot.label}</span></label>)}</div></fieldset>
         <label className="field venue-availability__layout"><span>Room layout <em>Optional</em></span><span className="venue-availability__layout-control"><select aria-label="Room layout" onChange={event => setLayout(event.target.value)} value={layout}><option value="">Any supported layout</option>{layoutOptions.map(option => <option key={option} value={option}>{option}</option>)}</select>{layout && <button className="venue-availability__clear-layout" onClick={() => setLayout('')} type="button">Clear</button>}</span></label>
+        <RequirementPicker icon={<ListChecks size={15} />} label="Required facilities" options={filterOptions.facilities} selected={facilities} onChange={setFacilities} />
+        <RequirementPicker icon={<Accessibility size={15} />} label="Accessibility needs" options={filterOptions.accessibility_needs} selected={accessibilityNeeds} onChange={setAccessibilityNeeds} />
+        <label className="field venue-availability__location"><span><MapPin size={15} /> Preferred venue location <em>Optional</em></span><select aria-label="Preferred venue location" onChange={event => setLocation(event.target.value)} value={location}><option value="">Any location</option>{locationOptions.map(option => <option key={option} value={option}>{option}</option>)}</select><small>Choose an area or address recorded on a venue profile.</small></label>
       </div>
       <footer className="venue-availability__actions"><p>Searches are read-only. A result is not a booking or a hold.</p><button className="button button--primary venue-availability__submit" disabled={!canSearch || loading} type="submit"><Search size={17} />{loading ? 'Checking…' : 'Search venues'}</button></footer>
     </form>
@@ -79,7 +111,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
           <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Fits {attendanceValue} guests</span><span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
         </m.button>)}
         <AnimatePresence initial={false}>{selectedVenue && <m.div className="venue-card-details venue-availability__detail" key={selectedVenue.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}>
-          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing and capacity confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue meets the active search filters and is available for the selected date, every required slot and any recorded preparation time.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Expected attendance</dt><dd>{attendanceValue} guests</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Layout filter</dt><dd>{layout.trim() ? layoutLabel(layout.trim()) : 'Any supported layout'}</dd></div></dl></section>
+          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow"><BadgeCheck size={14} /> Timing and capacity confirmed</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} is available</h3><p className="venue-availability__detail-copy">This venue meets every active date, slot, attendance and requirement filter. Searching does not create a booking or a hold.</p><dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Expected attendance</dt><dd>{attendanceValue} guests</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Requirement filters</dt><dd>{requirementSummary(facilities, accessibilityNeeds, location)}</dd></div></dl></section>
         </m.div>}</AnimatePresence>
       </div>}
     </div>}
@@ -93,4 +125,31 @@ function initialAttendance(value: number | null) {
 function normaliseLayoutChoice(value: string | null) {
   if (!value) return '';
   return ROOM_LAYOUT_OPTIONS.find(option => option.toLowerCase() === value.trim().toLowerCase()) || value;
+}
+
+function normaliseRequirementValues(values: string[]) {
+  const unique = new Map<string, string>();
+  values.forEach(value => { const cleaned = value.trim(); if (cleaned) unique.set(cleaned.toLowerCase(), cleaned); });
+  return [...unique.values()];
+}
+function mergeOptions(...groups: string[][]) { return normaliseRequirementValues(groups.flat()); }
+function appendRequirementFilters(parameters: URLSearchParams, name: string, values: string[]) {
+  if (values.length) values.forEach(item => parameters.append(name, item)); else parameters.append(name, '');
+}
+function requirementSummary(facilities: string[], accessibility: string[], location: string) {
+  const parts = [facilities.join(', '), accessibility.join(', '), location.trim()].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'No extra requirements';
+}
+
+function RequirementPicker({ icon, label, options, selected, onChange }: { icon: ReactNode; label: string; options: string[]; selected: string[]; onChange: (values: string[]) => void }) {
+  const available = options.filter(option => !selected.some(value => value.toLowerCase() === option.toLowerCase()));
+  function addOption(value: string) {
+    if (value) onChange(normaliseRequirementValues([...selected, value]));
+  }
+  return <fieldset className="venue-availability__requirements requirement-picker" aria-label={label}>
+    <legend>{icon} {label} <em>Optional</em></legend>
+    {selected.length > 0 && <div className="requirement-picker__chips" aria-label={`Selected ${label}`}>{selected.map(value => <span key={value} className="requirement-picker__chip">{value}<button aria-label={`Remove ${value}`} onClick={() => onChange(selected.filter(item => item !== value))} type="button"><X size={13} /></button></span>)}</div>}
+    <label className="requirement-picker__select"><span>Choose from catalogue</span><select aria-label={`Add ${label}`} onChange={event => { addOption(event.target.value); event.currentTarget.value = ''; }} defaultValue=""><option value="">Select an option</option>{available.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    {available.length > 0 && <div className="requirement-picker__suggestions" aria-label={`Suggested ${label}`}>{available.slice(0, 4).map(option => <button key={option} onClick={() => addOption(option)} type="button">+ {option}</button>)}</div>}
+  </fieldset>;
 }

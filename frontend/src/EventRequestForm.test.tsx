@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { EventRequestForm } from './EventRequestForm';
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -296,10 +296,12 @@ it('pulls a previously saved venue, layout, facilities and accessibility choices
   // ...and values that aren't in the venue's own lists are preserved under Others, not dropped.
   const facilitiesFieldset = screen.getByRole('group', { name: 'Required facilities' });
   const accessibilityFieldset = screen.getByRole('group', { name: 'Accessibility needs' });
-  expect(within(facilitiesFieldset).getByLabelText('Others')).toHaveProperty('checked', true);
-  expect(within(facilitiesFieldset).getByDisplayValue('Custom AV cart')).toBeTruthy();
-  expect(within(accessibilityFieldset).getByLabelText('Others')).toHaveProperty('checked', true);
-  expect(within(accessibilityFieldset).getByDisplayValue('Sign language interpreter')).toBeTruthy();
+  await waitFor(() => {
+    expect(within(facilitiesFieldset).getByLabelText('Others')).toHaveProperty('checked', true);
+    expect(within(facilitiesFieldset).getByDisplayValue('Custom AV cart')).toBeTruthy();
+    expect(within(accessibilityFieldset).getByLabelText('Others')).toHaveProperty('checked', true);
+    expect(within(accessibilityFieldset).getByDisplayValue('Sign language interpreter')).toBeTruthy();
+  });
 });
 
 it('submits an in-progress draft through the drafts submit endpoint, not the plain create endpoint', async () => {

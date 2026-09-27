@@ -453,6 +453,25 @@ button { touch-action: manipulation; }
 .venue-availability__fields .field > span { display: flex; align-items: center; gap: .4rem; font-size: 1rem; font-weight: 400; }
 .venue-availability__fields em { margin-left: auto; color: var(--color-muted-slate); font-size: .8125rem; font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .venue-availability__attendance, .venue-availability__layout { min-width: 0; }
+.venue-availability__requirements, .venue-availability__location { min-width: 0; }
+.venue-availability__location { grid-column: 1 / -1; }
+.venue-availability__location small { display: block; margin-top: var(--space-2); color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.45; }
+.requirement-picker { display: grid; gap: var(--space-3); margin: 0; padding: 0; border: 0; }
+.requirement-picker legend { display: flex; align-items: center; gap: .4rem; padding: 0; color: var(--color-ink-navy); font-size: 1rem; font-weight: 400; }
+.requirement-picker legend em { margin-left: auto; }
+.requirement-picker__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); min-height: 0; }
+.requirement-picker__chip { display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; padding: .38rem .45rem .38rem .6rem; border: 1px solid var(--color-blueprint-line); border-radius: 999px; color: var(--color-ink-navy); background: var(--color-mist-surface); font-size: .8125rem; line-height: 1.2; }
+.requirement-picker__chip button { display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; padding: 0; border: 0; border-radius: 50%; color: var(--color-muted-slate); background: transparent; cursor: pointer; }
+.requirement-picker__chip button:hover { color: var(--color-ink-navy); background: var(--color-blueprint-line); }
+.requirement-picker__select { display: grid; gap: var(--space-2); }
+.requirement-picker__select > span { color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.45; }
+.requirement-picker__select select { width: 100%; min-height: 3rem; padding: 0 var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); color: var(--color-ink-navy); background: var(--color-atlas-paper); transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
+.requirement-picker__select select:hover { border-color: var(--color-muted-slate); }
+.requirement-picker__select select:focus { border-color: var(--color-mineral-teal); background: var(--color-raised-surface); }
+.requirement-picker__select select:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.requirement-picker__suggestions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.requirement-picker__suggestions button { padding: .35rem .55rem; border: 1px dashed var(--color-blueprint-line); border-radius: 999px; color: var(--color-mineral-teal); background: transparent; font: inherit; font-size: .8125rem; cursor: pointer; }
+.requirement-picker__suggestions button:hover { border-style: solid; background: var(--color-mist-surface); }
 .venue-availability__layout-control { position: relative; display: flex !important; min-width: 0; }
 .venue-availability__layout-control select { width: 100%; padding-right: 4.8rem; }
 .venue-availability__clear-layout { position: absolute; top: 50%; right: var(--space-2); min-height: 2rem; transform: translateY(-50%); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); color: var(--color-mineral-teal); background: transparent; font-size: .75rem; font-weight: 700; cursor: pointer; }
@@ -544,6 +563,8 @@ button { touch-action: manipulation; }
 
 /* Detail surfaces: one clear shell, compact headers and content-led sections. */
 .venue-card-details {
+  position: relative;
+  z-index: 1;
   margin-top: var(--space-5);
   padding: clamp(var(--space-6), 3vw, var(--space-8));
   border-color: color-mix(in oklch, var(--color-blueprint-line) 82%, var(--color-mineral-teal));

@@ -4,7 +4,12 @@ from datetime import date
 
 import pytest
 from app.models import VenueLayout
-from app.venue_availability import SearchParameterError, parse_search_parameters, qualifying_layouts
+from app.venue_availability import (
+    SearchParameterError,
+    parse_requirement_filters,
+    parse_search_parameters,
+    qualifying_layouts,
+)
 
 
 # TC-SPL-71-07: valid equivalence partitions for each fixed operating slot.
@@ -91,3 +96,26 @@ def test_tc_spl_72_04_requires_event_level_expected_attendance():
     layouts = [VenueLayout(layout="theatre", capacity=80)]
 
     assert qualifying_layouts(layouts, None, None) == []
+
+
+def test_tc_spl_73_03_normalises_requirement_filter_equivalence_partitions():
+    assert parse_requirement_filters(
+        [" Projector ", "projector", "PA system", ""],
+        ["Step-free access", "step-free access"],
+        " Marina Centre ",
+    ) == (["Projector", "PA system"], ["Step-free access"], "Marina Centre")
+
+
+@pytest.mark.parametrize(
+    ("facilities", "accessibility", "location", "message"),
+    [
+        (["x" * 101], [], None, "Required facility must be 100 characters or fewer."),
+        ([], ["x" * 101], None, "Accessibility need must be 100 characters or fewer."),
+        ([], [], "x" * 201, "Location preference must be 200 characters or fewer."),
+    ],
+)
+def test_tc_spl_73_04_refuses_requirement_filter_values_outside_the_contract(
+    facilities, accessibility, location, message
+):
+    with pytest.raises(SearchParameterError, match=f"^{message}$"):
+        parse_requirement_filters(facilities, accessibility, location)

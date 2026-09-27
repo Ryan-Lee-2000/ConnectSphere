@@ -188,7 +188,7 @@ it('shows the selected event context on the dedicated venue-search page', async 
   expect(await screen.findByRole('heading', { name: 'Find available venues' })).toBeTruthy();
   expect(screen.getByText('Community Forum')).toBeTruthy();
   expect(screen.getByText('12 Oct 2026')).toBeTruthy();
-  expect(screen.getByText('Marina Centre')).toBeTruthy();
+  expect(screen.getByText('Marina Centre', { selector: 'dd' })).toBeTruthy();
 });
 
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
