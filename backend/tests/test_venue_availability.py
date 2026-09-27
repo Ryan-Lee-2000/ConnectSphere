@@ -162,18 +162,24 @@ def test_tc_spl_71_01_finds_only_venues_available_for_every_selected_slot(app, c
     response = search(client, app.config["TEST_EVENT_ID"])
 
     assert response.status_code == 200
-    assert response.json == {
-        "search": {"date": "2026-10-12", "slots": ["AM", "PM"]},
-        "venues": [
-            {
-                "id": available,
-                "name": "Atlas Hall",
-                "location": "Singapore",
-                "maximum_layout_capacity": 180,
-                "matching_layouts": [{"layout": "theatre", "capacity": 180}],
-            }
-        ],
+    assert response.json["search"] == {"date": "2026-10-12", "slots": ["AM", "PM"]}
+    assert response.json["venues"][0] | {"suitability": None} == {
+        "id": available,
+        "name": "Atlas Hall",
+        "location": "Singapore",
+        "maximum_layout_capacity": 180,
+        "matching_layouts": [{"layout": "theatre", "capacity": 180}],
+        "suitability": None,
     }
+    assessment = response.json["venues"][0]["suitability"]
+    assert assessment["suitable"] is True
+    assert [check["key"] for check in assessment["checks"]] == [
+        "timing",
+        "layout_capacity",
+        "facilities",
+        "accessibility",
+        "location",
+    ]
 
 
 def test_tc_spl_71_02_excludes_a_venue_when_its_required_adjacent_preparation_is_unavailable(
@@ -508,6 +514,86 @@ def test_tc_spl_73_09_keeps_requirement_matches_out_when_their_operating_buffer_
 
     assert response.status_code == 200
     assert [venue["id"] for venue in response.json["venues"]] == [available]
+
+
+def test_tc_spl_75_01_assesses_the_saved_event_not_transient_search_overrides(app, client):
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        event.expected_attendance = 120
+        event.preferred_room_layout = "Theatre"
+        event.required_facilities = ["Projector"]
+        venue = Venue(
+            name="Exploration Studio",
+            location="Singapore",
+            facilities=[],
+            operating_slots=["AM", "PM"],
+        )
+        venue.layouts = [VenueLayout(layout="classroom", capacity=80)]
+        session.add(venue)
+        session.commit()
+
+    response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-12&slot=AM&expected_attendance=80&preferred_room_layout=Classroom"
+        "&required_facility=",
+    )
+
+    assert response.status_code == 200
+    assessment = response.json["venues"][0]["suitability"]
+    assert assessment["suitable"] is False
+    assert {check["key"] for check in assessment["checks"] if not check["passed"]} == {
+        "layout_capacity",
+        "facilities",
+    }
+    assert "Theatre layout is not supported" in next(
+        check["detail"] for check in assessment["checks"] if check["key"] == "layout_capacity"
+    )
+    assert "Projector" in next(
+        check["detail"] for check in assessment["checks"] if check["key"] == "facilities"
+    )
+
+
+def test_tc_spl_75_03_reports_saved_event_timing_and_setup_buffer_conflicts(app, client):
+    venue_id = add_venue(app, "Buffered Studio", slots=("AM", "PM", "NIGHT"), setup=1)
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, app.config["TEST_EVENT_ID"])
+        assert event is not None
+        event.start_time = time(13)
+        event.end_time = time(18)
+        session.add(
+            VenueOperationalBlock(
+                venue_id=venue_id,
+                start_date=SEARCH_DATE,
+                end_date=SEARCH_DATE,
+                slots=["AM"],
+                reason="Required setup unavailable",
+                created_by_account_id=VENUE_STAFF,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    # A later, exploratory date can list the candidate. Its suitability remains tied to the
+    # saved event on SEARCH_DATE, where its required AM setup slot is blocked.
+    response = search(
+        client,
+        app.config["TEST_EVENT_ID"],
+        "date=2026-10-13&slot=PM&expected_attendance=80",
+    )
+
+    assert response.status_code == 200
+    assessment = response.json["venues"][0]["suitability"]
+    timing = next(check for check in assessment["checks"] if check["key"] == "timing")
+    assert assessment["suitable"] is False
+    assert timing == {
+        "key": "timing",
+        "label": "Timing and preparation",
+        "passed": False,
+        "detail": "The venue is unavailable for the event timing or its required setup and "
+        "turnaround slots.",
+    }
 
 
 def test_tc_spl_73_07_returns_catalogue_backed_requirement_and_location_suggestions(app, client):

@@ -83,6 +83,11 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await page.getByRole('button', { name: 'Search venues', exact: true }).click();
   await expect(page.locator('.venue-availability__summary')).toContainText(proposedDate);
   await expect(page.getByText('Fits 120 guests').first()).toBeVisible();
+  // SPL-75: each available discovery result also exposes a saved-event suitability assessment.
+  const firstVenue = page.locator('.venue-availability__card').first();
+  await expect(firstVenue.getByText('Suitable for this event')).toBeVisible();
+  await firstVenue.click();
+  await expect(page.getByText('Search filters are exploratory. This assessment uses the saved, current event requirements and creates neither a booking nor a hold.')).toBeVisible();
   await signOut(page);
 
   // CS-E05-S2 AC6: the organiser sees who is responsible after planning begins.

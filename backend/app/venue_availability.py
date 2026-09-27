@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.authorization import require_roles
 from app.coordinator_assignment import is_assigned_coordinator
 from app.models import EventRequest, Role, Venue, VenueBookingOccupancy, VenueLayout
-from app.slots import OPERATING_SLOTS, derive_venue_occupancy
+from app.slots import OPERATING_SLOTS, derive_venue_occupancy, slots_for_range
 from app.venue_operational_blocks import operational_block_for_slot
 
 
@@ -77,7 +77,13 @@ def register_venue_availability_routes(app: Flask) -> None:
                 location_override if location_supplied else event.location_preference
             )
             available = [
-                _serialize_venue(venue, expected_attendance, preferred_room_layout)
+                _serialize_venue(
+                    session,
+                    venue,
+                    event,
+                    expected_attendance,
+                    preferred_room_layout,
+                )
                 for venue in venues
                 if _is_available(session, venue, day, event_slots)
                 and qualifying_layouts(venue.layouts, expected_attendance, preferred_room_layout)
@@ -322,8 +328,150 @@ def venue_satisfies_requirements(
     return location_preference.casefold() in venue_location
 
 
+def assess_venue_suitability(
+    session: Session, venue: Venue, event: EventRequest
+) -> dict[str, object]:
+    """Assess one venue against the current, server-owned event requirements.
+
+    SPL-75 deliberately does not reuse a coordinator's editable catalogue-search
+    overrides.  A search can be broadened to explore alternatives, but a suitability
+    indication must always describe whether the venue can satisfy the saved event.
+    The returned check list is also the contract that later booking-request work can
+    reuse before it creates an occupancy claim.
+    """
+
+    event_slots = (
+        slots_for_range(event.start_time, event.end_time)
+        if event.start_time and event.end_time
+        else []
+    )
+    timing_ready = event.proposed_date is not None and bool(event_slots)
+    timing_passed = timing_ready and _is_available(session, venue, event.proposed_date, event_slots)
+
+    checks = [
+        {
+            "key": "timing",
+            "label": "Timing and preparation",
+            "passed": timing_passed,
+            "detail": (
+                "Available for the event date and selected slots, including required setup and "
+                "turnaround."
+                if timing_passed
+                else "The venue is unavailable for the event timing or its required setup and "
+                "turnaround slots."
+                if timing_ready
+                else "The event date and timing must be recorded before venue suitability can "
+                "be assessed."
+            ),
+        },
+    ] + profile_suitability_checks(venue, event)
+    return {"suitable": all(check["passed"] for check in checks), "checks": checks}
+
+
+def profile_suitability_checks(venue: Venue, event: EventRequest) -> list[dict[str, object]]:
+    """Evaluate the event requirements that require no database or wall-clock state."""
+
+    matching_layouts = qualifying_layouts(
+        venue.layouts, event.expected_attendance, event.preferred_room_layout
+    )
+    facilities_missing = _missing_requirements(event.required_facilities, venue.facilities)
+    accessibility_missing = _missing_requirements(
+        event.accessibility_needs, venue.accessibility_features
+    )
+    location_required = (event.location_preference or "").strip()
+    location_passed = (
+        not location_required or location_required.casefold() in (venue.location or "").casefold()
+    )
+    return [
+        {
+            "key": "layout_capacity",
+            "label": "Layout and capacity",
+            "passed": bool(matching_layouts),
+            "detail": _layout_suitability_detail(venue.layouts, event),
+        },
+        {
+            "key": "facilities",
+            "label": "Required facilities",
+            "passed": not facilities_missing,
+            "detail": (
+                "No facility requirements are recorded for this event."
+                if not event.required_facilities
+                else "All required facilities are recorded on this venue."
+                if not facilities_missing
+                else f"Missing required facilities: {', '.join(facilities_missing)}."
+            ),
+        },
+        {
+            "key": "accessibility",
+            "label": "Accessibility needs",
+            "passed": not accessibility_missing,
+            "detail": (
+                "No accessibility needs are recorded for this event."
+                if not event.accessibility_needs
+                else "All required accessibility features are recorded on this venue."
+                if not accessibility_missing
+                else f"Missing accessibility features: {', '.join(accessibility_missing)}."
+            ),
+        },
+        {
+            "key": "location",
+            "label": "Preferred location",
+            "passed": location_passed,
+            "detail": (
+                "No location preference is recorded for this event."
+                if not location_required
+                else f"{venue.location} matches the event location preference."
+                if location_passed
+                else (
+                    f"The event prefers {location_required}; this venue is recorded at "
+                    f"{venue.location or 'an unspecified location'}."
+                )
+            ),
+        },
+    ]
+
+
+def _layout_suitability_detail(layouts: Iterable[VenueLayout], event: EventRequest) -> str:
+    """Explain the stored layout-capacity decision without estimating a capacity."""
+
+    if event.expected_attendance is None:
+        return "Expected attendance must be recorded before capacity can be assessed."
+    requested = (event.preferred_room_layout or "").strip()
+    if requested:
+        supported = [
+            layout for layout in layouts if layout.layout.casefold() == requested.casefold()
+        ]
+        if not supported:
+            return f"The requested {requested} layout is not supported by this venue."
+        highest_capacity = max(layout.capacity for layout in supported)
+        if highest_capacity < event.expected_attendance:
+            return (
+                f"The requested {requested} layout supports {highest_capacity} guests; "
+                f"the event requires {event.expected_attendance}."
+            )
+        return f"The requested {requested} layout supports {event.expected_attendance} guests."
+
+    qualifying = qualifying_layouts(layouts, event.expected_attendance, None)
+    if not qualifying:
+        return f"No supported layout has capacity for {event.expected_attendance} guests."
+    names = ", ".join(f"{layout.layout} ({layout.capacity})" for layout in qualifying)
+    return (
+        f"Supported layout capacity meets the {event.expected_attendance}-guest requirement: "
+        f"{names}."
+    )
+
+
+def _missing_requirements(required: Iterable[str], available: Iterable[str]) -> list[str]:
+    available_keys = {item.strip().casefold() for item in available}
+    return [item for item in required if item.strip().casefold() not in available_keys]
+
+
 def _serialize_venue(
-    venue: Venue, expected_attendance: int | None, preferred_room_layout: str | None
+    session: Session,
+    venue: Venue,
+    event: EventRequest,
+    expected_attendance: int | None,
+    preferred_room_layout: str | None,
 ) -> dict[str, object]:
     matches = qualifying_layouts(venue.layouts, expected_attendance, preferred_room_layout)
     return {
@@ -334,4 +482,5 @@ def _serialize_venue(
         "matching_layouts": [
             {"layout": layout.layout, "capacity": layout.capacity} for layout in matches
         ],
+        "suitability": assess_venue_suitability(session, venue, event),
     }
