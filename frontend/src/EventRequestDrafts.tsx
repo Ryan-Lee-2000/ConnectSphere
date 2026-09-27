@@ -22,6 +22,10 @@ type RequestSummary = {
   // CS-E06-S4: who approved the request and when; null until it is approved.
   approved_by?: { id: string; name: string } | null;
   approved_at?: string | null;
+  // CS-E06-S5: who rejected the request, when and why; null unless it is rejected.
+  rejected_by?: { id: string; name: string } | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
 };
 
 function mostRecentFirst(rows: RequestSummary[]) {
@@ -151,6 +155,12 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
               <span className="event-request-status__explanation">{item.status_explanation}</span>
               {item.approved_by && <span className="event-request-status__explanation">
                 Approved by {item.approved_by.name}{item.approved_at ? ` on ${new Date(item.approved_at).toLocaleString()}` : ''}
+              </span>}
+              {item.rejected_by && <span className="event-request-status__explanation">
+                Rejected by {item.rejected_by.name}{item.rejected_at ? ` on ${new Date(item.rejected_at).toLocaleString()}` : ''}
+              </span>}
+              {item.rejected_by && item.rejection_reason && <span className="event-request-status__explanation">
+                Reason: {item.rejection_reason}
               </span>}
             </td>
             <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>

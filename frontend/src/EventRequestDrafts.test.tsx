@@ -73,4 +73,13 @@ describe('EventRequestDrafts', () => {
     render(<EventRequestDrafts accessToken="token" request={request} />);
     expect(await screen.findByText(/Approved by Alice Tan on/)).toBeTruthy();
   });
+  // CS-E06-S5 AC4
+  it('[TC-SPL-68-15] shows the organiser who rejected the request and why', async () => {
+    const request = vi.fn(async () => response({ event_requests: [
+      { id: 1, name: 'Forum', status: 'rejected', status_label: 'Not approved', status_explanation: 'Not accepted.', status_changed_at: null, last_saved_at: null, proposed_date: null, coordinator: { id: 'alice', name: 'Alice Tan' }, rejected_by: { id: 'alice', name: 'Alice Tan' }, rejected_at: '2026-09-27T10:00:00+08:00', rejection_reason: 'Clashes with exams.' },
+    ] }));
+    render(<EventRequestDrafts accessToken="token" request={request} />);
+    expect(await screen.findByText(/Rejected by Alice Tan on/)).toBeTruthy();
+    expect(screen.getByText('Reason: Clashes with exams.')).toBeTruthy();
+  });
 });

@@ -43,6 +43,9 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   clarifications: Clarification[];
   approved_by: { id: string; name: string } | null;
   approved_at: string | null;
+  rejected_by: { id: string; name: string } | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
 }>;
 
 const NOT_PROVIDED = 'Not provided';
@@ -78,6 +81,10 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
   return [
     ['core', 'Core details', [
       ['Status', event.status_label],
+      ...(event.rejected_by ? [
+        ['Rejected by', `${event.rejected_by.name}, ${formatTimestamp(event.rejected_at)}`] as [string, ReactNode],
+        ['Rejection reason', formatText(event.rejection_reason)] as [string, ReactNode],
+      ] : []),
       ...(event.approved_by ? [['Approved by', `${event.approved_by.name}, ${formatTimestamp(event.approved_at)}`] as [string, ReactNode]] : []),
       ['Purpose', formatText(event.purpose)],
       ['Description', formatText(event.description)],
@@ -151,6 +158,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [notice, setNotice] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [clarification, setClarification] = useState('');
+  const [rejecting, setRejecting] = useState<'closed' | 'reason' | 'confirm'>('closed');
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -159,6 +168,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     setError(null);
     setNotice(null);
     setClarification('');
+    setRejecting('closed');
+    setRejectionReason('');
     void (async () => {
       try {
         const response = await api(eventId === undefined
@@ -228,6 +239,47 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       }
     } catch {
       setError('Could not approve the request. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  function reviewRejection() {
+    if (!rejectionReason.trim()) {
+      setError('Enter a reason for rejecting the request.');
+      return;
+    }
+    setError(null);
+    setRejecting('confirm');
+  }
+
+  async function reject() {
+    if (!event || event.status !== 'under_review' || transitioning) return;
+    if (!rejectionReason.trim()) {
+      setError('Enter a reason for rejecting the request.');
+      return;
+    }
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: rejectionReason }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not reject the request. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event }));
+        setRejecting('closed');
+        setRejectionReason('');
+        setNotice(body.message || 'Request rejected. The Event Organiser can see your reason.');
+      } else {
+        setError('Could not reject the request. Try again.');
+      }
+    } catch {
+      setError('Could not reject the request. Try again.');
     } finally {
       setTransitioning(false);
     }
@@ -334,6 +386,35 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           </button>
         </div>
       </form>}
+      {event.status === 'under_review' && rejecting === 'closed' && <div className="organisation-events__actions">
+        <button type="button" className="button button--secondary" disabled={transitioning}
+          onClick={() => setRejecting('reason')}>Reject request</button>
+      </div>}
+      {event.status === 'under_review' && rejecting === 'reason' && <form className="request-form rejection-form"
+        onSubmit={submit => { submit.preventDefault(); reviewRejection(); }}>
+        <div className="field">
+          <label htmlFor="rejection-reason">Reason for rejecting this request</label>
+          <textarea id="rejection-reason" rows={4} maxLength={2000} value={rejectionReason}
+            onChange={change => setRejectionReason(change.target.value)} />
+        </div>
+        <div className="organisation-events__actions">
+          <button type="button" className="button button--secondary"
+            onClick={() => { setRejecting('closed'); setRejectionReason(''); setError(null); }}>Cancel</button>
+          <button type="submit" className="button button--primary">Continue</button>
+        </div>
+      </form>}
+      {event.status === 'under_review' && rejecting === 'confirm' && <div className="rejection-form" role="group" aria-label="Confirm rejection">
+        <p><strong>Reject this request?</strong> Rejection is final. The Event Organiser will see your reason and must submit a new event request to proceed.</p>
+        <p>{rejectionReason.trim()}</p>
+        <div className="organisation-events__actions">
+          <button type="button" className="button button--secondary" disabled={transitioning}
+            onClick={() => setRejecting('reason')}>Back</button>
+          <button type="button" className="button button--primary" disabled={transitioning}
+            onClick={() => { void reject(); }}>
+            {transitioning ? 'Rejecting…' : 'Confirm rejection'}
+          </button>
+        </div>
+      </div>}
       {event.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
       <div className="organisation-events__actions organisation-events__actions--planning">
         <div><span className="organisation-events__planning-label">Next step</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>

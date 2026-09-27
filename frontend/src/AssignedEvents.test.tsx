@@ -350,3 +350,69 @@ it('[TC-SPL-67-12] shows the server message and keeps the button when approval i
   expect(screen.getByRole('button', { name: 'Approve request' })).toBeTruthy();
   expect(screen.getAllByText('Under review').length).toBeGreaterThan(0);
 });
+
+const rejectedAnswer = {
+  event: {
+    ...assigned, status: 'rejected', status_label: 'Not approved',
+    rejected_by: { id: 'a', name: 'Alice Tan' }, rejected_at: '2026-09-27T10:00:00+08:00',
+    rejection_reason: 'Clashes with exams.',
+  },
+  message: 'Request rejected. The Event Organiser can see your reason.',
+};
+
+it('[TC-SPL-68-12] shows the reject button only while the event is under review', async () => {
+  renderDetail(fullDetail);
+  expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Reject request' })).toBeNull();
+  cleanup();
+  renderDetail(underReviewDetail);
+  expect(await screen.findByRole('button', { name: 'Reject request' })).toBeTruthy();
+});
+
+it('[TC-SPL-68-13] requires a reason, then a final confirmation, before rejecting', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => rejectedAnswer });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject request' }));
+  fireEvent.change(screen.getByLabelText('Reason for rejecting this request'), { target: { value: '   ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Enter a reason');
+  expect(request).toHaveBeenCalledTimes(1);
+
+  fireEvent.change(screen.getByLabelText('Reason for rejecting this request'), { target: { value: 'Clashes with exams.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(screen.getByText(/Rejection is final/)).toBeTruthy();
+  expect(request).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm rejection' }));
+
+  expect(await screen.findByText('Request rejected. The Event Organiser can see your reason.')).toBeTruthy();
+  expect((await screen.findByRole('rowheader', { name: 'Rejection reason' })).closest('tr')!.textContent).toContain('Clashes with exams.');
+  expect((screen.getByRole('rowheader', { name: 'Rejected by' })).closest('tr')!.textContent).toContain('Alice Tan');
+  expect(screen.queryByRole('button', { name: 'Approve request' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reject request' })).toBeNull();
+  expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/reject', {
+    method: 'POST', body: JSON.stringify({ reason: 'Clashes with exams.' }),
+  });
+});
+
+it('[TC-SPL-68-14] cancelling, or a refused rejection, keeps the event under review', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Only an event under review can be rejected.' }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('button', { name: 'Reject request' })).toBeTruthy();
+  expect(request).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Reject request' }));
+  fireEvent.change(screen.getByLabelText('Reason for rejecting this request'), { target: { value: 'No.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm rejection' }));
+
+  expect((await screen.findByRole('alert')).textContent).toContain('Only an event under review can be rejected.');
+  expect(screen.getByRole('button', { name: 'Confirm rejection' })).toBeTruthy();
+});
