@@ -593,6 +593,20 @@ def serialize_approval(event: EventRequest) -> dict[str, Any]:
     }
 
 
+def serialize_rejection(event: EventRequest) -> dict[str, Any]:
+    """Who rejected the request, when and why (CS-E06-S5); all null unless it is rejected."""
+
+    return {
+        "rejected_by": (
+            {"id": event.rejecter.id, "name": event.rejecter.display_name}
+            if event.rejecter
+            else None
+        ),
+        "rejected_at": _singapore_time(event.rejected_at) if event.rejected_at else None,
+        "rejection_reason": event.rejection_reason,
+    }
+
+
 def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
     """Every clarification asked of this request, newest first (CS-E06-S2)."""
 
@@ -686,6 +700,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         # own requests, so this discloses nothing beyond their own event.
         "coordinator": _coordinator(event),
         **serialize_approval(event),
+        **serialize_rejection(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

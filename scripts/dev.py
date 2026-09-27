@@ -205,6 +205,7 @@ def main():
             "backend/tests/test_venue_conflicts_postgres.py",
             "backend/tests/test_qa_spl65_postgres.py",
             "backend/tests/test_qa_spl67_postgres.py",
+            "backend/tests/test_qa_spl68_postgres.py",
             "-q",
         )
     elif cmd == "dev":
