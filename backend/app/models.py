@@ -18,6 +18,7 @@ from sqlalchemy import (
     Uuid,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.event_statuses import INITIAL_STATUS, status_check_constraint
@@ -284,6 +285,23 @@ class VenueBooking(Base):
     review_marked_by_account_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
+    # SPL-77. The request as submitted, kept on the booking so it survives released occupancy.
+    # Nullable because SPL-83/SPL-89 fixtures create bookings without a request.
+    layout: Mapped[str | None] = mapped_column(Text)
+    expected_attendance: Mapped[int | None] = mapped_column(Integer)
+    booking_date: Mapped[date | None] = mapped_column(Date)
+    # jsonb, not json: SPL-89 selects DISTINCT bookings and json has no equality operator.
+    event_slots: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
+    setup_date: Mapped[date | None] = mapped_column(Date)
+    setup_slot: Mapped[str | None] = mapped_column(String(10))
+    turnaround_date: Mapped[date | None] = mapped_column(Date)
+    turnaround_slot: Mapped[str | None] = mapped_column(String(10))
+    requested_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(
