@@ -3,6 +3,7 @@ import { Accessibility, ArrowUpRight, BadgeCheck, Building2, CalendarDays, Circl
 import { AnimatePresence, m } from 'motion/react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import { SLOTS, type SlotKey } from './slots';
+import { VenueBookingNotice, VenueBookingRequest, type VenueBooking } from './VenueBookingRequest';
 
 type MatchingLayout = { layout: string; capacity: number };
 type SuitabilityCheck = { key: string; label: string; passed: boolean; detail: string };
@@ -31,12 +32,13 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null);
+  const [requestedBooking, setRequestedBooking] = useState<VenueBooking | null>(null);
 
   useEffect(() => {
     setSearchDate(initialDate || ''); setSelectedSlots(selectableSlots(initialSlots || []));
     setAttendance(initialAttendance(expectedAttendance)); setLayout(normaliseLayoutChoice(preferredRoomLayout));
     setFacilities(normaliseRequirementValues(requiredFacilities)); setAccessibilityNeeds(normaliseRequirementValues(initialAccessibilityNeeds)); setLocation(locationPreference || '');
-    setVenues(null); setSearched(false); setError(null); setSelectedVenueId(null);
+    setVenues(null); setSearched(false); setError(null); setSelectedVenueId(null); setRequestedBooking(null);
   }, [eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, requiredFacilities, initialAccessibilityNeeds, locationPreference]);
 
   useEffect(() => {
@@ -106,6 +108,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
     </form>
     {!canSearch && <p className="venue-availability__hint" role="status">Choose a date, at least one slot and a positive expected attendance to search.</p>}
     {error && <p className="error" role="alert">{error}</p>}
+    {requestedBooking && <VenueBookingNotice booking={requestedBooking} />}
     {searched && !error && <div className="venue-availability__results" aria-live="polite"><p className="venue-availability__summary">Results for <strong>{summary}</strong> · <strong>{attendanceValue} guests</strong>{layout.trim() ? <> · <strong>{layoutLabel(layout.trim())}</strong></> : null}</p>
       {venues?.length === 0 ? <div className="organisation-events__empty" role="status"><strong>No venues are available for this search.</strong><span>Keep the date and slots, then adjust them to explore another option.</span></div> : <div className="venue-availability__marketplace venue-marketplace" aria-label="Available venue results">
         {venues?.map((venue, index) => <m.button type="button" key={venue.id} className={`venue-card venue-availability__card palette-${index % 3}${selectedVenueId === venue.id ? ' selected' : ''}`} style={{ order: index * 2 }} onClick={() => setSelectedVenueId(current => current === venue.id ? null : venue.id)} aria-expanded={selectedVenueId === venue.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .16, ease: 'easeOut', delay: Math.min(index * .04, .16) }} whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
@@ -113,7 +116,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
           <span className="venue-card-body"><span className="venue-card-label">Available venue</span><strong>{venue.name}</strong><span className="venue-card-location"><MapPin size={15} />{venue.location || 'Location to be confirmed'}</span><span className="venue-availability__capacity">Fits {attendanceValue} guests</span>{venue.suitability && <SuitabilityBadge suitability={venue.suitability} />}<span className="venue-card-action"><BadgeCheck size={16} />Available for selected slots <ArrowUpRight size={16} /></span></span>
         </m.button>)}
         <AnimatePresence initial={false}>{selectedVenue && <m.div className="venue-card-details venue-availability__detail" key={selectedVenue.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}>
-          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow">{selectedVenue.suitability?.suitable ? <BadgeCheck size={14} /> : <CircleAlert size={14} />}{selectedVenue.suitability?.suitable ? ' Suitable for this event' : ' Event requirements to resolve'}</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} {selectedVenue.suitability?.suitable ? 'is suitable' : 'does not meet every event requirement'}</h3><p className="venue-availability__detail-copy">Search filters are exploratory. This assessment uses the saved, current event requirements and creates neither a booking nor a hold.</p>{selectedVenue.suitability && <div className="venue-suitability__checks" aria-label={`Suitability checks for ${selectedVenue.name}`}>{selectedVenue.suitability.checks.map(check => <div className={`venue-suitability__check ${check.passed ? 'venue-suitability__check--pass' : 'venue-suitability__check--fail'}`} key={check.key}><span aria-hidden="true">{check.passed ? <CircleCheck size={18} /> : <CircleAlert size={18} />}</span><div><strong>{check.label}</strong><p>{check.detail}</p></div></div>)}</div>}<dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Search attendance</dt><dd>{attendanceValue} guests</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Search filters</dt><dd>{requirementSummary(facilities, accessibilityNeeds, location)}</dd></div></dl></section>
+          <section aria-labelledby={`availability-detail-${selectedVenue.id}`}><p className="eyebrow">{selectedVenue.suitability?.suitable ? <BadgeCheck size={14} /> : <CircleAlert size={14} />}{selectedVenue.suitability?.suitable ? ' Suitable for this event' : ' Event requirements to resolve'}</p><h3 id={`availability-detail-${selectedVenue.id}`}>{selectedVenue.name} {selectedVenue.suitability?.suitable ? 'is suitable' : 'does not meet every event requirement'}</h3><p className="venue-availability__detail-copy">Search filters are exploratory. This assessment uses the saved, current event requirements and creates neither a booking nor a hold.</p>{selectedVenue.suitability && <div className="venue-suitability__checks" aria-label={`Suitability checks for ${selectedVenue.name}`}>{selectedVenue.suitability.checks.map(check => <div className={`venue-suitability__check ${check.passed ? 'venue-suitability__check--pass' : 'venue-suitability__check--fail'}`} key={check.key}><span aria-hidden="true">{check.passed ? <CircleCheck size={18} /> : <CircleAlert size={18} />}</span><div><strong>{check.label}</strong><p>{check.detail}</p></div></div>)}</div>}<dl className="venue-availability__detail-facts"><div><dt>Applied search</dt><dd>{summary}</dd></div><div><dt>Search attendance</dt><dd>{attendanceValue} guests</dd></div><div><dt>Matching layout{selectedVenue.matching_layouts.length === 1 ? '' : 's'}</dt><dd>{selectedVenue.matching_layouts.map(layout => `${layoutLabel(layout.layout)} (${layout.capacity})`).join(', ')}</dd></div><div><dt>Search filters</dt><dd>{requirementSummary(facilities, accessibilityNeeds, location)}</dd></div></dl>{selectedVenue.suitability?.suitable && <VenueBookingRequest api={api} eventId={eventId} venueId={selectedVenue.id} venueName={selectedVenue.name} expectedAttendance={expectedAttendance} preferredRoomLayout={preferredRoomLayout} onRequested={booking => { setRequestedBooking(booking); void search(); }} />}</section>
         </m.div>}</AnimatePresence>
       </div>}
     </div>}

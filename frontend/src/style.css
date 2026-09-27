@@ -510,6 +510,17 @@ button { touch-action: manipulation; }
 .venue-availability__detail-facts div { display: grid; gap: var(--space-1); }
 .venue-availability__detail-facts dt, .event-brief dt { color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .venue-availability__detail-facts dd, .event-brief dd { margin: 0; font-size: .9375rem; font-weight: 650; line-height: 1.45; }
+/* SPL-77 request a venue booking */
+.venue-booking-request { display: grid; grid-template-columns: minmax(0, 16rem) auto; align-items: end; gap: var(--space-3) var(--space-4); padding-top: var(--space-5); border-top: 1px solid var(--color-blueprint-line); }
+.venue-booking-request .button { justify-self: start; }
+.venue-booking-request__note, .venue-booking-request__none { grid-column: 1 / -1; margin: 0; max-width: 65ch; color: var(--color-muted-slate); font-size: .875rem; line-height: 1.5; }
+.venue-booking-request .error { grid-column: 1 / -1; margin: 0; }
+.venue-booking-notice { display: grid; gap: var(--space-3); margin: var(--space-4) 0 0; padding: var(--space-4) var(--space-5); border: 1px solid var(--color-mineral-teal); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.venue-booking-notice p { margin: 0; line-height: 1.5; }
+.venue-booking-notice dl { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin: 0; }
+.venue-booking-notice dt { color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.venue-booking-notice dd { margin: 0; font-weight: 650; }
+@media (max-width: 640px) { .venue-booking-request { grid-template-columns: 1fr; } }
 
 /* SPL-71 event-scoped search and the venue-profile operating dossier. */
 .organisation-events__actions--planning { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
