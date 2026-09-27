@@ -5,15 +5,17 @@ import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 afterEach(cleanup);
 
 it('[TC-SPL-71-01] sends the selected Singapore date and slots, then shows result facts', async () => {
-  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ venues: [{ id: 1, name: 'Atlas Hall', location: 'City Campus', maximum_layout_capacity: 180, matching_layouts: [{ layout: 'theatre', capacity: 180 }] }] }) });
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ venues: [{ id: 1, name: 'Atlas Hall', location: 'City Campus', maximum_layout_capacity: 180, matching_layouts: [{ layout: 'theatre', capacity: 180 }], suitability: { suitable: true, checks: [{ key: 'timing', label: 'Timing and preparation', passed: true, detail: 'Available for the event date and selected slots.' }, { key: 'layout_capacity', label: 'Layout and capacity', passed: true, detail: 'Theatre supports 120 guests.' }, { key: 'facilities', label: 'Required facilities', passed: true, detail: 'All required facilities are recorded.' }] } }] }) });
   render(<VenueAvailabilitySearch accessToken="token" eventId={12} initialDate="2026-10-12" initialSlots={['AM', 'PM']} expectedAttendance={120} preferredRoomLayout="theatre" request={request} />);
   fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
   expect(await screen.findByText('Atlas Hall')).toBeTruthy();
   expect(screen.getByText('City Campus')).toBeTruthy(); expect(screen.getByText('Fits 120 guests')).toBeTruthy();
+  expect(screen.getByText('Suitable for this event')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/12/available-venues?date=2026-10-12&slot=AM&slot=PM&expected_attendance=120&preferred_room_layout=Theatre&required_facility=&accessibility_need=&location_preference=');
   fireEvent.click(screen.getByRole('button', { name: /Atlas Hall/ }));
-  expect(await screen.findByRole('heading', { name: 'Atlas Hall is available' })).toBeTruthy();
-  expect(screen.getByText('Timing and capacity confirmed')).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Atlas Hall is suitable' })).toBeTruthy();
+  expect(screen.getByText('Timing and preparation')).toBeTruthy();
+  expect(screen.getByText('Search filters are exploratory. This assessment uses the saved, current event requirements and creates neither a booking nor a hold.')).toBeTruthy();
   expect(screen.getByText('Theatre (180)')).toBeTruthy();
 });
 
@@ -55,6 +57,17 @@ it('allows a chosen room layout to be changed or cleared back to any supported l
   expect((screen.getByLabelText('Room layout') as HTMLSelectElement).value).toBe('Classroom');
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   expect((screen.getByLabelText('Room layout') as HTMLSelectElement).value).toBe('');
+});
+
+it('[TC-SPL-75-04] identifies unmet saved-event requirements in an expanded venue assessment', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ venues: [{ id: 3, name: 'Riverside Studio', location: 'Riverside', maximum_layout_capacity: 90, matching_layouts: [{ layout: 'classroom', capacity: 90 }], suitability: { suitable: false, checks: [{ key: 'timing', label: 'Timing and preparation', passed: true, detail: 'Available for the event date and selected slots.' }, { key: 'layout_capacity', label: 'Layout and capacity', passed: false, detail: 'The requested Theatre layout is not supported by this venue.' }, { key: 'facilities', label: 'Required facilities', passed: false, detail: 'Missing required facilities: Projector.' }, { key: 'accessibility', label: 'Accessibility needs', passed: true, detail: 'All required accessibility features are recorded on this venue.' }, { key: 'location', label: 'Preferred location', passed: true, detail: 'Riverside matches the event location preference.' }] } }] }) });
+  render(<VenueAvailabilitySearch accessToken="token" eventId={12} initialDate="2026-10-12" initialSlots={['AM']} expectedAttendance={80} preferredRoomLayout={null} request={request} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+  expect(await screen.findByText('Does not meet current event requirements')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /Riverside Studio/ }));
+  expect(await screen.findByRole('heading', { name: 'Riverside Studio does not meet every event requirement' })).toBeTruthy();
+  expect(screen.getByText('Missing required facilities: Projector.')).toBeTruthy();
 });
 
 it('[TC-SPL-73-05] applies editable facility, accessibility and location filters without changing the event', async () => {

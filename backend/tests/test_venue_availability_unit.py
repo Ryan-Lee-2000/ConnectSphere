@@ -3,11 +3,12 @@
 from datetime import date
 
 import pytest
-from app.models import VenueLayout
+from app.models import EventRequest, Venue, VenueLayout
 from app.venue_availability import (
     SearchParameterError,
     parse_requirement_filters,
     parse_search_parameters,
+    profile_suitability_checks,
     qualifying_layouts,
 )
 
@@ -119,3 +120,41 @@ def test_tc_spl_73_04_refuses_requirement_filter_values_outside_the_contract(
 ):
     with pytest.raises(SearchParameterError, match=f"^{message}$"):
         parse_requirement_filters(facilities, accessibility, location)
+
+
+def test_tc_spl_75_02_evaluates_layout_capacity_and_each_requirement_without_database_state():
+    venue = Venue(
+        name="Harbour Hall",
+        location="Marina Centre",
+        facilities=["Projector", "PA system"],
+        accessibility_features=["Step-free access"],
+    )
+    venue.layouts = [VenueLayout(layout="Theatre", capacity=120)]
+    event = EventRequest(
+        name="Leadership Forum",
+        expected_attendance=120,
+        preferred_room_layout="Theatre",
+        required_facilities=["Projector", "PA system"],
+        accessibility_needs=["Step-free access"],
+        location_preference="Marina",
+    )
+
+    assert all(check["passed"] for check in profile_suitability_checks(venue, event))
+
+    event.expected_attendance = 121
+    event.required_facilities = ["Projector", "Hybrid meeting kit"]
+    event.accessibility_needs = ["Hearing loop"]
+    event.location_preference = "Civic District"
+
+    checks = {check["key"]: check for check in profile_suitability_checks(venue, event)}
+
+    assert {key for key, check in checks.items() if not check["passed"]} == {
+        "layout_capacity",
+        "facilities",
+        "accessibility",
+        "location",
+    }
+    assert "120 guests" in checks["layout_capacity"]["detail"]
+    assert "Hybrid meeting kit" in checks["facilities"]["detail"]
+    assert "Hearing loop" in checks["accessibility"]["detail"]
+    assert "Civic District" in checks["location"]["detail"]
