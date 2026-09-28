@@ -310,6 +310,34 @@ def test_tc_spl_80_05_venue_without_preparation_reports_no_slots(app, client):
     assert item["event_slots"] == ["PM"]
 
 
+# TC-SPL-80-19
+def test_tc_spl_80_19_a_review_marked_booking_still_appears_in_the_queue(app, client, requested):
+    """AC1/AC2: SPL-89's marker is informational (TC-SPL-80-16 shows the flag). It must not act
+    as a sixth "excluded" status alongside Approved/Rejected/Withdrawn/Cancelled — a booking still
+    needs review before it can be decided on, so hiding it from the queue would be worse than
+    showing it unflagged.
+    """
+
+    with Session(app.extensions["engine"]) as session:
+        session.execute(
+            update(VenueBooking)
+            .where(VenueBooking.id == requested["booking"]["id"])
+            .values(
+                requires_review=True,
+                review_marked_at=datetime(2026, 9, 27, 9, tzinfo=SINGAPORE),
+                review_marked_by_account_id=VENUE_STAFF,
+            )
+        )
+        session.commit()
+
+    response = pending(client)
+
+    assert response.json["count"] == 1
+    item = response.json["requests"][0]
+    assert item["id"] == requested["booking"]["id"]
+    assert item["requires_review"] is True
+
+
 # ── AC5 — requests that are not Requested are excluded ───────────────────────────────────────
 
 
