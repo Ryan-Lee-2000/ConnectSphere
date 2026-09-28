@@ -673,3 +673,8 @@ button { touch-action: manipulation; }
 .venue-booking-review__decision > .button { justify-self: start; }
 .venue-booking-review__outcome { display: flex; gap: var(--space-2); align-items: flex-start; margin: 0; line-height: 1.5; }
 .venue-booking-review .error { margin: 0; }
+
+/* SPL-80 (CS-E10-S2): Venue Staff's queue of booking requests awaiting review. */
+.venue-booking-review__subheading { margin: var(--space-5) 0 var(--space-3); font-size: 1rem; }
+.request-flag { display: inline-flex; align-items: center; gap: var(--space-1); margin-left: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius-sm); background: var(--color-warning-surface, #fff0b3); color: var(--color-ink, #172b4d); font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.request-preparation { display: block; margin-top: 2px; color: var(--color-muted-slate); font-size: .72rem; }

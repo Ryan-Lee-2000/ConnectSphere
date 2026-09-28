@@ -13,7 +13,18 @@ type ReviewedBooking = VenueBooking & {
 };
 type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string };
 type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
-type ReviewBody = { booking: ReviewedBooking; event: { id: number; name: string; status: string }; review: Review };
+// SPL-80 (CS-E10-S2 AC3) widens this with what Venue Staff need in order to decide. The server
+// sends an allowlist, so there is deliberately no registration or organiser field to render (AC4).
+type DecisionEvent = {
+  id: number; name: string; status: string;
+  organisation: { id: number; name: string } | null;
+  purpose: string | null; description: string | null;
+  proposed_date: string | null; start_time: string | null; end_time: string | null;
+  expected_attendance: number | null; preferred_room_layout: string | null;
+  required_facilities: string[]; accessibility_needs: string[];
+  facilities_notes: string | null; location_preference: string | null; venue_notes: string | null;
+};
+type ReviewBody = { booking: ReviewedBooking; event: DecisionEvent; review: Review };
 
 const MAX_NOTE_LENGTH = 1000;
 const STATUS_NAMES: Record<string, string> = {
@@ -89,11 +100,31 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     ['Requested at', booking.requested_at ? timeName(booking.requested_at) : 'Not recorded'],
     ['Status', STATUS_NAMES[booking.status] || booking.status],
   ];
+  // SPL-80 AC3: what the event needs of a venue, so the decision can be made here rather than by
+  // chasing the coordinator. Empty values are dropped rather than shown as "None", because an
+  // absent requirement and a requirement of "none" read differently to someone deciding.
+  const eventDetails: [string, string][] = ([
+    ['Client', event.organisation?.name ?? ''],
+    ['Purpose', event.purpose ?? ''],
+    ['Description', event.description ?? ''],
+    ['Times', event.start_time && event.end_time ? `${event.start_time}–${event.end_time}` : ''],
+    ['Expected attendance', event.expected_attendance ? String(event.expected_attendance) : ''],
+    ['Preferred layout', event.preferred_room_layout ? layoutName(event.preferred_room_layout) : ''],
+    ['Required facilities', event.required_facilities.join(', ')],
+    ['Accessibility needs', event.accessibility_needs.join(', ')],
+    ['Facilities notes', event.facilities_notes ?? ''],
+    ['Location preference', event.location_preference ?? ''],
+    ['Venue notes', event.venue_notes ?? ''],
+  ] as [string, string][]).filter(([, value]) => value !== '');
   return <section className="venue-booking-review" aria-labelledby="venue-booking-review-title">
     <p className="eyebrow">Venue booking</p>
     <h1 id="venue-booking-review-title">Review venue-booking request</h1>
     <ul className="venue-booking-review__details" aria-label="Request details">
       {details.map(([label, value]) => <li key={label}><span>{label}</span><strong>{value}</strong></li>)}
+    </ul>
+    <h2 className="venue-booking-review__subheading">Event details</h2>
+    <ul className="venue-booking-review__details" aria-label="Event details">
+      {eventDetails.map(([label, value]) => <li key={label}><span>{label}</span><strong>{value}</strong></li>)}
     </ul>
     {review.requires_review && (
       <p className="venue-booking-history__review" role="note">

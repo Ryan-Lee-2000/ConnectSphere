@@ -652,7 +652,10 @@ def test_tc_spl_81_21_venue_staff_read_a_request_for_review(app, client, request
 
     assert response.status_code == 200, response.json
     body = response.json
-    assert body["event"] == {
+    # SPL-80 (CS-E10-S2 AC3) widened this payload with the fields Venue Staff need to decide.
+    # The widening is additive, so this case still asserts every key SPL-81 relies on, and
+    # TC-SPL-80-11 guards the same three values from SPL-80's side.
+    assert {key: body["event"][key] for key in ("id", "name", "status")} == {
         "id": requested["event"],
         "name": "Coastal Forum",
         "status": "planning",

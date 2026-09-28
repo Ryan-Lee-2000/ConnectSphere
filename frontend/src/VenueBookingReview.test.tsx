@@ -11,7 +11,18 @@ const BOOKING = {
   requested_at: '2026-09-27T21:15:00+08:00', requires_review: false, review_trigger_block_id: null, review_marked_at: null,
   withdrawn_by: null, withdrawn_at: null, approved_by: null, approved_at: null, approval_note: null,
 };
-const EVENT = { id: 12, name: 'Coastal Forum', status: 'planning' };
+// SPL-80 (CS-E10-S2 AC3) widened this payload with the event information Venue Staff need in
+// order to decide. SPL-81's own cases below are unaffected: id, name and status are unchanged.
+const EVENT = {
+  id: 12, name: 'Coastal Forum', status: 'planning',
+  organisation: { id: 3, name: 'Northstar Community Partners' },
+  purpose: 'Community planning', description: 'An open forum for the redevelopment plan.',
+  proposed_date: '2026-10-14', start_time: '13:00', end_time: '18:00',
+  expected_attendance: 150, preferred_room_layout: 'theatre',
+  required_facilities: ['Projector'], accessibility_needs: ['Step-free access'],
+  facilities_notes: 'Lectern needed', location_preference: 'Marina Centre',
+  venue_notes: 'Ground floor preferred',
+};
 const UNMARKED = { requires_review: false, marked_at: null, trigger_block: null };
 
 function reply(status: number, body: object) {
@@ -81,4 +92,18 @@ it('[TC-SPL-81-21] explains when the request cannot be found', async () => {
   render(<VenueBookingReview accessToken="token" bookingId={999} request={vi.fn(async () => reply(404, { error: 'Venue-booking request not found.' })) as unknown as ApiRequest} />);
 
   expect((await screen.findByRole('alert')).textContent).toBe('Venue-booking request not found.');
+});
+
+// QA-SPL-80 TC-SPL-80-17: AC3 is only met if the widened payload actually reaches the screen,
+// and AC4 only if nothing attendee-facing arrives with it.
+it('[TC-SPL-80-17] shows the event details needed to decide, and no registration details', async () => {
+  render(<VenueBookingReview accessToken="token" bookingId={41} request={api({ booking: BOOKING, event: EVENT, review: UNMARKED })} />);
+
+  const eventDetails = await screen.findByRole('list', { name: 'Event details' });
+  for (const text of ['Northstar Community Partners', 'Community planning', '13:00–18:00', '150', 'Theatre', 'Projector', 'Step-free access', 'Lectern needed', 'Marina Centre', 'Ground floor preferred']) {
+    expect(eventDetails.textContent).toContain(text);
+  }
+  // AC4: the server sends an allowlist, so there is nothing attendee-facing to render anywhere.
+  expect(document.body.textContent).not.toContain('registration');
+  expect(document.body.textContent).not.toContain('Registration');
 });
