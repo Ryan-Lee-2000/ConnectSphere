@@ -138,6 +138,11 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         if booking.withdrawn_by_account_id
         else None
     )
+    approver = (
+        session.get(Account, booking.approved_by_account_id)
+        if booking.approved_by_account_id
+        else None
+    )
     return {
         "id": booking.id,
         "event_request_id": booking.event_request_id,
@@ -161,6 +166,10 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
             {"id": withdrawer.id, "name": withdrawer.display_name} if withdrawer else None
         ),
         "withdrawn_at": _timestamp(booking.withdrawn_at),
+        # SPL-81: the approval record, null unless the request was approved.
+        "approved_by": {"id": approver.id, "name": approver.display_name} if approver else None,
+        "approved_at": _timestamp(booking.approved_at),
+        "approval_note": booking.approval_note,
     }
 
 
