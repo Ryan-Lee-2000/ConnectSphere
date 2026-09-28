@@ -316,6 +316,26 @@ class VenueBooking(Base):
     )
 
 
+class VenueBookingStatusHistory(Base):
+    """One venue-booking status change and who made it (SPL-79); rows are never edited."""
+
+    __tablename__ = "venue_booking_status_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("venue_bookings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    previous_status: Mapped[str | None] = mapped_column(String(40))
+    resulting_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    actor_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # The reason (rejection) or note (approval) recorded with this action, if any.
+    note: Mapped[str | None] = mapped_column(Text)
+
+
 class VenueBookingOccupancy(Base):
     """One active event or preparation slot claimed by a venue booking."""
 

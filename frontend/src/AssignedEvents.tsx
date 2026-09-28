@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'r
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
+import { VenueBookingPanel } from './VenueBookingWithdrawal';
+
+const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
 import { slotLabel } from './slots';
 
 type AssignedEvent = {
@@ -160,6 +163,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [clarification, setClarification] = useState('');
   const [rejecting, setRejecting] = useState<'closed' | 'reason' | 'confirm'>('closed');
   const [rejectionReason, setRejectionReason] = useState('');
+  // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
+  const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -170,6 +175,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     setClarification('');
     setRejecting('closed');
     setRejectionReason('');
+    setBookingStageOnLoad(false);
     void (async () => {
       try {
         const response = await api(eventId === undefined
@@ -183,6 +189,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           setEvents(body.events);
         } else if (eventId !== undefined && body?.event) {
           setEvent(body.event);
+          setBookingStageOnLoad(VENUE_BOOKING_STAGES.has(body.event.status));
         } else {
           setError('Could not load your assigned events. Try again.');
         }
@@ -353,6 +360,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <h1 id="assigned-events-title">{event.name}</h1>
       </header>
       <EventBrief event={event} />
+      {/* SPL-79: the event's venue-booking request, its status and history. A request can only be
+          made once the event is in Planning (SPL-77), so earlier stages have nothing to show. The
+          panel follows the event as loaded, so approving on this page performs no booking read. */}
+      {bookingStageOnLoad && <VenueBookingPanel api={api} eventId={event.id} emptyMessage />}
       <div className="organisation-events__table-wrap">
         <table className="organisation-events__table organisation-events__detail-table">
           <caption className="visually-hidden">Submitted request details for {event.name}</caption>

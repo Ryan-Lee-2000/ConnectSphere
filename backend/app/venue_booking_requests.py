@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.slots import OccupancyKind, derive_venue_occupancy, slots_for_range
 from app.venue_availability import profile_suitability_checks
+from app.venue_booking_history import record_booking_transition
 from app.venue_conflicts import VenueOccupancyConflict, claim_venue_occupancy
 
 PLANNING = "planning"
@@ -109,6 +110,16 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                     booking.setup_date, booking.setup_slot = occupied.date, occupied.slot
                 elif occupied.kind is OccupancyKind.TURNAROUND:
                     booking.turnaround_date, booking.turnaround_slot = occupied.date, occupied.slot
+            # SPL-79: the request is the booking's first recorded status change.
+            record_booking_transition(
+                session,
+                booking.id,
+                action="request",
+                previous_status=None,
+                resulting_status=REQUESTED,
+                actor_account_id=g.user_id,
+                changed_at=booking.requested_at,
+            )
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking)), 201
 
