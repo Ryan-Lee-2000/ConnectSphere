@@ -307,6 +307,12 @@ class VenueBooking(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SPL-81. Who approved a Requested booking, when, and the optional note; null unless approved.
+    approved_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approval_note: Mapped[str | None] = mapped_column(Text)
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(

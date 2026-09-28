@@ -16,6 +16,7 @@ import { VenueCatalogue } from './VenueCatalogue';
 import { EventRequestDrafts } from './EventRequestDrafts';
 import { OrganisationEvents } from './OrganisationEvents';
 import { AssignedEvents } from './AssignedEvents';
+import { VenueBookingReview } from './VenueBookingReview';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -57,6 +58,8 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (/^\/workspace\/organisation-events(?:\/\d+)?$/.test(requestedPath)) {
     return role === 'event_organiser';
   }
+  // SPL-81. Venue Staff review and approve one venue-booking request.
+  if (/^\/workspace\/venue-bookings\/\d+$/.test(requestedPath)) return role === 'venue_staff';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -375,12 +378,16 @@ function Workspace({
   const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
   const venueSearchMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/venue-search$/);
   const venueSearchEventId = venueSearchMatch ? Number(venueSearchMatch[1]) : undefined;
+  const venueBookingMatch = safePath.match(/^\/workspace\/venue-bookings\/(\d+)$/);
+  const venueBookingId = venueBookingMatch ? Number(venueBookingMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
     : safePath === '/workspace/assignments'
       ? 'Coordinator assignment workspace'
     : venueSearchEventId !== undefined
       ? 'Venue availability search workspace'
+    : venueBookingId !== undefined
+      ? 'Venue booking review workspace'
       : safePath.startsWith('/workspace/assigned-events')
       ? 'Assigned events workspace'
       : safePath.startsWith('/workspace/organisation-events')
@@ -497,6 +504,12 @@ function Workspace({
             eventId={organisationEventId}
             key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
             onNavigate={navigate}
+          />
+        ) : venueBookingId !== undefined ? (
+          <VenueBookingReview
+            accessToken={session.access_token}
+            bookingId={venueBookingId}
+            key={`${activeRole}:venue-booking:${venueBookingId}`}
           />
         ) : venueSearchEventId !== undefined ? (
           <AssignedEvents

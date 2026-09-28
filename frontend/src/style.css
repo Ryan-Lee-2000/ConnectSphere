@@ -660,3 +660,16 @@ button { touch-action: manipulation; }
   .venue-search-page__layout { grid-template-columns: 1fr; gap: var(--space-6); }
   .venue-search-page__brief { position: static; }
 }
+/* SPL-81 venue-booking review and approval */
+.venue-booking-review { display: grid; gap: var(--space-4); max-width: 760px; }
+.venue-booking-review h1, .venue-booking-review .eyebrow { margin: 0; }
+.venue-booking-review__details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); margin: 0; padding: var(--space-4) var(--space-5); list-style: none; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.venue-booking-review__details li { display: grid; gap: 2px; min-width: 0; }
+.venue-booking-review__details span { color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.venue-booking-review__details strong { overflow-wrap: anywhere; }
+.venue-booking-review__decision { display: grid; gap: var(--space-3); }
+.venue-booking-review__decision label { display: grid; gap: var(--space-1); }
+.venue-booking-review__decision textarea { width: 100%; }
+.venue-booking-review__decision > .button { justify-self: start; }
+.venue-booking-review__outcome { display: flex; gap: var(--space-2); align-items: flex-start; margin: 0; line-height: 1.5; }
+.venue-booking-review .error { margin: 0; }

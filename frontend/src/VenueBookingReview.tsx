@@ -1,0 +1,132 @@
+import { useEffect, useMemo, useState } from 'react';
+import { CircleAlert, Check } from 'lucide-react';
+import { defaultRequest, responseError, type ApiRequest } from './api';
+import type { VenueBooking } from './VenueBookingRequest';
+
+// SPL-81 (CS-E10-S3): Venue Staff review one venue-booking request and approve it with an optional
+// note. SPL-80's pending list links here; SPL-82 can add Reject beside Approve.
+
+type Person = { id: string; name: string };
+type ReviewedBooking = VenueBooking & {
+  requested_by: Person | null; requested_at: string | null;
+  approved_by: Person | null; approved_at: string | null; approval_note: string | null;
+};
+type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string };
+type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
+type ReviewBody = { booking: ReviewedBooking; event: { id: number; name: string; status: string }; review: Review };
+
+const MAX_NOTE_LENGTH = 1000;
+const STATUS_NAMES: Record<string, string> = {
+  requested: 'Requested', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled',
+};
+const SLOT_NAMES: Record<string, string> = { AM: 'AM', PM: 'PM', NIGHT: 'Night' };
+const slotName = (slot: string) => SLOT_NAMES[slot] || slot;
+const dateName = (day: string) => new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  .format(new Date(`${day}T00:00:00Z`));
+const timeName = (instant: string) => new Intl.DateTimeFormat('en-SG', {
+  day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore',
+}).format(new Date(instant));
+const layoutName = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
+const preparation = (slot: { date: string; slot: string } | null) => slot ? `${slotName(slot.slot)} · ${dateName(slot.date)}` : 'None';
+
+export function VenueBookingReview({ accessToken, bookingId, request }: {
+  accessToken: string; bookingId: number; request?: ApiRequest;
+}) {
+  const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
+  const [body, setBody] = useState<ReviewBody | null>(null);
+  const [note, setNote] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void api(`/api/venue-bookings/${bookingId}`).then(async response => {
+      if (!response.ok) {
+        const message = await responseError(response, 'Could not load this venue-booking request.');
+        if (active) setError(message);
+        return;
+      }
+      const next = await response.json() as ReviewBody;
+      if (active) setBody(next);
+    }).catch(() => { if (active) setError('Could not load this venue-booking request.'); });
+    return () => { active = false; };
+  }, [api, bookingId]);
+
+  async function approve() {
+    if (!body || approving) return;
+    setApproving(true); setError(null);
+    try {
+      const response = await api(`/api/venue-bookings/${bookingId}/approve`, {
+        method: 'POST', body: JSON.stringify(note.trim() ? { note } : {}),
+      });
+      if (!response.ok) { setError(await responseError(response, 'Could not approve this request. Try again.')); return; }
+      const next = await response.json() as { booking?: ReviewedBooking };
+      if (!next.booking) throw new Error('Invalid response');
+      setBody({ ...body, booking: next.booking });
+    } catch { setError('Could not approve this request. Try again.'); }
+    finally { setApproving(false); setConfirming(false); }
+  }
+
+  if (!body) {
+    return <section className="venue-booking-review" aria-labelledby="venue-booking-review-title">
+      <h1 id="venue-booking-review-title">Review venue-booking request</h1>
+      {error ? <p className="error" role="alert">{error}</p> : <p>Loading the request…</p>}
+    </section>;
+  }
+  const { booking, event, review } = body;
+  const block = review.requires_review ? review.trigger_block : null;
+  const details: [string, string][] = [
+    ['Event', event.name],
+    ['Venue', booking.venue.name],
+    ['Date', dateName(booking.date)],
+    ['Event slots', booking.event_slots.map(slotName).join(', ')],
+    ['Setup', preparation(booking.setup)],
+    ['Turnaround', preparation(booking.turnaround)],
+    ['Layout', layoutName(booking.layout)],
+    ['Expected attendance', String(booking.expected_attendance)],
+    ['Requested by', booking.requested_by?.name ?? 'Not recorded'],
+    ['Requested at', booking.requested_at ? timeName(booking.requested_at) : 'Not recorded'],
+    ['Status', STATUS_NAMES[booking.status] || booking.status],
+  ];
+  return <section className="venue-booking-review" aria-labelledby="venue-booking-review-title">
+    <p className="eyebrow">Venue booking</p>
+    <h1 id="venue-booking-review-title">Review venue-booking request</h1>
+    <ul className="venue-booking-review__details" aria-label="Request details">
+      {details.map(([label, value]) => <li key={label}><span>{label}</span><strong>{value}</strong></li>)}
+    </ul>
+    {review.requires_review && (
+      <p className="venue-booking-history__review" role="note">
+        <CircleAlert size={16} aria-hidden="true" />
+        <span><strong>Marked for review.</strong>{' '}
+          {block ? <>Venue Staff recorded "{block.reason}" for {dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slotName).join(', ')}).</> : null}
+          {review.marked_at ? <> Marked {timeName(review.marked_at)}.</> : null}
+          {' '}Approval rechecks every slot before it goes ahead.
+        </span>
+      </p>
+    )}
+    {booking.status === 'approved' && booking.approved_by && booking.approved_at && (
+      <p className="venue-booking-review__outcome" role="status">
+        <Check size={16} aria-hidden="true" />
+        <span>Approved by {booking.approved_by.name} on {timeName(booking.approved_at)}.
+          {booking.approval_note ? <> Note: {booking.approval_note}</> : null}</span>
+      </p>
+    )}
+    {booking.status === 'requested' && <div className="venue-booking-review__decision">
+      <label>Approval note (optional)
+        <textarea maxLength={MAX_NOTE_LENGTH} onChange={change => setNote(change.target.value)} rows={3} value={note} />
+      </label>
+      {!confirming && (
+        <button className="button button--primary" onClick={() => { setConfirming(true); setError(null); }} type="button">Approve booking</button>
+      )}
+      {confirming && (
+        <div className="venue-booking-panel__confirm" role="group" aria-label="Confirm approval">
+          <p>Approve this request? Its event, setup and turnaround slots stay reserved for {event.name}. Every slot is rechecked first.</p>
+          <button className="button button--primary" disabled={approving} onClick={() => void approve()} type="button">{approving ? 'Approving…' : 'Confirm approval'}</button>
+          <button className="button" disabled={approving} onClick={() => setConfirming(false)} type="button">Keep reviewing</button>
+        </div>
+      )}
+    </div>}
+    {error && <p className="error" role="alert">{error}</p>}
+  </section>;
+}
