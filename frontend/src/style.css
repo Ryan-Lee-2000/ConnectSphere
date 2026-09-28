@@ -521,6 +521,16 @@ button { touch-action: manipulation; }
 .venue-booking-notice dt { color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .venue-booking-notice dd { margin: 0; font-weight: 650; }
 @media (max-width: 640px) { .venue-booking-request { grid-template-columns: 1fr; } }
+/* SPL-78 venue booking request panel and withdrawal */
+.venue-booking-panel { display: grid; gap: var(--space-3); margin: 0 0 var(--space-5); padding: var(--space-4) var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.venue-booking-panel .eyebrow { margin: 0; }
+.venue-booking-panel__summary { display: grid; gap: var(--space-1); line-height: 1.5; }
+.venue-booking-panel__summary > span { color: var(--color-muted-slate); }
+.venue-booking-panel__status strong { color: var(--color-ink); }
+.venue-booking-panel .button { justify-self: start; }
+.venue-booking-panel__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.venue-booking-panel__confirm p { flex: 1 1 100%; margin: 0; max-width: 65ch; line-height: 1.5; }
+.venue-booking-panel__notice, .venue-booking-panel .error { margin: 0; }
 
 /* SPL-71 event-scoped search and the venue-profile operating dossier. */
 .organisation-events__actions--planning { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }

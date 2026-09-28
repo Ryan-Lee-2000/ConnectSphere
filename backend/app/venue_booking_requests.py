@@ -122,6 +122,11 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         if booking.requested_by_account_id
         else None
     )
+    withdrawer = (
+        session.get(Account, booking.withdrawn_by_account_id)
+        if booking.withdrawn_by_account_id
+        else None
+    )
     return {
         "id": booking.id,
         "event_request_id": booking.event_request_id,
@@ -140,6 +145,11 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         "requires_review": booking.requires_review,
         "review_trigger_block_id": booking.review_trigger_block_id,
         "review_marked_at": _timestamp(booking.review_marked_at),
+        # SPL-78: the withdrawal record, null unless the request was withdrawn.
+        "withdrawn_by": (
+            {"id": withdrawer.id, "name": withdrawer.display_name} if withdrawer else None
+        ),
+        "withdrawn_at": _timestamp(booking.withdrawn_at),
     }
 
 

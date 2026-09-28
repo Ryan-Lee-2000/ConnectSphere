@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timezone
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app import create_app
 from app.models import (
     Account,
@@ -248,7 +250,9 @@ def test_spl_77_migration_adds_nullable_request_columns_with_a_requester_key(eng
         and key["constrained_columns"] == ["requested_by_account_id"]
         for key in inspect(engine).get_foreign_keys("venue_bookings")
     )
+    # The database is at the single current head, and SPL-77's revision is in its history.
+    script = ScriptDirectory.from_config(Config("alembic.ini"))
     with engine.connect() as connection:
-        assert connection.execute(text("select version_num from alembic_version")).scalar() == (
-            "s2_venue_booking_request"
-        )
+        applied = connection.execute(text("select version_num from alembic_version")).scalar()
+    assert [applied] == script.get_heads()
+    assert "s2_venue_booking_request" in {rev.revision for rev in script.walk_revisions()}
