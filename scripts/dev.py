@@ -243,6 +243,7 @@ def main():
             "backend/tests/test_qa_spl67_postgres.py",
             "backend/tests/test_qa_spl68_postgres.py",
             "backend/tests/test_venue_booking_requests_postgres.py",
+            "backend/tests/test_venue_booking_withdrawals_postgres.py",
             "-q",
         )
     elif cmd == "dev":

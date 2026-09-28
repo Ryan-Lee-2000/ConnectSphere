@@ -302,6 +302,11 @@ class VenueBooking(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SPL-78. Who withdrew a Requested booking and when; both stay null unless withdrawn.
+    withdrawn_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(
