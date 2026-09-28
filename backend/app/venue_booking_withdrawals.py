@@ -15,6 +15,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import SINGAPORE
 from app.models import Role, VenueBooking
+from app.venue_booking_history import record_booking_transition
 from app.venue_booking_requests import NOT_FOUND, serialize_venue_booking
 from app.venue_conflicts import transition_booking_status
 
@@ -67,6 +68,16 @@ def register_venue_booking_withdrawal_routes(app: Flask) -> None:
             transition_booking_status(session, booking, WITHDRAWN)
             booking.withdrawn_by_account_id = g.user_id
             booking.withdrawn_at = datetime.now(SINGAPORE)
+            # SPL-79: the withdrawal is appended to the booking's status history.
+            record_booking_transition(
+                session,
+                booking.id,
+                action="withdraw",
+                previous_status=REQUESTED,
+                resulting_status=WITHDRAWN,
+                actor_account_id=g.user_id,
+                changed_at=booking.withdrawn_at,
+            )
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
 

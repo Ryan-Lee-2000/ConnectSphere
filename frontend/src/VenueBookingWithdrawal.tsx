@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Undo2 } from 'lucide-react';
 import { responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
+import { VenueBookingHistory } from './VenueBookingStatus';
 
 // SPL-78 (CS-E09-S4): the assigned coordinator sees the event's latest venue-booking request and can
 // withdraw it while it is Requested. The full status history remains SPL-79.
@@ -22,10 +23,14 @@ const timeName = (instant: string) => new Intl.DateTimeFormat('en-SG', {
 }).format(new Date(instant));
 const layoutName = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
 
-export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn }: {
+export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn, emptyMessage = false }: {
   api: ApiRequest; eventId: number; refreshKey?: number; onWithdrawn?: () => void;
+  // SPL-79 AC6: on the event page, say so explicitly when nothing has been requested yet.
+  emptyMessage?: boolean;
 }) {
   const [booking, setBooking] = useState<WithdrawableBooking | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -39,7 +44,7 @@ export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn }:
     void pending.then(async response => {
       if (!response.ok) return;
       const body = await response.json() as { booking?: WithdrawableBooking | null };
-      if (active) setBooking(body.booking ?? null);
+      if (active) { setBooking(body.booking ?? null); setLoaded(true); }
     }).catch(() => undefined);
     return () => { active = false; };
   }, [api, eventId, refreshKey]);
@@ -54,12 +59,19 @@ export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn }:
       if (!body.booking) throw new Error('Invalid response');
       setBooking(body.booking);
       setNotice(`Request withdrawn. ${body.booking.venue.name}'s slots are released for other events.`);
+      setHistoryVersion(version => version + 1);
       onWithdrawn?.();
     } catch { setError('Could not withdraw this request. Try again.'); }
     finally { setWithdrawing(false); setConfirming(false); }
   }
 
-  if (!booking) return null;
+  if (!booking) {
+    if (!emptyMessage || !loaded) return null;
+    return <section className="venue-booking-panel" aria-labelledby="venue-booking-panel-title">
+      <p className="eyebrow" id="venue-booking-panel-title">Venue booking request</p>
+      <p className="venue-booking-panel__empty">No venue-booking request has been made for this event yet.</p>
+    </section>;
+  }
   const slots = booking.event_slots.map(slot => SLOT_NAMES[slot] || slot).join(', ');
   return <section className="venue-booking-panel" aria-labelledby="venue-booking-panel-title">
     <p className="eyebrow" id="venue-booking-panel-title">Venue booking request</p>
@@ -83,5 +95,6 @@ export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn }:
     )}
     {notice && <p className="venue-booking-panel__notice" role="status">{notice}</p>}
     {error && <p className="error" role="alert">{error}</p>}
+    <VenueBookingHistory api={api} eventId={eventId} refreshKey={refreshKey + historyVersion} />
   </section>;
 }
