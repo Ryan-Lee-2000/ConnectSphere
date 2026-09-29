@@ -51,6 +51,7 @@ it('[QA-SPL-65-072] offers a labelled message box and an enabled button while Un
   expect((screen.getByRole('button', { name: 'Request clarification' }) as HTMLButtonElement).disabled).toBe(false);
 });
 
+// SPL-65 AC-7 Test-073
 it.each([
   'draft', 'submitted', 'returned_for_clarification', 'approved', 'planning',
   'confirmed', 'completed', 'cancelled', 'rejected', 'withdrawn', 'postponed',
@@ -107,6 +108,7 @@ it('[QA-SPL-65-077] posts the text exactly as typed, including line breaks (the 
 
 // ---- AC2: a non-blank message -------------------------------------------------------------------
 
+// SPL-65 AC-2 Test-078
 it.each(['', ' ', '   \n\t  '])('[QA-SPL-65-078] refuses %j without contacting the server', async blank => {
   const request = open(detail);
   await type(blank);

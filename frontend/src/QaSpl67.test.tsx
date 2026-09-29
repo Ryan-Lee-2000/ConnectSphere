@@ -53,6 +53,7 @@ it('[QA-SPL-67-087] offers an enabled Approve request button while the event is 
   expect(button.type).toBe('button');
 });
 
+// SPL-67 AC-1,6 Test-088
 it.each([
   'draft', 'submitted', 'returned_for_clarification', 'approved', 'planning',
   'confirmed', 'completed', 'cancelled', 'rejected', 'withdrawn', 'postponed',
@@ -192,6 +193,7 @@ it('[QA-SPL-67-101] shows the server refusal, keeps the status and keeps the but
   expect(screen.queryByRole('rowheader', { name: 'Approved by' })).toBeNull();
 });
 
+// SPL-67 AC-6 Test-102
 it.each([
   ['Assigned event not found.'],
   ['Access denied.'],
