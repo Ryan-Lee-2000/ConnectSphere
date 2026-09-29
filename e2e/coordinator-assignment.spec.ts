@@ -36,6 +36,12 @@ async function submitRequest(page: Page, name: string) {
   return tomorrow;
 }
 
+// SPL-59 AC-1,2,3 Test-01
+// SPL-59 AC-5 Test-05
+// SPL-60 AC-2,4,5,6,7 Test-01
+// SPL-62 AC-1 Test-001
+// SPL-62 AC-2 Test-002
+// SPL-64 AC-1 Test-01
 test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted request is queued, assigned, searched, and shown to its organiser', async ({
   page,
 }) => {
@@ -118,6 +124,8 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   await expect(page.getByRole('rowheader', { name: 'Registration required' })).toBeVisible();
 });
 
+// SPL-59 AC-NA Test-06
+// SPL-60 AC-NA Test-07
 test('TC-CS-E05-S1-06: a role without Event Operations Manager is never offered the queue', async ({
   page,
 }) => {

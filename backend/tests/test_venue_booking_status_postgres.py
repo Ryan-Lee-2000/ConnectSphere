@@ -56,6 +56,7 @@ def fresh_url():
 
 
 # TC-SPL-79-06 (a)
+# SPL-79 AC-2 Test-06
 def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
     migrated = _alembic(fresh_url, "upgrade", PREVIOUS_HEAD)
     assert migrated.returncode == 0, migrated.stderr
@@ -133,6 +134,7 @@ def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
         engine.dispose()
 
 
+# SPL-79 AC-NA Test-Supporting
 def test_spl_79_history_table_has_rls_and_no_browser_grants(fresh_url):
     """Supporting verification: the new table follows the product-table security rule."""
 

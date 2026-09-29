@@ -213,6 +213,8 @@ def organiser_view(client, event_id):
 # SPL-62 / CS-E05-S4: the coordinator's own assignment entry point.
 
 
+# SPL-62 AC-1 Test-001
+# SPL-62 AC-3 Test-003
 def test_tc_e05_s4_01_02_04_lists_only_current_coordinator_assignments(app, client):
     alice_event = add_request(app, "Alice's event")
     bob_event = add_request(app, "Bob's event", proposed_date=date(2026, 11, 3))
@@ -242,6 +244,8 @@ def test_tc_e05_s4_01_02_04_lists_only_current_coordinator_assignments(app, clie
     assert unassigned not in [event["id"] for event in alice.json["events"]]
 
 
+# SPL-62 AC-2 Test-002
+# SPL-62 AC-3 Test-003
 def test_tc_e05_s4_03_opens_only_current_assignment(app, client):
     alice_event = add_request(app)
     assert assign(client, alice_event, ALICE).status_code == 201
@@ -278,6 +282,7 @@ def fill_request_details(app, event_id):
 # SPL-64 / CS-E06-S1: the assigned coordinator reads the complete submitted request.
 
 
+# SPL-64 AC-1 Test-01
 def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client):
     event_id = add_request(app)
     fill_request_details(app, event_id)
@@ -324,6 +329,7 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
     }
 
 
+# SPL-64 AC-1 Test-02
 def test_tc_spl_64_02_empty_optional_fields_are_returned_empty(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -340,6 +346,8 @@ def test_tc_spl_64_02_empty_optional_fields_are_returned_empty(app, client):
     assert event["registration_required"] is False
 
 
+# SPL-64 AC-3 Test-03
+# SPL-64 AC-4 Test-04
 def test_tc_spl_64_03_04_unassigned_and_missing_requests_leak_nothing(app, client):
     event_id = add_request(app)
     fill_request_details(app, event_id)
@@ -355,6 +363,7 @@ def test_tc_spl_64_03_04_unassigned_and_missing_requests_leak_nothing(app, clien
     assert "Harbour" not in unassigned.get_data(as_text=True)
 
 
+# SPL-64 AC-3 Test-03
 def test_tc_spl_64_03_unassigned_event_is_not_readable_by_any_coordinator(app, client):
     event_id = add_request(app)
     path = f"/api/event-requests/assigned/{event_id}"
@@ -365,6 +374,8 @@ def test_tc_spl_64_03_unassigned_event_is_not_readable_by_any_coordinator(app, c
     assert client.get(path, headers=headers("coordinator-b")).status_code == 200
 
 
+# SPL-64 AC-2 Test-05
+# SPL-64 AC-3 Test-05
 def test_tc_spl_64_05_detail_is_read_only_and_role_protected(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -405,6 +416,7 @@ def transient_event(**overrides):
     return EventRequest(**values)
 
 
+# SPL-64 AC-1 Test-10
 def test_tc_spl_64_10_serializer_leaves_absent_optionals_null():
     event = _serialize_assigned_event_detail(transient_event())
 
@@ -418,6 +430,7 @@ def test_tc_spl_64_10_serializer_leaves_absent_optionals_null():
     assert event["responsible_organiser"] == "Olivia Organiser"
 
 
+# SPL-64 AC-1 Test-11
 def test_tc_spl_64_11_serializer_formats_times_without_seconds():
     event = _serialize_assigned_event_detail(
         transient_event(start_time=time(9, 30, 45), end_time=time(17, 5))
@@ -427,6 +440,7 @@ def test_tc_spl_64_11_serializer_formats_times_without_seconds():
     assert event["end_time"] == "17:05"
 
 
+# SPL-64 AC-1 Test-12
 def test_tc_spl_64_12_serializer_stamps_singapore_on_a_naive_submission_time():
     naive = _serialize_assigned_event_detail(
         transient_event(submitted_at=datetime(2026, 9, 1, 9, 0))
@@ -439,6 +453,7 @@ def test_tc_spl_64_12_serializer_stamps_singapore_on_a_naive_submission_time():
     assert aware["submitted_at"] == "2026-09-01T01:00:00+08:00"
 
 
+# SPL-64 AC-1 Test-13
 def test_tc_spl_64_13_serializer_omits_internal_identifiers_from_equipment_and_event():
     event = _serialize_assigned_event_detail(
         transient_event(
@@ -455,6 +470,7 @@ def test_tc_spl_64_13_serializer_omits_internal_identifiers_from_equipment_and_e
         assert internal not in event
 
 
+# SPL-64 AC-1 Test-14
 def test_tc_spl_64_14_equipment_lines_keep_entry_order(app, client):
     event_id = add_request(app)
     with Session(app.extensions["engine"]) as session:
@@ -474,6 +490,7 @@ def test_tc_spl_64_14_equipment_lines_keep_entry_order(app, client):
     assert [line["quantity"] for line in lines] == [1, 2, 3]
 
 
+# SPL-64 AC-2 Test-15
 def test_tc_spl_64_15_detail_stays_readable_after_review_begins(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -488,6 +505,7 @@ def test_tc_spl_64_15_detail_stays_readable_after_review_begins(app, client):
     assert event["purpose"] == "Client showcase"
 
 
+# SPL-64 AC-4 Test-16
 def test_tc_spl_64_16_malformed_and_out_of_range_ids_return_no_event(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -499,6 +517,7 @@ def test_tc_spl_64_16_malformed_and_out_of_range_ids_return_no_event(app, client
         assert "Harbour Summit" not in response.get_data(as_text=True)
 
 
+# SPL-64 AC-3 Test-17
 def test_tc_spl_64_17_reassigned_back_coordinator_regains_access(app, client):
     event_id = add_request(app)
     path = f"/api/event-requests/assigned/{event_id}"
@@ -510,6 +529,7 @@ def test_tc_spl_64_17_reassigned_back_coordinator_regains_access(app, client):
     assert client.get(path, headers=headers("coordinator-b")).status_code == 404
 
 
+# SPL-64 AC-3 Test-18
 def test_tc_spl_64_18_dual_role_manager_organiser_cannot_read_the_coordinator_detail(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -521,6 +541,7 @@ def test_tc_spl_64_18_dual_role_manager_organiser_cannot_read_the_coordinator_de
         assert "Harbour Summit" not in response.get_data(as_text=True)
 
 
+# SPL-64 AC-3 Test-19
 def test_tc_spl_64_19_deactivated_coordinator_cannot_read_the_detail(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -534,6 +555,7 @@ def test_tc_spl_64_19_deactivated_coordinator_cannot_read_the_detail(app, client
     assert "Harbour Summit" not in response.get_data(as_text=True)
 
 
+# SPL-64 AC-1 Test-20
 def test_tc_spl_64_20_long_and_unicode_text_round_trips(app, client):
     event_id = add_request(app)
     long_text = "Café 会议 ✓ " * 400
@@ -553,6 +575,7 @@ def test_tc_spl_64_20_long_and_unicode_text_round_trips(app, client):
     assert response.json["event"]["venue_notes"] == "<script>alert(1)</script>"
 
 
+# SPL-62 AC-3 Test-003
 def test_tc_e05_s4_05_empty_and_role_boundaries(app, client):
     response = client.get("/api/event-requests/assigned", headers=headers("coordinator"))
     assert response.json == {"events": []}
@@ -565,6 +588,9 @@ def test_tc_e05_s4_05_empty_and_role_boundaries(app, client):
 # SPL-59 / CS-E05-S1: see submitted events awaiting assignment
 
 
+# SPL-59 AC-1,2,3 Test-01
+# SPL-59 AC-4 Test-02
+# SPL-59 AC-2 Test-11
 def test_tc_e05_s1_01_02_11_queue_lists_unassigned_submitted_requests_oldest_first(app, client):
     newest = add_request(app, "Gala Night", submitted_at=SUBMITTED_AT + timedelta(hours=2))
     oldest = add_request(app, "Harbour Summit")
@@ -609,6 +635,7 @@ def test_tc_e05_s1_01_02_11_queue_lists_unassigned_submitted_requests_oldest_fir
     }
 
 
+# SPL-59 AC-6 Test-03
 def test_tc_e05_s1_03_empty_queue_reports_zero_events(client):
     response = queue(client)
 
@@ -616,6 +643,7 @@ def test_tc_e05_s1_03_empty_queue_reports_zero_events(client):
     assert response.json == {"count": 0, "events": []}
 
 
+# SPL-59 AC-1 Test-04
 def test_tc_e05_s1_04_queue_excludes_other_statuses_and_assigned_requests(app, client):
     add_request(app, "Under review", status=UNDER_REVIEW)
     add_request(app, "Approved", status="approved")
@@ -639,6 +667,7 @@ def test_tc_e05_s1_04_queue_excludes_other_statuses_and_assigned_requests(app, c
     assert response.json["count"] == 1
 
 
+# SPL-59 AC-5 Test-05
 def test_tc_e05_s1_05_assigned_request_leaves_the_queue_on_refresh(app, client):
     event_id = add_request(app)
     other = add_request(app, "Gala Night", submitted_at=SUBMITTED_AT + timedelta(hours=1))
@@ -651,12 +680,14 @@ def test_tc_e05_s1_05_assigned_request_leaves_the_queue_on_refresh(app, client):
     assert refreshed["count"] == 1
 
 
+# SPL-59 AC-4,6 Test-09
 def test_tc_e05_s1_09_single_request_is_listed_rather_than_empty(app, client):
     add_request(app)
 
     assert queue(client).json["count"] == 1
 
 
+# SPL-59 AC-3 Test-10
 def test_tc_e05_s1_10_equal_submission_times_tie_break_on_request_id(app, client):
     first = add_request(app, "First recorded")
     second = add_request(app, "Second recorded")
@@ -666,6 +697,7 @@ def test_tc_e05_s1_10_equal_submission_times_tie_break_on_request_id(app, client
     assert orders == [[first, second]] * 3
 
 
+# SPL-59 AC-3 Test-Supporting
 def test_requests_without_a_submission_time_sort_after_submitted_ones(app, client):
     legacy = add_request(app, "Stored before CS-E03-S5", submitted_at=None)
     submitted = add_request(app, "Submitted", submitted_at=SUBMITTED_AT)
@@ -676,6 +708,7 @@ def test_requests_without_a_submission_time_sort_after_submitted_ones(app, clien
     assert events[1]["submitted_at"] is None
 
 
+# SPL-59 AC-5 Test-12
 def test_tc_e05_s1_12_viewing_the_queue_has_no_side_effects(app, client):
     event_id = add_request(app)
 
@@ -684,6 +717,7 @@ def test_tc_e05_s1_12_viewing_the_queue_has_no_side_effects(app, client):
     assert history_count(app, event_id) == 0
 
 
+# SPL-59 AC-NA Test-13
 def test_tc_e05_s1_13_multi_role_account_with_manager_role_can_open_the_queue(app, client):
     add_request(app)
 
@@ -694,6 +728,9 @@ def test_tc_e05_s1_13_multi_role_account_with_manager_role_can_open_the_queue(ap
 # case IDs it covers so a reader can find it from the QA page by grepping the ID.
 
 
+# SPL-59 AC-NA Test-06
+# SPL-60 AC-NA Test-07
+# SPL-61 AC-NA Test-10
 @pytest.mark.parametrize("token", ["organiser", "coordinator", "venue-staff"])
 def test_tc_e05_s1_06_s2_07_s3_10_roles_other_than_manager_are_denied(app, client, token):
     event_id = add_request(app)
@@ -709,6 +746,9 @@ def test_tc_e05_s1_06_s2_07_s3_10_roles_other_than_manager_are_denied(app, clien
     assert history_count(app, event_id) == 0
 
 
+# SPL-59 AC-NA Test-07
+# SPL-60 AC-NA Test-08
+# SPL-61 AC-NA Test-11
 def test_tc_e05_s1_07_s2_08_s3_11_unauthenticated_requests_are_rejected(app, client):
     event_id = add_request(app)
 
@@ -720,6 +760,7 @@ def test_tc_e05_s1_07_s2_08_s3_11_unauthenticated_requests_are_rejected(app, cli
     assert history_count(app, event_id) == 0
 
 
+# SPL-59 AC-NA Test-08
 def test_tc_e05_s1_08_forged_role_claims_do_not_grant_manager_access(app, client):
     event_id = add_request(app)
 
@@ -736,6 +777,8 @@ def test_tc_e05_s1_08_forged_role_claims_do_not_grant_manager_access(app, client
 # SPL-60 / CS-E05-S2: assign an Event Coordinator
 
 
+# SPL-60 AC-2,4,5,6,7 Test-01
+# SPL-60 AC-7 Test-09
 def test_tc_e05_s2_01_09_assignment_records_the_coordinator_and_the_history(app, client):
     event_id = add_request(app)
 
@@ -765,6 +808,7 @@ def test_tc_e05_s2_01_09_assignment_records_the_coordinator_and_the_history(app,
     }
 
 
+# SPL-60 AC-6 Test-01
 def test_tc_e05_s2_01b_organiser_sees_the_assigned_coordinator(app, client):
     event_id = add_request(app)
     assert organiser_view(client, event_id).json["event_request"]["coordinator"] is None
@@ -776,6 +820,7 @@ def test_tc_e05_s2_01b_organiser_sees_the_assigned_coordinator(app, client):
     assert event["status"] == SUBMITTED
 
 
+# SPL-60 AC-1 Test-02
 def test_tc_e05_s2_02_picker_lists_only_active_event_coordinators(app, client):
     event_id = add_request(app)
 
@@ -793,6 +838,7 @@ def test_tc_e05_s2_02_picker_lists_only_active_event_coordinators(app, client):
     }
 
 
+# SPL-60 AC-3 Test-03
 def test_tc_e05_s2_03_assigned_request_cannot_be_assigned_again(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -805,6 +851,7 @@ def test_tc_e05_s2_03_assigned_request_cannot_be_assigned_again(app, client):
     assert history_count(app, event_id) == 1
 
 
+# SPL-60 AC-3 Test-04
 def test_tc_e05_s2_04_concurrent_assignment_cannot_overwrite_the_first(app, client, monkeypatch):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -821,6 +868,7 @@ def test_tc_e05_s2_04_concurrent_assignment_cannot_overwrite_the_first(app, clie
     assert history_count(app, event_id) == 1
 
 
+# SPL-60 AC-8 Test-05
 def test_tc_e05_s2_05_manager_is_told_why_when_no_coordinator_is_active(app, client):
     event_id = add_request(app)
     deactivate(app, ALICE, BOB, CAROL)
@@ -836,6 +884,7 @@ def test_tc_e05_s2_05_manager_is_told_why_when_no_coordinator_is_active(app, cli
     assert history_count(app, event_id) == 0
 
 
+# SPL-60 AC-2,5 Test-06
 @pytest.mark.parametrize("status", [UNDER_REVIEW, "approved", "cancelled"])
 def test_tc_e05_s2_06_requests_that_are_not_submitted_are_refused_server_side(app, client, status):
     event_id = add_request(app, status=status)
@@ -848,6 +897,7 @@ def test_tc_e05_s2_06_requests_that_are_not_submitted_are_refused_server_side(ap
     assert history_count(app, event_id) == 0
 
 
+# SPL-60 AC-NA Test-Supporting
 @pytest.mark.parametrize(
     "body,expected",
     [
@@ -880,6 +930,7 @@ def test_invalid_coordinator_choices_are_rejected(app, client, body, expected):
     assert stored_request(app, event_id)[0] == SUBMITTED
 
 
+# SPL-60 AC-NA Test-Supporting
 def test_unknown_requests_are_not_found(client):
     for method, path, body in ENDPOINTS[1:]:
         response = getattr(client, method)(path.format(event_id=999), json=body, headers=headers())
@@ -887,6 +938,7 @@ def test_unknown_requests_are_not_found(client):
         assert response.json == {"error": "Event request not found."}
 
 
+# SPL-60 AC-1 Test-10
 def test_tc_e05_s2_10_single_active_coordinator_is_the_only_option(app, client):
     event_id = add_request(app)
     deactivate(app, BOB, CAROL)
@@ -898,6 +950,7 @@ def test_tc_e05_s2_10_single_active_coordinator_is_the_only_option(app, client):
 # SPL-61 / CS-E05-S3: reassign an Event Coordinator
 
 
+# SPL-61 AC-1,6,7,8 Test-01
 def test_tc_e05_s3_01_reassignment_moves_responsibility_and_keeps_status(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -917,6 +970,7 @@ def test_tc_e05_s3_01_reassignment_moves_responsibility_and_keeps_status(app, cl
     assert latest["changed_at"] == assignment["assigned_at"]
 
 
+# SPL-61 AC-6 Test-01
 def test_tc_e05_s3_06b_organiser_sees_the_new_coordinator_in_place_of_the_previous_one(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -929,6 +983,7 @@ def test_tc_e05_s3_06b_organiser_sees_the_new_coordinator_in_place_of_the_previo
     }
 
 
+# SPL-61 AC-2 Test-02,03,04
 @pytest.mark.parametrize("status", ["completed", "cancelled", "rejected", "withdrawn"])
 def test_tc_e05_s3_02_to_04_closed_requests_cannot_be_reassigned(app, client, status):
     event_id = add_request(app)
@@ -945,6 +1000,7 @@ def test_tc_e05_s3_02_to_04_closed_requests_cannot_be_reassigned(app, client, st
     assert history_count(app, event_id) == 1
 
 
+# SPL-61 AC-3 Test-06
 def test_tc_e05_s3_06_picker_excludes_the_current_coordinator(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -958,6 +1014,7 @@ def test_tc_e05_s3_06_picker_excludes_the_current_coordinator(app, client):
     }
 
 
+# SPL-61 AC-4 Test-07
 def test_tc_e05_s3_07_manager_is_told_why_when_no_other_coordinator_is_active(app, client):
     event_id = add_request(app)
     deactivate(app, BOB, CAROL)
@@ -973,6 +1030,7 @@ def test_tc_e05_s3_07_manager_is_told_why_when_no_other_coordinator_is_active(ap
     assert holds_event(app, event_id, ALICE)
 
 
+# SPL-61 AC-7 Test-08
 def test_tc_e05_s3_08_history_reads_chronologically_across_reassignments(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
@@ -994,6 +1052,7 @@ def test_tc_e05_s3_08_history_reads_chronologically_across_reassignments(app, cl
     )
 
 
+# SPL-61 AC-1,8 Test-09
 @pytest.mark.parametrize("status", [UNDER_REVIEW, "approved"])
 def test_tc_e05_s3_09_reassignment_never_changes_status(app, client, status):
     event_id = add_request(app)
@@ -1007,6 +1066,7 @@ def test_tc_e05_s3_09_reassignment_never_changes_status(app, client, status):
     assert stored_request(app, event_id)[0] == status
 
 
+# SPL-61 AC-3 Test-12
 def test_tc_e05_s3_12_single_other_coordinator_is_the_only_option(app, client):
     event_id = add_request(app)
     deactivate(app, CAROL)
@@ -1016,6 +1076,7 @@ def test_tc_e05_s3_12_single_other_coordinator_is_the_only_option(app, client):
     assert reassign(client, event_id, BOB).status_code == 200
 
 
+# SPL-61 AC-NA Test-13
 def test_tc_e05_s3_13_request_without_a_coordinator_cannot_be_reassigned(app, client):
     event_id = add_request(app)
 
@@ -1028,6 +1089,7 @@ def test_tc_e05_s3_13_request_without_a_coordinator_cannot_be_reassigned(app, cl
     assert history_count(app, event_id) == 0
 
 
+# SPL-61 AC-3 Test-Supporting
 def test_reassigning_to_the_current_coordinator_is_rejected(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201

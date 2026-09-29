@@ -78,6 +78,7 @@ def headers(token="venue-staff"):
     return {"Authorization": f"Bearer {token}"}
 
 
+# SPL-89 AC-1,4 Test-01
 def test_tc_spl_89_01_venue_staff_records_an_active_operational_block(client):
     response = client.post(
         "/api/venues/1/operational-blocks",
@@ -107,6 +108,7 @@ def test_tc_spl_89_01_venue_staff_records_an_active_operational_block(client):
     assert listed.json == {"operational_blocks": [block]}
 
 
+# SPL-89 AC-3,4 Test-02
 def test_tc_spl_89_02_venue_staff_removes_only_the_selected_block_with_audit(client):
     first = client.post(
         "/api/venues/1/operational-blocks",
@@ -143,6 +145,7 @@ def test_tc_spl_89_02_venue_staff_removes_only_the_selected_block_with_audit(cli
     assert active.json == {"operational_blocks": [second]}
 
 
+# SPL-89 AC-4 Test-03
 def test_tc_spl_89_03_invalid_or_unauthorised_attempts_leave_no_block(client):
     invalid_payloads = [
         {
@@ -184,6 +187,7 @@ def test_tc_spl_89_03_invalid_or_unauthorised_attempts_leave_no_block(client):
     assert active.json == {"operational_blocks": []}
 
 
+# SPL-89 AC-2 Test-04
 def test_tc_spl_89_04_active_blocks_feed_shared_availability_for_the_inclusive_range(
     client, operational_block_app
 ):
@@ -210,6 +214,7 @@ def test_tc_spl_89_04_active_blocks_feed_shared_availability_for_the_inclusive_r
         assert operational_block_for_slot(session, 1, date(2026, 10, 6), "AM") is None
 
 
+# SPL-89 AC-5 Test-07
 def test_tc_spl_89_07_block_marks_only_overlapping_active_bookings_without_mutating_them(
     client, operational_block_app
 ):
@@ -315,6 +320,7 @@ def test_tc_spl_89_07_block_marks_only_overlapping_active_bookings_without_mutat
             assert booking.review_marked_by_account_id is None
 
 
+# SPL-89 AC-4 Test-08
 def test_tc_spl_89_08_refused_block_creation_does_not_mark_an_existing_booking(
     client, operational_block_app
 ):

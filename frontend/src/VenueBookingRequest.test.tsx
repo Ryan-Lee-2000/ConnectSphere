@@ -42,6 +42,7 @@ async function openVenue(name: string, request: ApiRequest) {
   return screen.findByRole('heading', { name: new RegExp(`^${name}`) });
 }
 
+// SPL-77 AC-2,6 Test-23
 it('[TC-SPL-77-23] offers Request booking only for suitable venues with fitting layouts', async () => {
   const request = api({ status: 201, body: { booking: REQUESTED } });
 
@@ -62,6 +63,7 @@ it('[TC-SPL-77-23] offers Request booking only for suitable venues with fitting 
   });
 });
 
+// SPL-77 AC-5,6 Test-24
 it('[TC-SPL-77-24] announces the Requested booking with its derived preparation slots', async () => {
   const request = api({ status: 201, body: { booking: REQUESTED } });
   await openVenue('Harbour Hall', request);
@@ -81,6 +83,7 @@ it('[TC-SPL-77-24] announces the Requested booking with its derived preparation 
   expect(request.mock.calls.filter(([path]) => String(path).includes('available-venues'))).toHaveLength(2);
 });
 
+// SPL-77 AC-5,6 Test-24
 it('[TC-SPL-77-24] shows the server refusal verbatim and never a confirmation', async () => {
   const request = api({ status: 409, body: { error: 'Venue is unavailable on 2026-10-14 during AM.', conflict: { date: '2026-10-14', slot: 'AM' } } });
   await openVenue('Harbour Hall', request);

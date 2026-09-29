@@ -29,6 +29,7 @@ function isolatedDate() {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// SPL-82 AC-5 Test-20
 test('TC-SPL-82-20: Venue Staff reject a pending request, and the coordinator sees the reason', async ({ page }) => {
   const name = `E2E Rejection ${Date.now()}`;
   const reason = 'The requested slot conflicts with scheduled maintenance.';

@@ -69,6 +69,9 @@ def create_venue(client):
     return response.json["venue"]
 
 
+# SPL-47 AC-2 Test-004
+# SPL-49 AC-1 Test-001
+# SPL-49 AC-3 Test-005
 def test_venue_staff_can_create_update_and_retrieve_a_complete_venue_profile(client):
     created = create_venue(client)
     assert created == {"id": 1, **venue_payload(), "layouts": []}
@@ -108,6 +111,7 @@ def test_venue_staff_can_create_update_and_retrieve_a_complete_venue_profile(cli
     assert retrieved.json["capabilities"] == {"can_manage": True}
 
 
+# SPL-47 AC-1 Test-002
 @pytest.mark.parametrize(
     ("setup_buffer_slots", "turnaround_buffer_slots"),
     [(0, 0), (0, 1), (1, 0), (1, 1)],
@@ -128,6 +132,7 @@ def test_each_supported_setup_and_turnaround_requirement_is_accepted(
     assert response.json["venue"]["turnaround_buffer_slots"] == turnaround_buffer_slots
 
 
+# SPL-49 AC-1 Test-002
 @pytest.mark.parametrize(
     ("setup_buffer_slots", "turnaround_buffer_slots"),
     [(0, 0), (0, 1), (1, 0), (1, 1)],
@@ -151,6 +156,7 @@ def test_each_supported_setup_and_turnaround_requirement_is_retained_on_update(
     assert response.json["venue"]["turnaround_buffer_slots"] == turnaround_buffer_slots
 
 
+# SPL-49 AC-2 Test-004
 def test_venue_staff_can_add_update_and_remove_layouts_for_selected_venue(client):
     venue = create_venue(client)
     created = client.post(
@@ -180,6 +186,8 @@ def test_venue_staff_can_add_update_and_remove_layouts_for_selected_venue(client
     assert stored.json["venue"]["layouts"] == []
 
 
+# SPL-48 AC-1 Test-001
+# SPL-48 AC-3 Test-005
 def test_save_venue_creates_and_replaces_its_complete_layout_list(client):
     created = client.post(
         "/api/venues",
@@ -220,6 +228,7 @@ def test_save_venue_creates_and_replaces_its_complete_layout_list(client):
     assert updated_layouts == [("banquet", 96)]
 
 
+# SPL-48 AC-1 Test-001
 def test_venue_staff_can_record_a_custom_supported_room_layout(client):
     venue = create_venue(client)
     created = client.post(
@@ -246,6 +255,9 @@ def test_save_venue_rejects_duplicate_layouts(client):
     assert response.json == {"error": "Room layouts must not contain duplicates."}
 
 
+# SPL-50 AC-1 Test-001
+# SPL-50 AC-2 Test-002
+# SPL-50 AC-3 Test-003
 def test_coordinator_can_browse_list_and_details_but_cannot_change_catalogue(client):
     venue = create_venue(client)
     client.post(
@@ -286,6 +298,7 @@ def test_coordinator_can_browse_list_and_details_but_cannot_change_catalogue(cli
     assert stored.json["venue"]["name"] == "Harbour Hall"
 
 
+# SPL-47 AC-1 Test-003
 @pytest.mark.parametrize(
     "payload,expected",
     [
@@ -324,6 +337,8 @@ def test_invalid_venue_attributes_are_rejected(client, payload, expected):
     assert response.json == {"error": expected}
 
 
+# SPL-48 AC-1 Test-002
+# SPL-48 AC-2 Test-004
 @pytest.mark.parametrize(
     "payload,expected",
     [
@@ -346,6 +361,7 @@ def test_invalid_layout_attributes_are_rejected(client, payload, expected):
     assert response.json == {"error": expected}
 
 
+# SPL-48 AC-2 Test-003
 def test_lowest_supported_layout_capacity_is_accepted(client):
     venue = create_venue(client)
     response = client.post(
@@ -357,6 +373,7 @@ def test_lowest_supported_layout_capacity_is_accepted(client):
     assert response.json["layout"]["capacity"] == 1
 
 
+# SPL-49 AC-1 Test-003
 @pytest.mark.parametrize(
     "patch",
     [
@@ -383,6 +400,7 @@ def test_update_rejects_invalid_venue_data_without_changing_the_stored_profile(c
     assert stored.json["venue"] == venue
 
 
+# SPL-48 AC-1 Test-002
 def test_duplicate_layout_is_rejected_for_the_same_selected_venue(client):
     venue = create_venue(client)
     client.post(

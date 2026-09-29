@@ -46,6 +46,7 @@ it('asks unauthenticated visitors to sign in', () => {
   expect(screen.getByRole('heading', { name: 'Sign in to create an event request' })).toBeTruthy();
 });
 
+// SPL-128 AC-6 Test-06
 it('requires the mandatory fields before saving', async () => {
   const request = noVenuesRequest();
   render(<EventRequestForm accessToken="token" request={request} />);
@@ -61,6 +62,7 @@ it('requires the mandatory fields before saving', async () => {
   expect(save).toHaveProperty('disabled', false);
 });
 
+// SPL-52 AC-2 Test-006
 it('restricts the available time slots to the selected venue\'s operating slots', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [{ id: harbourHall.id, name: harbourHall.name, location: harbourHall.location }] });
@@ -77,6 +79,7 @@ it('restricts the available time slots to the selected venue\'s operating slots'
   expect(screen.getByRole('radio', { name: /Night/ })).toHaveProperty('disabled', true);
 });
 
+// SPL-128 AC-1 Test-01
 it('disables the layout, facilities and accessibility fields until a venue is selected', async () => {
   const request = noVenuesRequest();
   render(<EventRequestForm accessToken="token" request={request} />);
@@ -86,6 +89,7 @@ it('disables the layout, facilities and accessibility fields until a venue is se
   expect(screen.getByRole('group', { name: 'Accessibility needs' })).toHaveProperty('disabled', true);
 });
 
+// SPL-128 AC-2 Test-02
 it('populates layout, facility and accessibility options from the selected venue, with an Others option', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [{ id: harbourHall.id, name: harbourHall.name, location: harbourHall.location }] });
@@ -106,6 +110,7 @@ it('populates layout, facility and accessibility options from the selected venue
   expect(screen.getAllByLabelText('Others')).toHaveLength(2);
 });
 
+// SPL-128 AC-3 Test-03
 it('lets the organiser type a custom layout, facility and accessibility value under Others', async () => {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/venues') return response({ venues: [{ id: harbourHall.id, name: harbourHall.name, location: harbourHall.location }] });
@@ -137,6 +142,7 @@ it('lets the organiser type a custom layout, facility and accessibility value un
   });
 });
 
+// SPL-128 AC-4 Test-04
 it('clears previously chosen layout, facility and accessibility selections when the venue changes', async () => {
   const otherVenue = {
     id: 8,
@@ -190,6 +196,8 @@ it('adds and removes equipment lines', async () => {
   expect(screen.getByText('None recorded.')).toBeTruthy();
 });
 
+// SPL-51 AC-5 Test-011
+// SPL-128 AC-6 Test-06
 it('submits the mandatory fields and shows the mapped slots on success', async () => {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/venues') return response({ venues: [] });
@@ -217,6 +225,8 @@ it('submits the mandatory fields and shows the mapped slots on success', async (
   expect(await screen.findByText('This falls in the NIGHT venue slot.')).toBeTruthy();
 });
 
+// SPL-56 AC-1 Test-001
+// SPL-56 AC-2 Test-002
 it('saves a draft with only the event name filled in', async () => {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/venues') return response({ venues: [] });
@@ -242,6 +252,7 @@ it('saves a draft with only the event name filled in', async () => {
   expect(screen.getByText(/Last saved/)).toBeTruthy();
 });
 
+// SPL-57 AC-2 Test-002
 it('loads an existing draft by id and resaves it with a PATCH', async () => {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/venues') return response({ venues: [] });
@@ -266,6 +277,7 @@ it('loads an existing draft by id and resaves it with a PATCH', async () => {
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/drafts/42', expect.objectContaining({ method: 'PATCH' })));
 });
 
+// SPL-128 AC-5 Test-05
 it('pulls a previously saved venue, layout, facilities and accessibility choices back onto the page when reopening a draft (SPL-128)', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [{ id: harbourHall.id, name: harbourHall.name, location: harbourHall.location }] });
@@ -304,6 +316,7 @@ it('pulls a previously saved venue, layout, facilities and accessibility choices
   });
 });
 
+// SPL-57 AC-3 Test-003
 it('submits an in-progress draft through the drafts submit endpoint, not the plain create endpoint', async () => {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/venues') return response({ venues: [] });
@@ -335,6 +348,7 @@ it('submits an in-progress draft through the drafts submit endpoint, not the pla
   expect(await screen.findByText('Event request created.')).toBeTruthy();
 });
 
+// SPL-54 AC-2 Test-005
 it('shows a server error and only shows registration notes once registration is required', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [] });

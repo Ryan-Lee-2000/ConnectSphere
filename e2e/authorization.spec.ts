@@ -11,6 +11,7 @@ async function signIn(page: Page) {
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
+// SPL-44 AC-1,2,6 Test-01
 test('TC-CS-E01-S2-01 current-account roles come from trusted application data', async ({
   page,
 }) => {

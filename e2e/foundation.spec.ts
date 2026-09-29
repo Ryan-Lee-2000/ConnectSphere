@@ -18,6 +18,7 @@ async function signIn(page: Page, email: string, password: string, role?: string
   if (role) await page.getByRole('button', { name: new RegExp(role) }).click();
 }
 
+// SPL-43 AC-1,4 Test-01
 test('TC-CS-E01-S1A-01 valid credentials establish a verified session', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
@@ -33,6 +34,7 @@ test('TC-CS-E01-S1A-01 valid credentials establish a verified session', async ({
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toBeVisible();
 });
 
+// SPL-43 AC-2,3 Test-02
 test('TC-CS-E01-S1A-02 invalid credential partitions receive the same response', async ({ page }) => {
   await page.goto('/');
 
@@ -57,6 +59,7 @@ test('TC-CS-E01-S1A-02 invalid credential partitions receive the same response',
   expect(incorrectPasswordMessage).not.toContain('wrong-password');
 });
 
+// SPL-43 AC-5 Test-03
 test('TC-CS-E01-S1A-03 direct protected-page access is denied without a session', async ({ page }) => {
   await page.goto('/workspace');
 
@@ -65,6 +68,7 @@ test('TC-CS-E01-S1A-03 direct protected-page access is denied without a session'
   await expect(page.getByText('Your session has been verified.')).toHaveCount(0);
 });
 
+// SPL-43 AC-5 Test-04
 test('TC-CS-E01-S1A-04 protected API rejects a request with no authentication header', async ({
   request,
 }) => {
@@ -75,6 +79,7 @@ test('TC-CS-E01-S1A-04 protected API rejects a request with no authentication he
   expect(body).toEqual({ error: 'Sign in to continue.' });
 });
 
+// SPL-43 AC-5 Test-05
 test('TC-CS-E01-S1A-05 protected API rejects malformed and invalid authentication', async ({
   request,
 }) => {
@@ -94,6 +99,7 @@ test('TC-CS-E01-S1A-05 protected API rejects malformed and invalid authenticatio
   }
 });
 
+// SPL-43 AC-5 Test-06
 test('TC-CS-E01-S1A-06 a server-rejected stored session cannot expose the workspace', async ({
   page,
 }) => {
@@ -115,6 +121,7 @@ test('TC-CS-E01-S1A-06 a server-rejected stored session cannot expose the worksp
   await expect(page.getByText('Your session has been verified.')).toHaveCount(0);
 });
 
+// SPL-43 AC-5 Test-07
 test('TC-CS-E01-S1A-07 session-verification outage fails closed after authentication', async ({
   page,
 }) => {
@@ -132,6 +139,7 @@ test('TC-CS-E01-S1A-07 session-verification outage fails closed after authentica
   await expect(page.getByText('Your session has been verified.')).toHaveCount(0);
 });
 
+// SPL-127 AC-1,2,3,4 Test-01
 test('TC-CS-E01-S1B-01 sign-out ends the browser session and protects direct access', async ({
   page,
 }) => {
@@ -159,6 +167,7 @@ test('TC-CS-E01-S1B-01 sign-out ends the browser session and protects direct acc
   await expect(page.getByRole('heading', { name: 'Workspace access confirmed' })).toHaveCount(0);
 });
 
+// SPL-127 AC-4 Test-02
 test('TC-CS-E01-S1B-02 browser history cannot reveal the ended session', async ({ page }) => {
   await page.goto('/');
   await signIn(page, validAccount.email, validAccount.password, 'Event Organiser');

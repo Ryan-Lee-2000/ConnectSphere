@@ -6,6 +6,7 @@ function response(body: unknown, ok = true) {
   return Promise.resolve({ ok, json: async () => body } as Response);
 }
 
+// SPL-45 AC-1,2,3,4 Test-01
 it('lists each submitted organisation event with the required summary fields', async () => {
   const request = vi.fn().mockReturnValue(response({ events: [
     { id: 7, name: 'Community Forum', proposed_date: '2026-12-04', responsible_organiser: 'Aisha Rahman' },
@@ -21,6 +22,7 @@ it('lists each submitted organisation event with the required summary fields', a
   expect(request).toHaveBeenCalledWith('/api/organisation/events');
 });
 
+// SPL-45 AC-5 Test-02
 it('opens an event through the workspace route', async () => {
   const onNavigate = vi.fn();
   const request = vi.fn().mockReturnValue(response({ events: [
@@ -33,6 +35,7 @@ it('opens an event through the workspace route', async () => {
   expect(onNavigate).toHaveBeenCalledWith('/workspace/organisation-events/7');
 });
 
+// SPL-45 AC-5 Test-02
 it('shows every approved detail field and identifies the view as read-only', async () => {
   const request = vi.fn().mockReturnValue(response({ event: {
     id: 7,
@@ -61,6 +64,7 @@ it('shows every approved detail field and identifies the view as read-only', asy
   expect(request).toHaveBeenCalledWith('/api/organisation/events/7');
 });
 
+// SPL-45 AC-9 Test-06
 it('teaches an organiser what an empty result means', async () => {
   const request = vi.fn().mockReturnValue(response({ events: [] }));
   render(<OrganisationEvents accessToken="token" onNavigate={vi.fn()} request={request} />);
@@ -70,6 +74,7 @@ it('teaches an organiser what an empty result means', async () => {
   expect(message.textContent).toContain('after an organiser submits them');
 });
 
+// SPL-45 AC-7 Test-03
 it('does not render protected event information after a refused detail request', async () => {
   const request = vi.fn().mockReturnValue(response({ error: 'Event not found.' }, false));
   render(<OrganisationEvents accessToken="token" eventId={99} onNavigate={vi.fn()} request={request} />);
@@ -80,6 +85,7 @@ it('does not render protected event information after a refused detail request',
   expect(screen.queryByText('Other client event')).toBeNull();
 });
 
+// SPL-65 AC-5 Test-12
 it('[TC-SPL-65-12] shows the returned status and the clarification message read-only', async () => {
   const request = vi.fn().mockReturnValue(response({ event: {
     id: 7, name: 'Community Forum', purpose: 'Bring partners together', description: null,

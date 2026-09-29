@@ -133,6 +133,7 @@ def _assign(session, scenario, coordinator_id):
     )
 
 
+# SPL-60 AC-3 Test-04
 def test_tc_e05_s2_04_first_assignment_wins_when_two_managers_assign_at_once(engine, scenario):
     event_request_id = scenario["event_request_id"]
 
@@ -155,6 +156,7 @@ def test_tc_e05_s2_04_first_assignment_wins_when_two_managers_assign_at_once(eng
         assert session.get(EventRequest, event_request_id).status == SUBMITTED
 
 
+# SPL-61 AC-2 Test-02
 def test_tc_e05_s3_02_reassignment_loses_to_a_concurrent_terminal_transition(engine, scenario):
     event_request_id = scenario["event_request_id"]
     assert "cancelled" in NON_REASSIGNABLE_STATUSES
@@ -189,6 +191,7 @@ def test_tc_e05_s3_02_reassignment_loses_to_a_concurrent_terminal_transition(eng
         assert assignment.coordinator_account_id == scenario["alice"]
 
 
+# SPL-61 AC-2 Test-Supporting
 def test_reassignment_applies_while_the_request_is_still_reassignable(engine, scenario):
     event_request_id = scenario["event_request_id"]
     with Session(engine) as session:

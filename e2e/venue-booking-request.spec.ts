@@ -26,6 +26,8 @@ function isolatedDate() {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// SPL-77 AC-1,6,7 Test-25
+// SPL-77 AC-NA Test-26
 test('TC-SPL-77-25 and TC-SPL-77-26: a coordinator requests a suitable venue from search, by keyboard, at phone width', async ({ page }) => {
   const name = `E2E Venue Booking ${Date.now()}`;
   const proposedDate = isolatedDate();

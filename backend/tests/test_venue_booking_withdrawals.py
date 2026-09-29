@@ -240,6 +240,7 @@ def assert_unchanged(app, booking_id):
 
 
 # TC-SPL-78-01
+# SPL-78 AC-1,2 Test-01
 def test_tc_spl_78_01_assigned_coordinator_withdraws_a_requested_booking(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -253,6 +254,7 @@ def test_tc_spl_78_01_assigned_coordinator_withdraws_a_requested_booking(app, cl
 
 
 # TC-SPL-78-02
+# SPL-78 AC-1 Test-02
 def test_tc_spl_78_02_authority_follows_the_current_assignment(app, client, requested):
     booking_id = requested["booking"]["id"]
     with Session(app.extensions["engine"]) as session:
@@ -276,6 +278,7 @@ def test_tc_spl_78_02_authority_follows_the_current_assignment(app, client, requ
 
 
 # TC-SPL-78-03
+# SPL-78 AC-1 Test-03
 @pytest.mark.parametrize("condition", ["event-cancelled", "event-postponed", "marked-for-review"])
 def test_tc_spl_78_03_withdrawal_is_gated_by_booking_status_only(app, client, requested, condition):
     booking_id = requested["booking"]["id"]
@@ -324,6 +327,7 @@ def test_tc_spl_78_03_withdrawal_is_gated_by_booking_status_only(app, client, re
 
 
 # TC-SPL-78-04
+# SPL-78 AC-2 Test-04
 def test_tc_spl_78_04_withdrawer_and_time_are_recorded(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = datetime.now(SINGAPORE)
@@ -341,6 +345,7 @@ def test_tc_spl_78_04_withdrawer_and_time_are_recorded(app, client, requested):
 
 
 # TC-SPL-78-05
+# SPL-78 AC-2,4 Test-05
 def test_tc_spl_78_05_original_request_details_are_unchanged(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = stored(app, booking_id)
@@ -359,6 +364,7 @@ def test_tc_spl_78_05_original_request_details_are_unchanged(app, client, reques
 
 
 # TC-SPL-78-06
+# SPL-78 AC-3 Test-06
 def test_tc_spl_78_06_withdrawn_slots_return_to_search(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
     for slot in ("PM", "AM", "NIGHT"):
@@ -372,6 +378,7 @@ def test_tc_spl_78_06_withdrawn_slots_return_to_search(app, client, requested):
 
 
 # TC-SPL-78-07
+# SPL-78 AC-3 Test-07
 def test_tc_spl_78_07_another_event_can_claim_released_slots(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
 
@@ -387,6 +394,7 @@ def test_tc_spl_78_07_another_event_can_claim_released_slots(app, client, reques
 
 
 # TC-SPL-78-08
+# SPL-78 AC-3 Test-08
 def test_tc_spl_78_08_other_occupancy_is_untouched(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
     neighbour = seed_booking(
@@ -429,6 +437,7 @@ def test_tc_spl_78_08_other_occupancy_is_untouched(app, client, requested):
 
 
 # TC-SPL-78-09
+# SPL-78 AC-4 Test-09
 def test_tc_spl_78_09_withdrawn_request_is_retrievable(app, client, requested):
     event_id, created = requested["event"], requested["booking"]
     assert withdraw(client, event_id, created["id"]).status_code == 200
@@ -447,6 +456,7 @@ def test_tc_spl_78_09_withdrawn_request_is_retrievable(app, client, requested):
 
 
 # TC-SPL-78-10
+# SPL-78 AC-4 Test-10
 def test_tc_spl_78_10_withdrawn_row_is_retained(app, client, requested):
     def bookings():
         with Session(app.extensions["engine"]) as session:
@@ -463,6 +473,7 @@ def test_tc_spl_78_10_withdrawn_row_is_retained(app, client, requested):
 
 
 # TC-SPL-78-11
+# SPL-78 AC-4 Test-11
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("other-coordinator", 404), ("venue-staff", 403), ("organiser", 403), (None, 401)],
@@ -483,6 +494,7 @@ def test_tc_spl_78_11_others_cannot_read_the_booking(app, client, requested, tok
 
 
 # TC-SPL-78-11 — a booking read under another event's URL is not found.
+# SPL-78 AC-4 Test-11
 def test_tc_spl_78_11_booking_read_under_another_event_is_not_found(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
 
@@ -497,6 +509,7 @@ def test_tc_spl_78_11_booking_read_under_another_event_is_not_found(app, client,
 
 
 # TC-SPL-78-12
+# SPL-78 AC-5 Test-12
 def test_tc_spl_78_12_same_venue_and_slots_can_be_requested_again(app, client, requested):
     event_id, original = requested["event"], requested["booking"]["id"]
     assert withdraw(client, event_id, original).status_code == 200
@@ -514,6 +527,7 @@ def test_tc_spl_78_12_same_venue_and_slots_can_be_requested_again(app, client, r
 
 
 # TC-SPL-78-13
+# SPL-78 AC-5 Test-13
 def test_tc_spl_78_13_withdrawal_is_what_unlocks_a_new_request(app, client, requested):
     east = add_venue(app, "Harbour Hall East")
 
@@ -531,6 +545,7 @@ def test_tc_spl_78_13_withdrawal_is_what_unlocks_a_new_request(app, client, requ
 
 
 # TC-SPL-78-14
+# SPL-78 AC-6 Test-14
 @pytest.mark.parametrize("status", ["approved", "rejected", "cancelled", "withdrawn"])
 def test_tc_spl_78_14_only_requested_bookings_can_be_withdrawn(app, client, status):
     event_id, venue_id = make_event(app), add_venue(app)
@@ -560,6 +575,7 @@ def test_tc_spl_78_14_only_requested_bookings_can_be_withdrawn(app, client, stat
 
 
 # TC-SPL-78-15
+# SPL-78 AC-6 Test-15
 def test_tc_spl_78_15_unassigned_coordinator_is_refused(app, client, requested):
     event_id, booking_id = requested["event"], requested["booking"]["id"]
 
@@ -572,6 +588,7 @@ def test_tc_spl_78_15_unassigned_coordinator_is_refused(app, client, requested):
 
 
 # TC-SPL-78-16
+# SPL-78 AC-6 Test-16
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("venue-staff", 403), ("organiser", 403), ("manager", 403), (None, 401)],
@@ -586,6 +603,7 @@ def test_tc_spl_78_16_other_roles_and_no_session_are_refused(
 
 
 # TC-SPL-78-17
+# SPL-78 AC-6 Test-17
 def test_tc_spl_78_17_booking_under_another_event_is_refused(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
 
@@ -596,6 +614,7 @@ def test_tc_spl_78_17_booking_under_another_event_is_refused(app, client, reques
 
 
 # TC-SPL-78-18
+# SPL-78 AC-6 Test-18
 @pytest.mark.parametrize(
     "body",
     [
@@ -613,6 +632,7 @@ def test_tc_spl_78_18_parameters_are_refused(app, client, requested, body):
 
 
 # TC-SPL-78-18 — control partition: an empty JSON object carries no parameters.
+# SPL-78 AC-6 Test-18
 def test_tc_spl_78_18_an_empty_object_is_accepted(app, client, requested):
     response = withdraw(client, requested["event"], requested["booking"]["id"], json={})
 
@@ -623,6 +643,7 @@ def test_tc_spl_78_18_an_empty_object_is_accepted(app, client, requested):
 
 
 # TC-SPL-78-20
+# SPL-78 AC-7 Test-20
 @pytest.mark.parametrize("method", ["put", "patch"])
 def test_tc_spl_78_20_a_booking_cannot_be_amended(app, client, requested, method):
     east = add_venue(app, "Harbour Hall East")
@@ -642,6 +663,7 @@ def test_tc_spl_78_20_a_booking_cannot_be_amended(app, client, requested, method
 
 
 # TC-SPL-78-21
+# SPL-78 AC-7 Test-21
 def test_tc_spl_78_21_withdraw_and_resubmit_the_alternative(app, client, requested):
     east = add_venue(app, "Harbour Hall East")
     original = requested["booking"]["id"]
@@ -662,6 +684,7 @@ def test_tc_spl_78_21_withdraw_and_resubmit_the_alternative(app, client, request
 
 
 # TC-SPL-78-15 — boundary partition: ids beyond the database's integer range are simply not found.
+# SPL-78 AC-6 Test-15
 def test_tc_spl_78_15_out_of_range_ids_are_not_found(app, client, requested):
     unassigned = withdraw(
         client, requested["event"], requested["booking"]["id"], token="other-coordinator"

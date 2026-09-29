@@ -44,12 +44,14 @@ const send = () => fireEvent.click(screen.getByRole('button', { name: /Request c
 
 // ---- AC1 / AC7: when the form is offered --------------------------------------------------------
 
+// SPL-65 AC-1 Test-072
 it('[QA-SPL-65-072] offers a labelled message box and an enabled button while Under Review', async () => {
   open(detail);
   expect((await textbox()).tagName).toBe('TEXTAREA');
   expect((screen.getByRole('button', { name: 'Request clarification' }) as HTMLButtonElement).disabled).toBe(false);
 });
 
+// SPL-65 AC-7 Test-073
 it.each([
   'draft', 'submitted', 'returned_for_clarification', 'approved', 'planning',
   'confirmed', 'completed', 'cancelled', 'rejected', 'withdrawn', 'postponed',
@@ -62,6 +64,7 @@ it.each([
 
 // ---- AC3 / AC4: the happy flow ------------------------------------------------------------------
 
+// SPL-65 AC-4 Test-074
 it('[QA-SPL-65-074] sends the message to the action endpoint and shows the returned status', async () => {
   const request = open(detail, ok({ event: returned, clarifications: [item(1, 'Please confirm the attendance.')] }));
   await type('Please confirm the attendance.');
@@ -74,6 +77,7 @@ it('[QA-SPL-65-074] sends the message to the action endpoint and shows the retur
   expect(screen.getAllByText('Returned for clarification').length).toBeGreaterThan(0);
 });
 
+// SPL-65 AC-4 Test-075
 it('[QA-SPL-65-075] hides the form and empties nothing else after success', async () => {
   open({ ...detail, purpose: 'Client showcase' }, ok({ event: returned, clarifications: [item(1, 'Why?')] }));
   await type('Why?');
@@ -83,6 +87,7 @@ it('[QA-SPL-65-075] hides the form and empties nothing else after success', asyn
   expect(screen.getByText('Client showcase')).toBeTruthy();
 });
 
+// SPL-65 AC-3 Test-076
 it('[QA-SPL-65-076] shows the message, author and Singapore date and time in the history', async () => {
   open(detail, ok({ event: returned, clarifications: [item(1, 'Check the layout.', '2026-09-26T10:05:00+08:00')] }));
   await type('Check the layout.');
@@ -92,6 +97,7 @@ it('[QA-SPL-65-076] shows the message, author and Singapore date and time in the
   expect(within(history).getByText(/Alice Tan · 26 Sept 2026, 10:05/)).toBeTruthy();
 });
 
+// SPL-65 AC-2 Test-077
 it('[QA-SPL-65-077] posts the text exactly as typed, including line breaks (the server trims)', async () => {
   const request = open(detail, ok({ event: returned, clarifications: [item(1, 'a')] }));
   await type('  Line one\n\nLine two  ');
@@ -102,6 +108,7 @@ it('[QA-SPL-65-077] posts the text exactly as typed, including line breaks (the 
 
 // ---- AC2: a non-blank message -------------------------------------------------------------------
 
+// SPL-65 AC-2 Test-078
 it.each(['', ' ', '   \n\t  '])('[QA-SPL-65-078] refuses %j without contacting the server', async blank => {
   const request = open(detail);
   await type(blank);
@@ -111,11 +118,13 @@ it.each(['', ' ', '   \n\t  '])('[QA-SPL-65-078] refuses %j without contacting t
   expect(screen.getByRole('button', { name: 'Request clarification' })).toBeTruthy();
 });
 
+// SPL-65 AC-2 Test-079
 it('[QA-SPL-65-079] limits the box to 2000 characters', async () => {
   open(detail);
   expect((await textbox()).maxLength).toBe(2000);
 });
 
+// SPL-65 AC-2 Test-080
 it('[QA-SPL-65-080] clears the blank-message error once a real message is sent', async () => {
   open(detail, ok({ event: returned, clarifications: [item(1, 'Real')] }));
   await type('');
@@ -129,6 +138,7 @@ it('[QA-SPL-65-080] clears the blank-message error once a real message is sent',
 
 // ---- AC7 and failure handling -------------------------------------------------------------------
 
+// SPL-65 AC-7 Test-081
 it('[QA-SPL-65-081] shows the server refusal and keeps both the form and the typed text', async () => {
   open(detail, refused('Clarification can only be requested while the event is under review.'));
   await type('My question');
@@ -138,6 +148,7 @@ it('[QA-SPL-65-081] shows the server refusal and keeps both the form and the typ
   expect(screen.getAllByText('Under review').length).toBeGreaterThan(0);
 });
 
+// SPL-65 AC-7 Test-082
 it('[QA-SPL-65-082] falls back to a generic message when the server gives no reason', async () => {
   open(detail, refused());
   await type('Question');
@@ -145,6 +156,7 @@ it('[QA-SPL-65-082] falls back to a generic message when the server gives no rea
   expect((await screen.findByRole('alert')).textContent).toBe('Could not request clarification. Try again.');
 });
 
+// SPL-65 AC-7 Test-083
 it('[QA-SPL-65-083] survives a network failure and lets the coordinator try again', async () => {
   const request = open(detail);
   request.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(ok({ event: returned, clarifications: [item(1, 'Question')] }));
@@ -156,6 +168,7 @@ it('[QA-SPL-65-083] survives a network failure and lets the coordinator try agai
   expect(await screen.findByText(/Clarification requested/)).toBeTruthy();
 });
 
+// SPL-65 AC-7 Test-084
 it('[QA-SPL-65-084] treats a success reply without an event as a failure', async () => {
   open(detail, ok({}));
   await type('Question');
@@ -164,6 +177,7 @@ it('[QA-SPL-65-084] treats a success reply without an event as a failure', async
   expect(screen.getAllByText('Under review').length).toBeGreaterThan(0);
 });
 
+// SPL-65 AC-7 Test-085
 it('[QA-SPL-65-085] sends once when the button is pressed repeatedly while the request is pending', async () => {
   let finish: (value: unknown) => void = () => {};
   const request = open(detail);
@@ -181,18 +195,21 @@ it('[QA-SPL-65-085] sends once when the button is pressed repeatedly while the r
 
 // ---- AC6: history in the coordinator's view -----------------------------------------------------
 
+// SPL-65 AC-6 Test-086
 it('[QA-SPL-65-086] lists earlier clarifications newest first beside the returned status', async () => {
   open({ ...returned, clarifications: [item(3, 'Third'), item(2, 'Second'), item(1, 'First')] });
   const entries = await screen.findAllByRole('listitem');
   expect(entries.map(entry => entry.textContent!.match(/First|Second|Third/)![0])).toEqual(['Third', 'Second', 'First']);
 });
 
+// SPL-65 AC-6 Test-087
 it('[QA-SPL-65-087] shows no history section when there is nothing to show', async () => {
   open(detail);
   await textbox();
   expect(screen.queryByRole('heading', { name: 'Clarification history' })).toBeNull();
 });
 
+// SPL-65 AC-6 Test-088
 it('[QA-SPL-65-088] keeps the older history when a new clarification is added', async () => {
   open({ ...detail, clarifications: [item(1, 'Earlier question')] },
     ok({ event: returned, clarifications: [item(2, 'Newer question'), item(1, 'Earlier question')] }));
@@ -205,6 +222,7 @@ it('[QA-SPL-65-088] keeps the older history when a new clarification is added', 
   ]);
 });
 
+// SPL-65 AC-1 Test-089
 it('[QA-SPL-65-089] does not carry a typed draft over to a different event', async () => {
   const request = vi.fn().mockResolvedValue(ok({ event: detail }));
   const { rerender } = render(<AssignedEvents accessToken="t" eventId={12} request={request} onNavigate={vi.fn()} />);
@@ -214,6 +232,7 @@ it('[QA-SPL-65-089] does not carry a typed draft over to a different event', asy
   expect(((await textbox()) as HTMLTextAreaElement).value).toBe('');
 });
 
+// SPL-65 AC-4 Test-090
 it('[QA-SPL-65-090] shows the Returned for clarification status in the coordinator\'s event list', async () => {
   const request = vi.fn().mockResolvedValue(ok({ events: [returned, { ...summary, id: 13, name: 'Other' }] }));
   render(<AssignedEvents accessToken="t" request={request} onNavigate={vi.fn()} />);
@@ -222,6 +241,7 @@ it('[QA-SPL-65-090] shows the Returned for clarification status in the coordinat
   expect(screen.getByRole('columnheader', { name: 'Status' })).toBeTruthy();
 });
 
+// SPL-65 AC-1 Test-091
 it('[QA-SPL-65-091] gives the form, error and notice accessible roles and names', async () => {
   open(detail, ok({ event: returned, clarifications: [item(1, 'Q')] }));
   const box = await textbox();
@@ -247,12 +267,14 @@ const organiserEvent = {
 const organiserView = (event: Record<string, unknown>) => render(
   <OrganisationEvents accessToken="t" eventId={7} onNavigate={vi.fn()} request={vi.fn().mockResolvedValue(ok({ event }))} />);
 
+// SPL-65 AC-5 Test-092
 it('[QA-SPL-65-092] shows the organiser the status and what they need to do about it', async () => {
   organiserView(organiserEvent);
   expect(await screen.findByText('Returned for clarification')).toBeTruthy();
   expect(screen.getByRole('status').textContent).toContain('Update your request with what they asked for.');
 });
 
+// SPL-65 AC-5 Test-093
 it('[QA-SPL-65-093] shows the organiser every clarification, newest first, with author and time', async () => {
   organiserView(organiserEvent);
   const entries = await screen.findAllByRole('listitem');
@@ -262,6 +284,7 @@ it('[QA-SPL-65-093] shows the organiser every clarification, newest first, with 
   expect(screen.getByRole('heading', { name: 'Clarification requests' })).toBeTruthy();
 });
 
+// SPL-65 AC-5 Test-094
 it('[QA-SPL-65-094] gives the organiser a read-only view with no message box or action', async () => {
   organiserView(organiserEvent);
   await screen.findByText('Second question');
@@ -269,6 +292,7 @@ it('[QA-SPL-65-094] gives the organiser a read-only view with no message box or 
   expect(screen.queryByRole('button')).toBeNull();
 });
 
+// SPL-65 AC-5 Test-095
 it('[QA-SPL-65-095] shows no guidance banner or history when the event was never returned', async () => {
   organiserView({ ...organiserEvent, status: 'submitted', status_label: 'Submitted', clarifications: [] });
   expect(await screen.findByText('Submitted')).toBeTruthy();
@@ -276,12 +300,14 @@ it('[QA-SPL-65-095] shows no guidance banner or history when the event was never
   expect(screen.queryByRole('heading', { name: 'Clarification requests' })).toBeNull();
 });
 
+// SPL-65 AC-5 Test-096
 it('[QA-SPL-65-096] keeps earlier clarifications visible after the event is Under Review again', async () => {
   organiserView({ ...organiserEvent, status: 'under_review', status_label: 'Under review' });
   expect(await screen.findByText('First question')).toBeTruthy();
   expect(screen.queryByRole('status')).toBeNull();
 });
 
+// SPL-65 AC-5 Test-097
 it('[QA-SPL-65-097] tolerates an older response that has no clarifications field', async () => {
   const { clarifications: _omitted, ...withoutHistory } = organiserEvent;
   organiserView(withoutHistory);
@@ -291,21 +317,25 @@ it('[QA-SPL-65-097] tolerates an older response that has no clarifications field
 
 // ---- The shared history component, on its own ---------------------------------------------------
 
+// SPL-65 AC-6 Test-098
 it('[QA-SPL-65-098] renders nothing at all for an empty history', () => {
   const { container } = render(<ClarificationHistory clarifications={[]} heading="History" />);
   expect(container.innerHTML).toBe('');
 });
 
+// SPL-65 AC-3 Test-099
 it('[QA-SPL-65-099] shows an unparseable timestamp as received instead of "Invalid Date"', () => {
   render(<ClarificationHistory clarifications={[item(1, 'Odd', 'not-a-date')]} heading="History" />);
   expect(screen.getByText('Alice Tan · not-a-date')).toBeTruthy();
 });
 
+// SPL-65 AC-3 Test-100
 it('[QA-SPL-65-100] displays the time in Singapore whatever offset the server used', () => {
   render(<ClarificationHistory clarifications={[item(1, 'UTC stamp', '2026-09-27T01:00:00+00:00')]} heading="History" />);
   expect(screen.getByText(/Alice Tan · 27 Sept 2026, 9:00\s*am/i)).toBeTruthy();
 });
 
+// SPL-65 AC-3 Test-101
 it('[QA-SPL-65-101] renders message text as text, never as markup', () => {
   render(<ClarificationHistory clarifications={[item(1, '<img src=x onerror=alert(1)> **bold**')]} heading="History" />);
   expect(screen.getByText('<img src=x onerror=alert(1)> **bold**')).toBeTruthy();

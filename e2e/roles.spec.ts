@@ -5,6 +5,7 @@ const multiRoleAccount = {
   password: 'LocalDemo123!',
 };
 
+// SPL-46 AC-1,2,3,6,7,10,11 Test-01
 test('TC-CS-E01-S4-01 selects, switches, and remembers an assigned role for the browser session', async ({
   page,
 }) => {
@@ -33,6 +34,7 @@ test('TC-CS-E01-S4-01 selects, switches, and remembers an assigned role for the 
   await expect(page.getByRole('heading', { name: 'Which role are you working in?' })).toHaveCount(0);
 });
 
+// SPL-46 AC-9 Test-02
 test('TC-CS-E01-S4-02 refuses an unavailable direct page without changing the active role', async ({
   page,
 }) => {
@@ -50,6 +52,7 @@ test('TC-CS-E01-S4-02 refuses an unavailable direct page without changing the ac
   await expect(page.getByRole('heading', { name: 'Find the right space, faster.' })).toHaveCount(0);
 });
 
+// SPL-46 AC-NA Test-03
 test('TC-CS-E01-S4-03 keeps role selection and account actions usable at a narrow width', async ({
   page,
 }) => {

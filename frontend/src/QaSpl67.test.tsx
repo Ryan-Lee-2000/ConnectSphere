@@ -45,6 +45,7 @@ const approved = ok({ event: approvedEvent, message: SUCCESS });
 
 // ---- AC1 / AC2 / AC6: when the button is offered ------------------------------------------------
 
+// SPL-67 AC-1,2,6 Test-087
 it('[QA-SPL-67-087] offers an enabled Approve request button while the event is Under Review', async () => {
   open(detail);
   const button = (await approveButton()) as HTMLButtonElement;
@@ -52,6 +53,7 @@ it('[QA-SPL-67-087] offers an enabled Approve request button while the event is 
   expect(button.type).toBe('button');
 });
 
+// SPL-67 AC-1,6 Test-088
 it.each([
   'draft', 'submitted', 'returned_for_clarification', 'approved', 'planning',
   'confirmed', 'completed', 'cancelled', 'rejected', 'withdrawn', 'postponed',
@@ -61,6 +63,7 @@ it.each([
   expect(screen.queryByRole('button', { name: APPROVE })).toBeNull();
 });
 
+// SPL-67 AC-1 Test-089
 it('[QA-SPL-67-089] shows Approve request beside the clarification form, not instead of it', async () => {
   open(detail);
   await approveButton();
@@ -69,6 +72,7 @@ it('[QA-SPL-67-089] shows Approve request beside the clarification form, not ins
 
 // ---- AC1 / AC6: what is sent --------------------------------------------------------------------
 
+// SPL-67 AC-1,6 Test-090
 it('[QA-SPL-67-090] posts to the approve endpoint with no body, so no status can be chosen', async () => {
   const { request } = open(detail, approved);
   await approveNow();
@@ -77,6 +81,7 @@ it('[QA-SPL-67-090] posts to the approve endpoint with no body, so no status can
   expect(request).toHaveBeenCalledTimes(2);
 });
 
+// SPL-67 AC-6 Test-091
 it('[QA-SPL-67-091] does not send the unsent clarification text when approving', async () => {
   const { request } = open(detail, approved);
   fireEvent.change(await screen.findByLabelText('Clarification for the Event Organiser'), { target: { value: 'Half typed' } });
@@ -85,6 +90,7 @@ it('[QA-SPL-67-091] does not send the unsent clarification text when approving',
   expect(request.mock.calls[1][1]).toEqual({ method: 'POST' });
 });
 
+// SPL-67 AC-6 Test-092
 it('[QA-SPL-67-092] disables the button while approving and sends only one request for a double click', async () => {
   let release: (value: unknown) => void = () => undefined;
   const pending = new Promise(resolve => { release = resolve; });
@@ -100,18 +106,21 @@ it('[QA-SPL-67-092] disables the button while approving and sends only one reque
 
 // ---- AC3: the outcome the coordinator sees ------------------------------------------------------
 
+// SPL-67 AC-3 Test-093
 it('[QA-SPL-67-093] shows the success message returned by the server', async () => {
   open(detail, ok({ event: approvedEvent, message: 'Approved, planning may start.' }));
   await approveNow();
   expect((await screen.findByRole('status')).textContent).toBe('Approved, planning may start.');
 });
 
+// SPL-67 AC-3 Test-094
 it('[QA-SPL-67-094] falls back to the standard message when the server sends none', async () => {
   open(detail, ok({ event: approvedEvent }));
   await approveNow();
   expect(await screen.findByText(SUCCESS)).toBeTruthy();
 });
 
+// SPL-67 AC-3 Test-095
 it('[QA-SPL-67-095] shows In planning in the summary and the Status row', async () => {
   open(detail, approved);
   await approveNow();
@@ -122,6 +131,7 @@ it('[QA-SPL-67-095] shows In planning in the summary and the Status row', async 
   expect(screen.queryByText('Under review')).toBeNull();
 });
 
+// SPL-67 AC-3 Test-096
 it('[QA-SPL-67-096] shows who approved and when, in Singapore time', async () => {
   open(detail, approved);
   await approveNow();
@@ -130,6 +140,7 @@ it('[QA-SPL-67-096] shows who approved and when, in Singapore time', async () =>
   expect(row.textContent).toMatch(/27 Sep(t)? 2026, 10:00/);
 });
 
+// SPL-67 AC-3 Test-097
 it('[QA-SPL-67-097] removes the Approve button and the clarification form once approved', async () => {
   open(detail, approved);
   await approveNow();
@@ -139,6 +150,7 @@ it('[QA-SPL-67-097] removes the Approve button and the clarification form once a
   expect(screen.queryByRole('button', { name: 'Request clarification' })).toBeNull();
 });
 
+// SPL-67 AC-3 Test-098
 it('[QA-SPL-67-098] keeps the request details and clarification history on screen after approval', async () => {
   const history = [{ id: 1, message: 'Earlier question', author: alice, created_at: '2026-09-26T10:00:00+08:00' }];
   open({ ...detail, clarifications: history }, approved);
@@ -150,6 +162,7 @@ it('[QA-SPL-67-098] keeps the request details and clarification history on scree
 
 // ---- AC5: nothing else happens ------------------------------------------------------------------
 
+// SPL-67 AC-5 Test-099
 it('[QA-SPL-67-099] calls only the approve endpoint and does not navigate away', async () => {
   const { request, onNavigate } = open(detail, approved);
   await approveNow();
@@ -159,6 +172,7 @@ it('[QA-SPL-67-099] calls only the approve endpoint and does not navigate away',
   expect(onNavigate).not.toHaveBeenCalled();
 });
 
+// SPL-67 AC-5 Test-100
 it('[QA-SPL-67-100] does not start a venue booking or registration by itself', async () => {
   const { request } = open(detail, approved);
   await approveNow();
@@ -169,6 +183,7 @@ it('[QA-SPL-67-100] does not start a venue booking or registration by itself', a
 
 // ---- AC6: refusals and failures leave the page unchanged ----------------------------------------
 
+// SPL-67 AC-6 Test-101
 it('[QA-SPL-67-101] shows the server refusal, keeps the status and keeps the button', async () => {
   open(detail, refused('Only an event under review can be approved.'));
   await approveNow();
@@ -178,6 +193,7 @@ it('[QA-SPL-67-101] shows the server refusal, keeps the status and keeps the but
   expect(screen.queryByRole('rowheader', { name: 'Approved by' })).toBeNull();
 });
 
+// SPL-67 AC-6 Test-102
 it.each([
   ['Assigned event not found.'],
   ['Access denied.'],
@@ -188,18 +204,21 @@ it.each([
   expect((await screen.findByRole('alert')).textContent).toBe(message);
 });
 
+// SPL-67 AC-6 Test-103
 it('[QA-SPL-67-103] uses a fallback when a refusal carries no message', async () => {
   open(detail, refused());
   await approveNow();
   expect((await screen.findByRole('alert')).textContent).toBe('Could not approve the request. Try again.');
 });
 
+// SPL-67 AC-6 Test-104
 it('[QA-SPL-67-104] uses a fallback when a refusal is not JSON', async () => {
   open(detail, { ok: false, json: async () => { throw new Error('not json'); } });
   await approveNow();
   expect((await screen.findByRole('alert')).textContent).toBe('Could not approve the request. Try again.');
 });
 
+// SPL-67 AC-6 Test-105
 it('[QA-SPL-67-105] recovers from a network failure and lets the coordinator try again', async () => {
   const { request } = open(detail);
   request.mockImplementationOnce(() => Promise.reject(new Error('offline')));
@@ -212,6 +231,7 @@ it('[QA-SPL-67-105] recovers from a network failure and lets the coordinator try
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
+// SPL-67 AC-6 Test-106
 it('[QA-SPL-67-106] treats a success reply without an event as a failure and changes nothing', async () => {
   open(detail, ok({ message: SUCCESS }));
   await approveNow();
@@ -220,6 +240,7 @@ it('[QA-SPL-67-106] treats a success reply without an event as a failure and cha
   expect(screen.getAllByText('Under review').length).toBeGreaterThan(0);
 });
 
+// SPL-67 AC-6 Test-107
 it('[QA-SPL-67-107] clears an earlier error when a retry succeeds', async () => {
   open(detail, refused('Only an event under review can be approved.'), approved);
   await approveNow();
@@ -231,6 +252,7 @@ it('[QA-SPL-67-107] clears an earlier error when a retry succeeds', async () => 
 
 // ---- AC3 / AC4: reading an outcome that already exists ------------------------------------------
 
+// SPL-67 AC-3,4 Test-108
 it('[QA-SPL-67-108] shows the decision-maker and time when an approved event is opened later', async () => {
   open({ ...detail, ...approvedEvent, clarifications: [] });
   const row = (await screen.findByRole('rowheader', { name: 'Approved by' })).closest('tr') as HTMLElement;
@@ -238,6 +260,7 @@ it('[QA-SPL-67-108] shows the decision-maker and time when an approved event is 
   expect(screen.queryByRole('button', { name: APPROVE })).toBeNull();
 });
 
+// SPL-67 AC-3 Test-109
 it('[QA-SPL-67-109] shows no Approved by row while nobody has approved', async () => {
   open(detail);
   await approveButton();
@@ -255,18 +278,21 @@ const organiserView = (rows: unknown[]) => {
   render(<EventRequestDrafts accessToken="t" request={request} />);
 };
 
+// SPL-67 AC-4 Test-110
 it('[QA-SPL-67-110] tells the organiser who approved the request and when', async () => {
   organiserView([listed({ status: 'planning', status_label: 'In planning', approved_by: alice, approved_at: '2026-09-27T10:00:00+08:00' })]);
   expect(await screen.findByText(/Approved by Alice Tan on/)).toBeTruthy();
   expect(screen.getByText('In planning')).toBeTruthy();
 });
 
+// SPL-67 AC-4 Test-111
 it('[QA-SPL-67-111] shows no approval line while the request is not approved', async () => {
   organiserView([listed({ approved_by: null, approved_at: null }), listed({ id: 2, name: 'Older', approved_by: undefined })]);
   expect(await screen.findByText('Forum')).toBeTruthy();
   expect(screen.queryByText(/Approved by/)).toBeNull();
 });
 
+// SPL-67 AC-4 Test-112
 it('[QA-SPL-67-112] shows the approval line only against the approved request', async () => {
   organiserView([
     listed({ id: 1, name: 'Approved one', status: 'planning', status_label: 'In planning', approved_by: alice, approved_at: '2026-09-27T10:00:00+08:00' }),
@@ -279,6 +305,7 @@ it('[QA-SPL-67-112] shows the approval line only against the approved request', 
   expect(waitingRow.textContent).not.toContain('Approved by');
 });
 
+// SPL-67 AC-4 Test-113
 it('[QA-SPL-67-113] still lists an approved request whose approval time is missing', async () => {
   organiserView([listed({ status: 'planning', status_label: 'In planning', approved_by: alice, approved_at: null })]);
   expect(await screen.findByText('Approved by Alice Tan')).toBeTruthy();

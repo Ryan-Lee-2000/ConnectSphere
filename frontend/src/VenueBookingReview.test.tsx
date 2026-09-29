@@ -36,6 +36,7 @@ function api(review: object, approval?: Response) {
   )) as unknown as ApiRequest & ReturnType<typeof vi.fn>;
 }
 
+// SPL-81 AC-1,4 Test-23
 it('[TC-SPL-81-23] reviews, confirms and approves with a note', async () => {
   const approved = { ...BOOKING, status: 'approved', approved_by: { id: 'valerie', name: 'Valerie Tan' }, approved_at: '2026-09-28T10:05:00+08:00', approval_note: 'Confirmed with the hall manager' };
   const request = api(
@@ -67,6 +68,7 @@ it('[TC-SPL-81-23] reviews, confirms and approves with a note', async () => {
   expect(screen.queryByRole('button', { name: 'Approve booking' })).toBeNull();
 });
 
+// SPL-81 AC-1,4 Test-23
 it('[TC-SPL-81-23] offers no Approve action for a request that is not Requested', async () => {
   const withdrawn = { ...BOOKING, status: 'withdrawn' };
   render(<VenueBookingReview accessToken="token" bookingId={41} request={api({ booking: withdrawn, event: EVENT, review: UNMARKED })} />);
@@ -76,6 +78,7 @@ it('[TC-SPL-81-23] offers no Approve action for a request that is not Requested'
   expect(screen.queryByLabelText('Approval note (optional)')).toBeNull();
 });
 
+// SPL-81 AC-3 Test-12
 it('[TC-SPL-81-12] shows the conflict and keeps the request Requested', async () => {
   const conflict = reply(409, { error: 'Harbour Hall is unavailable on 14 Oct 2026 during Night.', conflict: { date: '2026-10-14', slot: 'NIGHT' } });
   render(<VenueBookingReview accessToken="token" bookingId={41} request={api({ booking: BOOKING, event: EVENT, review: UNMARKED }, conflict)} />);
@@ -89,6 +92,7 @@ it('[TC-SPL-81-12] shows the conflict and keeps the request Requested', async ()
   expect(screen.getByRole('button', { name: 'Approve booking' })).toBeTruthy();
 });
 
+// SPL-81 AC-1 Test-21
 it('[TC-SPL-81-21] explains when the request cannot be found', async () => {
   render(<VenueBookingReview accessToken="token" bookingId={999} request={vi.fn(async () => reply(404, { error: 'Venue-booking request not found.' })) as unknown as ApiRequest} />);
 
@@ -97,6 +101,7 @@ it('[TC-SPL-81-21] explains when the request cannot be found', async () => {
 
 // QA-SPL-80 TC-SPL-80-17: AC3 is only met if the widened payload actually reaches the screen,
 // and AC4 only if nothing attendee-facing arrives with it.
+// SPL-80 AC-3,4 Test-17
 it('[TC-SPL-80-17] shows the event details needed to decide, and no registration details', async () => {
   render(<VenueBookingReview accessToken="token" bookingId={41} request={api({ booking: BOOKING, event: EVENT, review: UNMARKED })} />);
 
@@ -111,6 +116,7 @@ it('[TC-SPL-80-17] shows the event details needed to decide, and no registration
 
 // QA-SPL-82 TC-SPL-82-18/-19: Reject sits beside Approve with a required reason and an optional
 // suggestion, and the outcome replaces both actions once the request is decided.
+// SPL-82 AC-NA Test-18
 it('[TC-SPL-82-18] rejects with a reason and an optional alternative suggestion', async () => {
   const rejected = {
     ...BOOKING, status: 'rejected',
@@ -149,6 +155,7 @@ it('[TC-SPL-82-18] rejects with a reason and an optional alternative suggestion'
   expect(screen.queryByRole('button', { name: 'Reject booking' })).toBeNull();
 });
 
+// SPL-82 AC-NA Test-19
 it('[TC-SPL-82-19] cancelling the reject form returns to both actions without submitting', async () => {
   const request = api({ booking: BOOKING, event: EVENT, review: UNMARKED });
   render(<VenueBookingReview accessToken="token" bookingId={41} request={request} />);

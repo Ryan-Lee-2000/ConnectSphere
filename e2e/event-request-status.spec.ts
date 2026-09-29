@@ -34,6 +34,7 @@ function uniqueName() {
   return `E2E Status ${Date.now()}`;
 }
 
+// SPL-63 AC-7 Test-17,18
 test('TC-CS-E07-S1-17 and -18 a submission lands on My requests with the new request on top', async ({
   page,
 }) => {
@@ -59,6 +60,7 @@ test('TC-CS-E07-S1-17 and -18 a submission lands on My requests with the new req
   await expect(firstRow).toContainText('waiting to be picked up for review');
 });
 
+// SPL-63 AC-7 Test-19
 test('TC-CS-E07-S1-19 an incomplete submission does not move the organiser on', async ({ page }) => {
   await signIn(page, organiser, 'Event Organiser');
   await page.goto('/workspace/event-requests');
@@ -68,6 +70,7 @@ test('TC-CS-E07-S1-19 an incomplete submission does not move the organiser on', 
   await expect(page.getByRole('heading', { name: 'Request an event' })).toBeVisible();
 });
 
+// SPL-63 AC-8 Test-20,22
 test('TC-CS-E07-S1-20 and -22 another role is neither offered the view nor served it', async ({
   page,
 }) => {
@@ -81,6 +84,7 @@ test('TC-CS-E07-S1-20 and -22 another role is neither offered the view nor serve
   await expect(page.getByRole('table')).toHaveCount(0);
 });
 
+// SPL-63 AC-9 Test-23,24
 test('TC-CS-E07-S1-23 and -24 the navigation opens the view and returns to it', async ({
   page,
 }) => {
@@ -101,6 +105,7 @@ test('TC-CS-E07-S1-23 and -24 the navigation opens the view and returns to it', 
   await expect(page.getByRole('button', { name: 'Submit event request' })).toHaveCount(0);
 });
 
+// SPL-63 AC-9 Test-25
 test('TC-CS-E07-S1-25 the navigation entry follows the active role', async ({ page }) => {
   // developer@example.test holds Event Organiser and Attendee (CS-E01-S4).
   await signIn(page, organiser, 'Event Organiser');
@@ -113,6 +118,7 @@ test('TC-CS-E07-S1-25 the navigation entry follows the active role', async ({ pa
   await expect(page.getByRole('link', { name: 'My requests' })).toBeVisible();
 });
 
+// SPL-63 AC-NA Test-26
 test('TC-CS-E07-S1-26 the view holds together at a 390 x 844 viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, organiser, 'Event Organiser');

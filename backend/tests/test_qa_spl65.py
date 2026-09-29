@@ -216,6 +216,7 @@ def organiser_view(client, event_id, token="owner"):
 # ===========================================================================================
 
 
+# SPL-65 AC-1 Test-001
 def test_qa_spl65_001_assigned_coordinator_requests_clarification_on_under_review_event(
     world, client
 ):
@@ -231,6 +232,7 @@ def test_qa_spl65_001_assigned_coordinator_requests_clarification_on_under_revie
     assert status_of(world, event_id) == "returned_for_clarification"
 
 
+# SPL-65 AC-1 Test-002
 def test_qa_spl65_002_full_lifecycle_through_the_real_routes(world, client):
     """QA-SPL-65-002 [UAT / Visualise Flow] AC1,4,5: submit -> assign -> review -> ask -> read.
 
@@ -255,6 +257,7 @@ def test_qa_spl65_002_full_lifecycle_through_the_real_routes(world, client):
     assert [c["message"] for c in seen["clarifications"]] == [MSG]
 
 
+# SPL-65 AC-1 Test-003
 def test_qa_spl65_003_unassigned_coordinator_is_refused_without_disclosure(world, client):
     """QA-SPL-65-003 [Negative] AC1: a coordinator who is not assigned gets the same 404."""
 
@@ -268,6 +271,7 @@ def test_qa_spl65_003_unassigned_coordinator_is_refused_without_disclosure(world
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-1 Test-004
 @pytest.mark.parametrize("token", ["manager", "owner", "colleague", "stranger", "attendee"])
 def test_qa_spl65_004_every_non_coordinator_role_is_refused(world, client, token):
     """QA-SPL-65-004 [Negative] AC1: manager, organisers and attendee are all forbidden."""
@@ -278,6 +282,7 @@ def test_qa_spl65_004_every_non_coordinator_role_is_refused(world, client, token
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-1 Test-005
 def test_qa_spl65_005_request_without_credentials_is_refused(world, client):
     """QA-SPL-65-005 [Negative] AC1: no bearer token means 401 and nothing is recorded."""
 
@@ -291,6 +296,7 @@ def test_qa_spl65_005_request_without_credentials_is_refused(world, client):
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-1 Test-006
 def test_qa_spl65_006_reassignment_moves_the_right_to_ask(world, client):
     """QA-SPL-65-006 [Cross-cut] AC1: only the currently assigned coordinator may ask."""
 
@@ -307,6 +313,7 @@ def test_qa_spl65_006_reassignment_moves_the_right_to_ask(world, client):
     assert ask(client, event_id, token="bob").status_code == 200
 
 
+# SPL-65 AC-1 Test-007
 def test_qa_spl65_007_deactivated_coordinator_is_refused(world, client):
     """QA-SPL-65-007 [Negative] AC1: an inactive account holds no roles, even if assigned."""
 
@@ -323,6 +330,7 @@ def test_qa_spl65_007_deactivated_coordinator_is_refused(world, client):
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-1 Test-008
 @pytest.mark.parametrize("event_id", [0, 999999, 2**31, 2**40])
 def test_qa_spl65_008_nonexistent_event_ids_answer_404(world, client, event_id):
     """QA-SPL-65-008 [Boundary] AC1: absent and out-of-range ids are a plain 404."""
@@ -330,6 +338,7 @@ def test_qa_spl65_008_nonexistent_event_ids_answer_404(world, client, event_id):
     assert ask(client, event_id).status_code == 404
 
 
+# SPL-65 AC-1 Test-009
 @pytest.mark.parametrize("method", ["get", "put", "patch", "delete"])
 def test_qa_spl65_009_only_post_is_supported_on_the_action(world, client, method):
     """QA-SPL-65-009 [Negative / API] AC1,6: the action cannot be read, edited or deleted."""
@@ -353,6 +362,7 @@ def test_qa_spl65_009_only_post_is_supported_on_the_action(world, client, method
 # ===========================================================================================
 
 
+# SPL-65 AC-2 Test-010
 @pytest.mark.parametrize("blank", ["", " ", "     ", "\t", "\n", " \t\r\n ", " ", " "])
 def test_qa_spl65_010_blank_and_whitespace_only_messages_are_refused(world, client, blank):
     """QA-SPL-65-010 [Negative] AC2: nothing visible means nothing is sent."""
@@ -366,6 +376,7 @@ def test_qa_spl65_010_blank_and_whitespace_only_messages_are_refused(world, clie
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-2 Test-011
 def test_qa_spl65_011_missing_message_key_is_refused(world, client):
     """QA-SPL-65-011 [Negative] AC2: an empty object is not a message."""
 
@@ -375,6 +386,7 @@ def test_qa_spl65_011_missing_message_key_is_refused(world, client):
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-2 Test-012
 @pytest.mark.parametrize("value", [None, 0, 123, 1.5, True, ["a"], {"a": "b"}])
 def test_qa_spl65_012_non_string_messages_are_refused(world, client, value):
     """QA-SPL-65-012 [Negative] AC2: only text can be a message."""
@@ -385,6 +397,7 @@ def test_qa_spl65_012_non_string_messages_are_refused(world, client, value):
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-2 Test-013
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -406,6 +419,7 @@ def test_qa_spl65_013_malformed_request_bodies_are_refused(world, client, kwargs
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-2 Test-014
 def test_qa_spl65_014_shortest_message_is_accepted(world, client):
     """QA-SPL-65-014 [Boundary] AC2: a single character is the lower boundary."""
 
@@ -415,6 +429,7 @@ def test_qa_spl65_014_shortest_message_is_accepted(world, client):
     assert rows(world, event_id)[0][0].message == "?"
 
 
+# SPL-65 AC-2 Test-015
 def test_qa_spl65_015_message_of_exactly_the_maximum_length_is_accepted(world, client):
     """QA-SPL-65-015 [Boundary] AC2: 2000 characters is the upper boundary."""
 
@@ -424,6 +439,7 @@ def test_qa_spl65_015_message_of_exactly_the_maximum_length_is_accepted(world, c
     assert len(rows(world, event_id)[0][0].message) == 2000
 
 
+# SPL-65 AC-2 Test-016
 def test_qa_spl65_016_message_one_over_the_maximum_is_refused(world, client):
     """QA-SPL-65-016 [Boundary] AC2: 2001 characters is refused with an explanation."""
 
@@ -436,6 +452,7 @@ def test_qa_spl65_016_message_one_over_the_maximum_is_refused(world, client):
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-2 Test-017
 def test_qa_spl65_017_length_limit_applies_after_trimming(world, client):
     """QA-SPL-65-017 [Boundary] AC2: padding does not count towards the 2000 characters."""
 
@@ -447,6 +464,7 @@ def test_qa_spl65_017_length_limit_applies_after_trimming(world, client):
     assert rows(world, event_id)[0][0].message == "y" * 2000
 
 
+# SPL-65 AC-2 Test-018
 def test_qa_spl65_018_outer_whitespace_is_trimmed_and_inner_layout_is_kept(world, client):
     """QA-SPL-65-018 [Functional] AC2,3: only the ends are trimmed."""
 
@@ -457,6 +475,7 @@ def test_qa_spl65_018_outer_whitespace_is_trimmed_and_inner_layout_is_kept(world
     assert rows(world, event_id)[0][0].message == "Line one\n\n  line   two"
 
 
+# SPL-65 AC-2 Test-019
 def test_qa_spl65_019_unicode_and_multiline_text_round_trip_unchanged(world, client):
     """QA-SPL-65-019 [Cross-cut] AC2,3,5: accents, CJK, emoji and newlines survive intact."""
 
@@ -468,6 +487,7 @@ def test_qa_spl65_019_unicode_and_multiline_text_round_trip_unchanged(world, cli
     assert organiser_view(client, event_id)["clarifications"][0]["message"] == message
 
 
+# SPL-65 AC-2 Test-020
 @pytest.mark.parametrize(
     "message",
     [
@@ -495,6 +515,7 @@ def test_qa_spl65_020_hostile_text_is_stored_as_plain_data(world, client, messag
 # ===========================================================================================
 
 
+# SPL-65 AC-3 Test-021
 def test_qa_spl65_021_record_holds_message_author_and_timestamp(world, client):
     """QA-SPL-65-021 [Functional] AC3: all three facts are stored and returned."""
 
@@ -514,6 +535,7 @@ def test_qa_spl65_021_record_holds_message_author_and_timestamp(world, client):
     assert stored.created_at is not None
 
 
+# SPL-65 AC-3 Test-022
 def test_qa_spl65_022_timestamp_is_reported_in_singapore_time(world, client):
     """QA-SPL-65-022 [Cross-cut] AC3: the offset is explicit, so no viewer has to guess."""
 
@@ -525,6 +547,7 @@ def test_qa_spl65_022_timestamp_is_reported_in_singapore_time(world, client):
     assert datetime.fromisoformat(stamp).utcoffset() == timedelta(hours=8)
 
 
+# SPL-65 AC-3 Test-023
 def test_qa_spl65_023_one_moment_is_shared_by_record_audit_and_status(world, client):
     """QA-SPL-65-023 [White-box] AC3,4: the three writes use a single transaction timestamp."""
 
@@ -540,6 +563,7 @@ def test_qa_spl65_023_one_moment_is_shared_by_record_audit_and_status(world, cli
         assert clarification.created_at == audit.changed_at == changed
 
 
+# SPL-65 AC-3 Test-024
 @pytest.mark.parametrize(
     "extra",
     [
@@ -561,6 +585,7 @@ def test_qa_spl65_024_client_cannot_choose_author_time_or_ids(world, client, ext
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-3 Test-025
 def test_qa_spl65_025_each_clarification_keeps_its_own_author(world, client):
     """QA-SPL-65-025 [Functional] AC3,6: after reassignment the new author is recorded."""
 
@@ -582,6 +607,7 @@ def test_qa_spl65_025_each_clarification_keeps_its_own_author(world, client):
     ]
 
 
+# SPL-65 AC-3 Test-026
 def test_qa_spl65_026_timestamps_never_go_backwards(world, client):
     """QA-SPL-65-026 [Boundary] AC3,6: successive records are ordered in time."""
 
@@ -600,6 +626,7 @@ def test_qa_spl65_026_timestamps_never_go_backwards(world, client):
 # ===========================================================================================
 
 
+# SPL-65 AC-4 Test-027
 def test_qa_spl65_027_status_label_and_change_time_are_updated(world, client):
     """QA-SPL-65-027 [Functional] AC4: stored value, plain-language label and change time."""
 
@@ -616,6 +643,7 @@ def test_qa_spl65_027_status_label_and_change_time_are_updated(world, client):
     assert moved is not None and moved >= started
 
 
+# SPL-65 AC-4 Test-028
 def test_qa_spl65_028_nothing_else_about_the_event_changes(world, client):
     """QA-SPL-65-028 [Functional] AC4: content and coordinator assignment are preserved."""
 
@@ -636,6 +664,7 @@ def test_qa_spl65_028_nothing_else_about_the_event_changes(world, client):
     assert after["coordinator"] == before["coordinator"] == {"id": ALICE, "name": "Alice Tan"}
 
 
+# SPL-65 AC-4 Test-029
 def test_qa_spl65_029_other_events_are_not_touched(world, client):
     """QA-SPL-65-029 [Cross-cut] AC4: the action is scoped to one event."""
 
@@ -649,6 +678,7 @@ def test_qa_spl65_029_other_events_are_not_touched(world, client):
     assert len(rows(world, target)[0]) == 1
 
 
+# SPL-65 AC-4 Test-030
 def test_qa_spl65_030_assigned_list_and_detail_show_the_new_status(world, client):
     """QA-SPL-65-030 [Functional] AC4: the coordinator sees where the event now stands."""
 
@@ -662,6 +692,7 @@ def test_qa_spl65_030_assigned_list_and_detail_show_the_new_status(world, client
     assert detail["status"] == "returned_for_clarification"
 
 
+# SPL-65 AC-4 Test-031
 def test_qa_spl65_031_one_complete_audit_record_is_written(world, client):
     """QA-SPL-65-031 [Functional] AC4: action, before, after, actor and time are all recorded."""
 
@@ -679,6 +710,7 @@ def test_qa_spl65_031_one_complete_audit_record_is_written(world, client):
     assert response.json["transition"]["actor"] == {"id": ALICE, "name": "Alice Tan"}
 
 
+# SPL-65 AC-4 Test-032
 def test_qa_spl65_032_a_failed_write_leaves_the_status_unchanged(world, client, monkeypatch):
     """QA-SPL-65-032 [White-box] AC4,7: status, audit and message commit together or not at all."""
 
@@ -696,6 +728,7 @@ def test_qa_spl65_032_a_failed_write_leaves_the_status_unchanged(world, client, 
     assert_unchanged(world, event_id)
 
 
+# SPL-65 AC-4 Test-033
 def test_qa_spl65_033_review_history_shows_both_transitions_in_order(world, client):
     """QA-SPL-65-033 [Functional] AC4: begin-review then clarification are both audited."""
 
@@ -717,6 +750,7 @@ def test_qa_spl65_033_review_history_shows_both_transitions_in_order(world, clie
     ]
 
 
+# SPL-65 AC-4 Test-034
 def test_qa_spl65_034_begin_review_is_unaffected_and_refuses_a_returned_event(world, client):
     """QA-SPL-65-034 [Regression] AC4,7: SPL-70 behaviour is unchanged by the new status."""
 
@@ -738,6 +772,7 @@ def test_qa_spl65_034_begin_review_is_unaffected_and_refuses_a_returned_event(wo
 # ===========================================================================================
 
 
+# SPL-65 AC-5 Test-035
 def test_qa_spl65_035_responsible_organiser_retrieves_the_message(world, client):
     """QA-SPL-65-035 [Happy Flow] AC5: the request itself carries the message."""
 
@@ -752,6 +787,7 @@ def test_qa_spl65_035_responsible_organiser_retrieves_the_message(world, client)
     assert seen["clarifications"][0]["author"]["name"] == "Alice Tan"
 
 
+# SPL-65 AC-5 Test-036
 def test_qa_spl65_036_same_client_colleague_can_read_it_read_only(world, client):
     """QA-SPL-65-036 [Functional] AC5: same-client organisers may view (release rule)."""
 
@@ -765,6 +801,7 @@ def test_qa_spl65_036_same_client_colleague_can_read_it_read_only(world, client)
     assert [c["message"] for c in seen.json["event"]["clarifications"]] == [MSG]
 
 
+# SPL-65 AC-5 Test-037
 def test_qa_spl65_037_another_client_cannot_see_the_event_or_message(world, client):
     """QA-SPL-65-037 [Negative / Security] AC5: unrelated clients get a non-disclosing 404."""
 
@@ -778,6 +815,7 @@ def test_qa_spl65_037_another_client_cannot_see_the_event_or_message(world, clie
     assert MSG not in own_route.get_data(as_text=True) + org_route.get_data(as_text=True)
 
 
+# SPL-65 AC-5 Test-038
 def test_qa_spl65_038_organiser_list_shows_the_returned_status_and_guidance(world, client):
     """QA-SPL-65-038 [Functional] AC5: the list tells the organiser what to do next."""
 
@@ -791,6 +829,7 @@ def test_qa_spl65_038_organiser_list_shows_the_returned_status_and_guidance(worl
     assert "update your request" in listed["status_explanation"].lower()
 
 
+# SPL-65 AC-5 Test-039
 def test_qa_spl65_039_assigned_coordinator_reads_the_history_but_others_cannot(world, client):
     """QA-SPL-65-039 [Functional] AC5,6: coordinator detail carries it; strangers get 404."""
 
@@ -804,6 +843,7 @@ def test_qa_spl65_039_assigned_coordinator_reads_the_history_but_others_cannot(w
     assert theirs.status_code == 404
 
 
+# SPL-65 AC-5 Test-040
 def test_qa_spl65_040_clarification_shape_exposes_only_the_intended_fields(world, client):
     """QA-SPL-65-040 [Cross-cut / API] AC5: no internal ids, emails or roles leak."""
 
@@ -816,6 +856,7 @@ def test_qa_spl65_040_clarification_shape_exposes_only_the_intended_fields(world
     assert set(item["author"]) == {"id", "name"}
 
 
+# SPL-65 AC-5 Test-041
 @pytest.mark.parametrize("via", ["own", "organisation", "assigned"])
 def test_qa_spl65_041_an_event_without_clarifications_returns_an_empty_list(world, client, via):
     """QA-SPL-65-041 [Boundary] AC5,6: zero history is an empty list, never null or missing."""
@@ -838,6 +879,7 @@ def test_qa_spl65_041_an_event_without_clarifications_returns_an_empty_list(worl
 # ===========================================================================================
 
 
+# SPL-65 AC-6 Test-042
 def test_qa_spl65_042_second_request_keeps_the_first_newest_first(world, client):
     """QA-SPL-65-042 [Happy Flow] AC6: two requests, two records, latest on top."""
 
@@ -852,6 +894,7 @@ def test_qa_spl65_042_second_request_keeps_the_first_newest_first(world, client)
     assert len(rows(world, event_id)[1]) == 2
 
 
+# SPL-65 AC-6 Test-043
 def test_qa_spl65_043_five_rounds_are_all_retained_in_order(world, client):
     """QA-SPL-65-043 [Boundary] AC6: repeated use stays consistent."""
 
@@ -866,6 +909,7 @@ def test_qa_spl65_043_five_rounds_are_all_retained_in_order(world, client):
     assert len(rows(world, event_id)[1]) == 5
 
 
+# SPL-65 AC-6 Test-044
 def test_qa_spl65_044_earlier_records_are_never_altered(world, client):
     """QA-SPL-65-044 [Functional] AC6: id, text, author and time of record one stay fixed."""
 
@@ -881,6 +925,7 @@ def test_qa_spl65_044_earlier_records_are_never_altered(world, client):
     assert (again.id, again.message, again.author_account_id, again.created_at) == snapshot
 
 
+# SPL-65 AC-6 Test-045
 def test_qa_spl65_045_identical_timestamps_still_sort_newest_first(world, client):
     """QA-SPL-65-045 [White-box] AC6: the id breaks a tie when created_at is equal."""
 
@@ -903,6 +948,7 @@ def test_qa_spl65_045_identical_timestamps_still_sort_newest_first(world, client
     assert [c["message"] for c in history] == ["newer", "older"]
 
 
+# SPL-65 AC-6 Test-046
 def test_qa_spl65_046_deleting_an_event_removes_its_clarifications(world, client):
     """QA-SPL-65-046 [White-box] AC6: no orphan rows are left behind."""
 
@@ -919,6 +965,7 @@ def test_qa_spl65_046_deleting_an_event_removes_its_clarifications(world, client
 # ===========================================================================================
 
 
+# SPL-65 AC-7 Test-047
 @pytest.mark.parametrize("status", ALL_OTHER_STATUSES)
 def test_qa_spl65_047_every_status_other_than_under_review_is_refused(world, client, status):
     """QA-SPL-65-047 [Negative] AC7: the full status vocabulary is walked, one at a time."""
@@ -933,6 +980,7 @@ def test_qa_spl65_047_every_status_other_than_under_review_is_refused(world, cli
     assert_unchanged(world, event_id, status)
 
 
+# SPL-65 AC-7 Test-048
 def test_qa_spl65_048_a_repeated_request_is_refused_and_recorded_once(world, client):
     """QA-SPL-65-048 [Negative] AC7: a double click cannot create a second record."""
 
@@ -945,6 +993,7 @@ def test_qa_spl65_048_a_repeated_request_is_refused_and_recorded_once(world, cli
     assert len(rows(world, event_id)[1]) == 1
 
 
+# SPL-65 AC-7 Test-049
 def test_qa_spl65_049_a_submitted_event_must_begin_review_first(world, client):
     """QA-SPL-65-049 [Negative] AC7: assignment alone does not allow clarification."""
 
@@ -955,6 +1004,7 @@ def test_qa_spl65_049_a_submitted_event_must_begin_review_first(world, client):
     assert_unchanged(world, event_id, "submitted")
 
 
+# SPL-65 AC-7 Test-050
 def test_qa_spl65_050_refusal_bodies_are_json_with_an_error_message(world, client):
     """QA-SPL-65-050 [API] AC2,7: 400, 403, 404 and 409 all explain themselves in JSON."""
 
@@ -977,6 +1027,7 @@ def test_qa_spl65_050_refusal_bodies_are_json_with_an_error_message(world, clien
 # ===========================================================================================
 
 
+# SPL-65 AC-4 Test-051
 def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world):
     """QA-SPL-65-051 [White-box] AC4,7: the server-owned rule table is exactly as specified."""
 
@@ -995,6 +1046,7 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
     assert TRANSITION_RULES["begin_review"].resulting_status == "under_review"
 
 
+# SPL-65 AC-7 Test-052
 def test_qa_spl65_052_transition_service_refuses_a_stale_state_without_an_audit_row(world, client):
     """QA-SPL-65-052 [White-box] AC7: the conditional UPDATE is what enforces the rule."""
 
@@ -1015,6 +1067,7 @@ def test_qa_spl65_052_transition_service_refuses_a_stale_state_without_an_audit_
     assert status_of(world, event_id) == "approved"
 
 
+# SPL-65 AC-4 Test-053
 def test_qa_spl65_053_transition_service_applies_the_rule_and_returns_evidence(world, client):
     """QA-SPL-65-053 [White-box] AC4: called directly, it moves the row and returns the audit."""
 
@@ -1034,6 +1087,7 @@ def test_qa_spl65_053_transition_service_applies_the_rule_and_returns_evidence(w
         assert session.get(EventRequest, event_id).status == "returned_for_clarification"
 
 
+# SPL-65 AC-7 Test-054
 def test_qa_spl65_054_unknown_action_is_a_programming_error_not_a_silent_success(world, client):
     """QA-SPL-65-054 [White-box] AC7: an unregistered action name cannot change anything."""
 
@@ -1051,6 +1105,7 @@ def test_qa_spl65_054_unknown_action_is_a_programming_error_not_a_silent_success
     assert status_of(world, event_id) == "under_review"
 
 
+# SPL-65 AC-4 Test-055
 def test_qa_spl65_055_new_status_has_wording_and_a_check_constraint_entry(world):
     """QA-SPL-65-055 [White-box] AC4: vocabulary, wording and DB constraint agree."""
 
@@ -1061,6 +1116,7 @@ def test_qa_spl65_055_new_status_has_wording_and_a_check_constraint_entry(world)
     assert len(EVENT_REQUEST_STATUSES) == 12
 
 
+# SPL-65 AC-4 Test-056
 def test_qa_spl65_056_database_accepts_the_new_status_and_rejects_an_unknown_one(world, client):
     """QA-SPL-65-056 [White-box] AC4,7: the check constraint is the last line of defence."""
 
@@ -1073,6 +1129,7 @@ def test_qa_spl65_056_database_accepts_the_new_status_and_rejects_an_unknown_one
             session.commit()
 
 
+# SPL-65 AC-2 Test-057
 def test_qa_spl65_057_message_validator_is_exercised_directly(world):
     """QA-SPL-65-057 [White-box] AC2: every branch of the request-body validator."""
 
@@ -1097,6 +1154,7 @@ def test_qa_spl65_057_message_validator_is_exercised_directly(world):
             run(**bad)
 
 
+# SPL-65 AC-3 Test-058
 def test_qa_spl65_058_serialiser_reads_every_offset_as_singapore_time(world, client):
     """QA-SPL-65-058 [White-box] AC3,5: naive, UTC and Singapore times all read as +08:00."""
 
@@ -1154,6 +1212,7 @@ def _add_history(world, event_id, count):
         session.commit()
 
 
+# SPL-65 AC-5 Test-059
 @pytest.mark.parametrize("path", ["own", "organisation", "assigned"])
 def test_qa_spl65_059_reading_history_costs_the_same_queries_however_long_it_is(
     world, client, path
@@ -1179,6 +1238,7 @@ def test_qa_spl65_059_reading_history_costs_the_same_queries_however_long_it_is(
     assert many == one
 
 
+# SPL-65 AC-6 Test-060
 def test_qa_spl65_060_a_long_history_is_returned_quickly_and_completely(world, client):
     """QA-SPL-65-060 [Performance] AC6: 300 records come back in one fast, ordered response."""
 
@@ -1195,6 +1255,7 @@ def test_qa_spl65_060_a_long_history_is_returned_quickly_and_completely(world, c
     assert elapsed < 2.0
 
 
+# SPL-65 AC-1 Test-061
 def test_qa_spl65_061_thirty_events_can_each_be_returned_in_sequence(world, client):
     """QA-SPL-65-061 [Load] AC1,4: repeated use records exactly one clarification per event."""
 
@@ -1213,6 +1274,7 @@ def test_qa_spl65_061_thirty_events_can_each_be_returned_in_sequence(world, clie
         }
 
 
+# SPL-65 AC-1 Test-062
 def test_qa_spl65_062_success_response_contract(world, client):
     """QA-SPL-65-062 [API] AC1,3,4: the 200 body has exactly the documented top-level keys."""
 
