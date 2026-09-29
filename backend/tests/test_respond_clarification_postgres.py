@@ -107,7 +107,7 @@ def test_tc_spl_66_02_partial_response_evidence_is_rejected_by_postgres(engine):
                 "(:actor, :organisation, 'Forum', 'Test', '2026-12-01', '09:00', '12:00', 10, "
                 "'returned_for_clarification', '[]'::json, '[]'::json, false) returning id"
             ),
-                {"actor": account_id, "organisation": organisation_id},
+            {"actor": account_id, "organisation": organisation_id},
         ).scalar_one()
         clarification_id = connection.execute(
             text(
