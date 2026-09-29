@@ -173,6 +173,11 @@ class EventRequest(Base):
             name="ck_event_requests_rejection_complete",
         ),
         CheckConstraint(
+            "(withdrawn_by_account_id is null and withdrawn_at is null and withdrawal_note is null)"
+            " or (withdrawn_by_account_id is not null and withdrawn_at is not null)",
+            name="ck_event_requests_withdrawal_complete",
+        ),
+        CheckConstraint(
             "status <> 'submitted' or (purpose is not null "
             "and proposed_date is not null "
             "and start_time is not null "
@@ -226,11 +231,18 @@ class EventRequest(Base):
     )
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
+    # CS-E06-S6. Withdrawal keeps its actor and time; the accompanying note is optional.
+    withdrawn_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawal_note: Mapped[str | None] = mapped_column(Text)
     organiser: Mapped[Account] = relationship(
         back_populates="event_requests", foreign_keys=[organiser_account_id]
     )
     approver: Mapped[Account | None] = relationship(foreign_keys=[approved_by_account_id])
     rejecter: Mapped[Account | None] = relationship(foreign_keys=[rejected_by_account_id])
+    withdrawer: Mapped[Account | None] = relationship(foreign_keys=[withdrawn_by_account_id])
     venue: Mapped["Venue | None"] = relationship()
     organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(

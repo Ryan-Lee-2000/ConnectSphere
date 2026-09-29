@@ -1143,7 +1143,13 @@ def test_qa_spl68_070_the_rule_table_maps_under_review_to_rejected(client):
     rule = TRANSITION_RULES[REJECT]
     assert (rule.previous_status, rule.resulting_status) == (UNDER_REVIEW, REJECTED)
     assert (UNDER_REVIEW, REJECTED, REJECT) == ("under_review", "rejected", "reject")
-    assert set(TRANSITION_RULES) == {BEGIN_REVIEW, REQUEST_CLARIFICATION, APPROVE, REJECT}
+    assert set(TRANSITION_RULES) == {
+        BEGIN_REVIEW,
+        REQUEST_CLARIFICATION,
+        APPROVE,
+        REJECT,
+        "withdraw",
+    }
 
 
 def test_qa_spl68_071_rejected_is_a_known_terminal_status_with_wording(client):
@@ -1390,7 +1396,7 @@ def test_qa_spl68_086_the_migration_extends_the_approval_head_as_the_only_head(c
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["s2_venue_booking_rejection"]
+    assert script.get_heads() == ["s2_event_withdrawal"]
     assert script.get_revision("s2_event_rejection").down_revision == "s2_event_approval"
 
 

@@ -14,7 +14,6 @@ import pytest
 from app.event_requests import SINGAPORE
 from app.models import (
     Account,
-    EventRequest,
     Organisation,
     Venue,
     VenueBooking,
@@ -73,19 +72,26 @@ def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
                 Account(id=coordinator, display_name="Casey Lim", organisation_id=organisation.id)
             )
             session.flush()
-            planning_event = EventRequest(
-                organiser_account_id=coordinator,
-                organisation_id=organisation.id,
-                name="Backfill Forum",
-                purpose="Backfill proof",
-                proposed_date=date(2026, 10, 14),
-                start_time=time(13),
-                end_time=time(18),
-                expected_attendance=100,
-                status="planning",
-            )
+            # This database intentionally stops at the historical predecessor revision. Use
+            # revision-era SQL so future nullable EventRequest fields do not leak into the insert.
+            planning_event_id = session.execute(
+                text(
+                    "INSERT INTO event_requests "
+                    "(organiser_account_id, organisation_id, name, purpose, proposed_date, "
+                    "start_time, end_time, expected_attendance, status) VALUES "
+                    "(:organiser, :organisation, 'Backfill Forum', 'Backfill proof', :date, "
+                    ":start, :end, 100, 'planning') RETURNING id"
+                ),
+                {
+                    "organiser": coordinator,
+                    "organisation": organisation.id,
+                    "date": date(2026, 10, 14),
+                    "start": time(13),
+                    "end": time(18),
+                },
+            ).scalar_one()
             venue = Venue(name="Backfill Hall", operating_slots=["PM"])
-            session.add_all([planning_event, venue])
+            session.add(venue)
             session.flush()
             session.execute(
                 text(
@@ -96,7 +102,7 @@ def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
                     "(:event, :venue, 'requested', false, NULL, NULL, NULL, NULL)"
                 ),
                 {
-                    "event": planning_event.id,
+                    "event": planning_event_id,
                     "venue": venue.id,
                     "who": coordinator,
                     "req": requested_at,

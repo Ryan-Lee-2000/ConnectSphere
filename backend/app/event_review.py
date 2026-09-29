@@ -1,4 +1,4 @@
-"""Assigned-coordinator review workflow: SPL-70, SPL-65, SPL-67 (approve) and SPL-68 (reject)."""
+"""Assigned-coordinator review workflow for Sprint 2 event decisions."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -15,6 +15,7 @@ from app.event_requests import (
     serialize_approval,
     serialize_clarifications,
     serialize_rejection,
+    serialize_withdrawal,
 )
 from app.event_statuses import status_label
 from app.models import (
@@ -31,18 +32,21 @@ BEGIN_REVIEW = "begin_review"
 REQUEST_CLARIFICATION = "request_clarification"
 APPROVE = "approve"
 REJECT = "reject"
+WITHDRAW = "withdraw"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
 PLANNING = "planning"
 REJECTED = "rejected"
+WITHDRAWN = "withdrawn"
 MAX_CLARIFICATION_LENGTH = 2000
 MAX_REJECTION_REASON_LENGTH = 2000
+MAX_WITHDRAWAL_NOTE_LENGTH = 2000
 
 
 @dataclass(frozen=True)
 class TransitionRule:
-    previous_status: str
+    previous_status: str | tuple[str, ...]
     resulting_status: str
 
 
@@ -64,6 +68,10 @@ TRANSITION_RULES = {
     REJECT: TransitionRule(
         previous_status=UNDER_REVIEW,
         resulting_status=REJECTED,
+    ),
+    WITHDRAW: TransitionRule(
+        previous_status=(SUBMITTED, UNDER_REVIEW, RETURNED_FOR_CLARIFICATION),
+        resulting_status=WITHDRAWN,
     ),
 }
 
@@ -244,6 +252,59 @@ def register_event_review_routes(app: Flask) -> None:
                 message="Request rejected. The Event Organiser can see your reason.",
             )
 
+    @app.post("/api/event-requests/<int:event_request_id>/withdraw")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def withdraw_event_request(event_request_id: int):
+        note = _withdrawal_note()
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Assigned event not found.")
+            now = datetime.now(SINGAPORE)
+            try:
+                audit = transition_event_status(
+                    session,
+                    event_request_id=event_request_id,
+                    action=WITHDRAW,
+                    actor_account_id=g.user_id,
+                    changed_at=now,
+                )
+            except InvalidStatusTransition:
+                session.rollback()
+                abort(
+                    409,
+                    "Only a Submitted, Under Review, or Returned for Clarification event "
+                    "can be withdrawn.",
+                )
+            session.execute(
+                update(EventRequest)
+                .where(EventRequest.id == event_request_id)
+                .values(
+                    withdrawn_by_account_id=g.user_id,
+                    withdrawn_at=now,
+                    withdrawal_note=note,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            session.commit()
+            actor = session.get(Account, g.user_id)
+            session.expire_all()
+            event = session.get(EventRequest, event_request_id)
+            return jsonify(
+                event={**_serialize_event(event), **serialize_withdrawal(event)},
+                transition=_serialize_transition(audit, actor),
+                message="Withdrawal recorded. This request will not be reviewed further.",
+            )
+
 
 def transition_event_status(
     session: Session,
@@ -256,11 +317,19 @@ def transition_event_status(
     """Apply one named transition and append its evidence in the caller's transaction."""
 
     rule = TRANSITION_RULES[action]
+    previous_status = session.scalar(
+        select(EventRequest.status).where(EventRequest.id == event_request_id)
+    )
+    allowed = (
+        rule.previous_status if isinstance(rule.previous_status, tuple) else (rule.previous_status,)
+    )
+    if previous_status not in allowed:
+        raise InvalidStatusTransition
     transitioned = session.execute(
         update(EventRequest)
         .where(
             EventRequest.id == event_request_id,
-            EventRequest.status == rule.previous_status,
+            EventRequest.status == previous_status,
         )
         .values(status=rule.resulting_status, status_changed_at=changed_at)
         .execution_options(synchronize_session=False)
@@ -270,7 +339,7 @@ def transition_event_status(
     audit = EventStatusHistory(
         event_request_id=event_request_id,
         action=action,
-        previous_status=rule.previous_status,
+        previous_status=previous_status,
         resulting_status=rule.resulting_status,
         actor_account_id=actor_account_id,
         changed_at=changed_at,
@@ -316,6 +385,27 @@ def _rejection_reason() -> str:
     if len(reason) > MAX_REJECTION_REASON_LENGTH:
         abort(400, f"Keep the reason to {MAX_REJECTION_REASON_LENGTH} characters or fewer.")
     return reason
+
+
+def _withdrawal_note() -> str | None:
+    """Accept only an optional note; status and actor remain server-owned."""
+
+    if request.content_length in (None, 0):
+        return None
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) - {"note"}:
+        abort(400, "Send only an optional withdrawal note.")
+    note = data.get("note")
+    if note is None or note == "":
+        return None
+    if not isinstance(note, str):
+        abort(400, "The withdrawal note must be text.")
+    note = note.strip()
+    if not note:
+        return None
+    if len(note) > MAX_WITHDRAWAL_NOTE_LENGTH:
+        abort(400, f"Keep the withdrawal note to {MAX_WITHDRAWAL_NOTE_LENGTH} characters or fewer.")
+    return note
 
 
 def _serialize_event(event: EventRequest) -> dict[str, Any]:
