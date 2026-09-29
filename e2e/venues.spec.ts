@@ -20,6 +20,8 @@ async function signIn(page: Page, email: string) {
 }
 
 test.describe('venue catalogue journeys', () => {
+  // SPL-47 AC-1 Test-001
+  // SPL-47 AC-2 Test-004
   test('Venue Staff creates a venue and retrieves it after refresh', async ({ page }) => {
     const venueName = `E2E Venue ${Date.now()}`;
     await signIn(page, venueStaffEmail);
@@ -58,6 +60,9 @@ test.describe('venue catalogue journeys', () => {
     await expect(preparation.getByText('Required', { exact: true })).toHaveCount(2);
   });
 
+  // SPL-48 AC-3 Test-005
+  // SPL-49 AC-1 Test-001
+  // SPL-49 AC-3 Test-005
   test('Venue Staff edits a venue profile and layout', async ({ page }) => {
     const initialName = `E2E Editable ${Date.now()}`;
     const updatedName = `${initialName} Updated`;
@@ -80,6 +85,8 @@ test.describe('venue catalogue journeys', () => {
     await expect(page.locator('.layout-capacity-list').getByText('42', { exact: true })).toBeVisible();
   });
 
+  // SPL-50 AC-2 Test-002
+  // SPL-50 AC-3 Test-003
   test('Event Coordinator can browse venue details but cannot manage the catalogue', async ({ page }) => {
     await signIn(page, coordinatorEmail);
     const firstVenue = page.locator('.venue-card').first();

@@ -135,6 +135,7 @@ def submit_request(client, *, name="Regional Partner Conference", identity="orga
 # --- AC1: the agreed status vocabulary is recorded ---------------------------------------
 
 
+# SPL-63 AC-1 Test-01
 def test_tc_01_every_agreed_status_value_is_accepted(status_app):
     for status in EVENT_REQUEST_STATUSES:
         seed_request(status_app, name=f"Request holding {status}", status=status)
@@ -145,6 +146,7 @@ def test_tc_01_every_agreed_status_value_is_accepted(status_app):
     assert sorted(stored) == sorted(EVENT_REQUEST_STATUSES)
 
 
+# SPL-63 AC-1 Test-02
 @pytest.mark.parametrize(
     "status",
     ["pending", "SUBMITTED", "Not approved", ""],
@@ -157,6 +159,7 @@ def test_tc_02_a_value_outside_the_vocabulary_is_refused(status_app, status):
         assert session.scalars(select(EventRequest)).all() == []
 
 
+# SPL-63 AC-1 Test-03
 def test_tc_03_a_newly_submitted_request_starts_at_the_submitted_status(client):
     created = submit_request(client)
 
@@ -167,6 +170,7 @@ def test_tc_03_a_newly_submitted_request_starts_at_the_submitted_status(client):
 # --- AC2: status is visible in the list and on the detail view ----------------------------
 
 
+# SPL-63 AC-2 Test-04
 def test_tc_04_the_list_reports_the_status_of_every_own_request(client, status_app):
     seed_request(status_app, name="Waiting", status="submitted")
     seed_request(status_app, name="Being read", status="under_review")
@@ -183,6 +187,7 @@ def test_tc_04_the_list_reports_the_status_of_every_own_request(client, status_a
     }
 
 
+# SPL-63 AC-2 Test-05
 def test_tc_05_the_detail_view_agrees_with_the_list(client, status_app):
     event_id = seed_request(status_app, status="under_review")
 
@@ -194,6 +199,7 @@ def test_tc_05_the_detail_view_agrees_with_the_list(client, status_app):
         assert detail.json["event_request"][field] == listed[field]
 
 
+# SPL-63 AC-2 Test-06
 def test_tc_06_another_organisers_request_is_neither_listed_nor_readable(client, status_app):
     mine = seed_request(status_app, name="Mine", organiser=ORGANISER_ONE)
     theirs = seed_request(status_app, name="Theirs", organiser=ORGANISER_TWO)
@@ -210,6 +216,7 @@ def test_tc_06_another_organisers_request_is_neither_listed_nor_readable(client,
 # --- AC3: plain language, and no raw system value -----------------------------------------
 
 
+# SPL-63 AC-3 Test-07
 @pytest.mark.parametrize(
     ("status", "label", "explanation"),
     [
@@ -230,6 +237,7 @@ def test_tc_07_each_status_carries_its_name_and_explanation(
     assert listed["status_explanation"] == status_explanation(status)
 
 
+# SPL-63 AC-3 Test-08
 def test_tc_08_the_wording_never_repeats_the_stored_value(status_app):
     """No machine-readable form of a status reaches the organiser.
 
@@ -250,6 +258,7 @@ def test_tc_08_the_wording_never_repeats_the_stored_value(status_app):
         assert "_" not in label
 
 
+# SPL-63 AC-3 Test-09
 def test_tc_09_every_vocabulary_member_has_exactly_one_name_and_one_explanation():
     for status, wording in EVENT_REQUEST_STATUSES.items():
         assert len(wording) == 2, status
@@ -264,6 +273,7 @@ def test_tc_09_every_vocabulary_member_has_exactly_one_name_and_one_explanation(
     assert INITIAL_STATUS in EVENT_REQUEST_STATUSES
 
 
+# SPL-63 AC-3 Test-09
 def test_tc_09_the_constraint_and_the_wording_describe_the_same_set(status_app):
     """Nothing is storable without wording, and nothing is described that cannot be stored."""
 
@@ -279,6 +289,7 @@ def test_tc_09_the_constraint_and_the_wording_describe_the_same_set(status_app):
 # --- AC4: the time of the most recent status change ---------------------------------------
 
 
+# SPL-63 AC-4 Test-10
 def test_tc_10_an_unchanged_status_reports_the_submission_time(client, status_app):
     submitted = datetime(2026, 9, 18, 9, 30, tzinfo=SINGAPORE)
     seed_request(status_app, submitted_at=submitted, status_changed_at=None)
@@ -289,6 +300,7 @@ def test_tc_10_an_unchanged_status_reports_the_submission_time(client, status_ap
     assert listed["status_changed_at"] == listed["submitted_at"]
 
 
+# SPL-63 AC-4 Test-11
 def test_tc_11_a_changed_status_reports_the_time_of_that_change(client, status_app):
     submitted = datetime(2026, 9, 18, 9, 30, tzinfo=SINGAPORE)
     changed = datetime(2026, 9, 18, 14, 0, tzinfo=SINGAPORE)
@@ -304,6 +316,7 @@ def test_tc_11_a_changed_status_reports_the_time_of_that_change(client, status_a
     assert detail.json["event_request"]["status_changed_at"] == changed.isoformat()
 
 
+# SPL-63 AC-4 Test-12
 def test_tc_12_a_request_with_no_recorded_time_is_still_readable(client, status_app):
     seed_request(status_app, submitted_at=None, status_changed_at=None)
 
@@ -320,6 +333,7 @@ def test_tc_12_a_request_with_no_recorded_time_is_still_readable(client, status_
 # --- AC8: only an Event Organiser -----------------------------------------------------------
 
 
+# SPL-63 AC-8 Test-21
 def test_tc_21_an_unauthenticated_read_is_refused_without_disclosing_anything(client, status_app):
     seed_request(status_app, name="Should stay private")
 

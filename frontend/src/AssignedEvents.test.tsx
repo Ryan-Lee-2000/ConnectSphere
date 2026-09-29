@@ -12,6 +12,8 @@ const assigned = {
   location_preference: 'Marina Centre',
 };
 
+// SPL-62 AC-1 Test-001
+// SPL-62 AC-2 Test-002
 it('shows an assigned event with status and proposed date, then opens its route', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ events: [assigned] }) });
   const onNavigate = vi.fn();
@@ -24,6 +26,7 @@ it('shows an assigned event with status and proposed date, then opens its route'
   expect(request).toHaveBeenCalledWith('/api/event-requests/assigned');
 });
 
+// SPL-62 AC-2 Test-002
 it('opens the selected event using the assigned-only detail endpoint', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: assigned }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
@@ -49,6 +52,7 @@ const fullDetail = {
   submitted_at: '2026-09-01T09:00:00+08:00',
 };
 
+// SPL-64 AC-1,2 Test-01,02
 it('[TC-SPL-64-01, TC-SPL-64-02] shows every request field in a table, marking empty ones', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: fullDetail }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
@@ -68,6 +72,7 @@ it('[TC-SPL-64-01, TC-SPL-64-02] shows every request field in a table, marking e
   expect(screen.queryByRole('textbox')).toBeNull();
 });
 
+// SPL-64 AC-3,4 Test-03
 it('[TC-SPL-64-03] shows only the unavailable message when the request cannot be retrieved', async () => {
   const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'Assigned event not found.' }) });
   render(<AssignedEvents accessToken="token" eventId={99} request={request} onNavigate={vi.fn()} />);
@@ -75,6 +80,7 @@ it('[TC-SPL-64-03] shows only the unavailable message when the request cannot be
   expect(screen.queryByRole('table')).toBeNull();
 });
 
+// SPL-64 AC-2 Test-06
 it('[TC-SPL-64-06] keeps the full detail visible after begin review returns the summary shape', async () => {
   const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
   const request = vi.fn()
@@ -93,6 +99,7 @@ function renderDetail(event: Record<string, unknown>) {
   return async (label: string) => (await screen.findByRole('rowheader', { name: label })).closest('tr')!.textContent!;
 }
 
+// SPL-64 AC-1 Test-10
 it('[TC-SPL-64-10] renders registration as No when false and Not provided when the field is absent', async () => {
   const row = renderDetail({ ...fullDetail, registration_required: false });
   expect(await row('Registration required')).toContain('No');
@@ -101,6 +108,7 @@ it('[TC-SPL-64-10] renders registration as No when false and Not provided when t
   expect(await absent('Registration required')).toContain('Not provided');
 });
 
+// SPL-64 AC-1 Test-11
 it('[TC-SPL-64-11] shows Not provided for every empty value and an empty equipment list', async () => {
   const row = renderDetail({ ...assigned, proposed_date: null, description: '', equipment_requirements: [], required_facilities: [], submitted_at: null });
   expect(await row('Proposed date')).toContain('Not provided');
@@ -111,11 +119,13 @@ it('[TC-SPL-64-11] shows Not provided for every empty value and an empty equipme
   expect(await row('Time')).toContain('Not provided');
 });
 
+// SPL-64 AC-1 Test-12
 it('[TC-SPL-64-12] shows Time only when both a start and an end are present', async () => {
   const row = renderDetail({ ...fullDetail, end_time: null });
   expect(await row('Time')).toContain('Not provided');
 });
 
+// SPL-64 AC-1 Test-13
 it('[TC-SPL-64-13] lists several equipment lines and omits empty notes', async () => {
   const row = renderDetail({
     ...fullDetail,
@@ -130,18 +140,21 @@ it('[TC-SPL-64-13] lists several equipment lines and omits empty notes', async (
   expect(text).not.toContain('Lamp × 1 (');
 });
 
+// SPL-64 AC-1 Test-14
 it('[TC-SPL-64-14] keeps zero attendance rather than treating it as empty', async () => {
   const row = renderDetail({ ...fullDetail, expected_attendance: 0 });
   expect(await row('Expected attendance')).toContain('0');
   expect(await row('Expected attendance')).not.toContain('Not provided');
 });
 
+// SPL-64 AC-1 Test-15
 it('[TC-SPL-64-15] shows the submission time in Singapore time whatever offset arrives', async () => {
   const row = renderDetail({ ...fullDetail, submitted_at: '2026-09-01T17:00:00Z' });
   const text = await row('Submission date and time');
   expect(text).toContain('2 Sept 2026');
 });
 
+// SPL-64 AC-4 Test-16
 it('[TC-SPL-64-16] shows a retry message when the detail response is malformed or the request throws', async () => {
   const malformed = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   render(<AssignedEvents accessToken="token" eventId={12} request={malformed} onNavigate={vi.fn()} />);
@@ -153,12 +166,14 @@ it('[TC-SPL-64-16] shows a retry message when the detail response is malformed o
   expect(screen.queryByRole('table')).toBeNull();
 });
 
+// SPL-64 AC-2 Test-17
 it('[TC-SPL-64-17] hides Begin review once the event is under review but keeps the full detail', async () => {
   renderDetail({ ...fullDetail, status: 'under_review', status_label: 'Under review' });
   expect(await screen.findByText('Harbour Hall')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Begin review' })).toBeNull();
 });
 
+// SPL-64 AC-1,2 Test-18
 it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and row headers', async () => {
   renderDetail({ ...fullDetail, status: 'planning', status_label: 'In planning' });
   const table = await screen.findByRole('table', { name: /Submitted request details for Community Forum/ });
@@ -204,6 +219,8 @@ it('[TC-SPL-71-12] hides venue discovery before Planning and blocks a direct sea
   expect(screen.queryByRole('heading', { name: 'Search filters' })).toBeNull();
 });
 
+// SPL-70 AC-1,4 Test-01
+// SPL-70 AC-1,2 Test-05
 it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from a submitted event', async () => {
   const underReview = { ...assigned, status: 'under_review', status_label: 'Under review' };
   const request = vi.fn()
@@ -222,6 +239,7 @@ it('[TC-SPL-70-01, TC-SPL-70-05] lets the assigned coordinator begin review from
   );
 });
 
+// SPL-70 AC-1,2 Test-05
 it('[TC-SPL-70-05] keeps the submitted status available when begin review is refused', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: assigned }) })
@@ -235,6 +253,7 @@ it('[TC-SPL-70-05] keeps the submitted status available when begin review is ref
   expect(screen.getByRole('button', { name: 'Begin review' })).toBeTruthy();
 });
 
+// SPL-62 AC-3 Test-003
 it('shows an empty state when nothing is assigned', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ events: [] }) });
   render(<AssignedEvents accessToken="token" request={request} onNavigate={vi.fn()} />);
@@ -250,6 +269,7 @@ const clarificationAnswer = {
   }],
 };
 
+// SPL-65 AC-1,7 Test-09
 it('[TC-SPL-65-09] shows the clarification form only while the event is under review', async () => {
   renderDetail(fullDetail);
   expect(await screen.findByText('Harbour Hall')).toBeTruthy();
@@ -260,6 +280,7 @@ it('[TC-SPL-65-09] shows the clarification form only while the event is under re
   expect(screen.getByLabelText('Clarification for the Event Organiser')).toBeTruthy();
 });
 
+// SPL-65 AC-1,7 Test-09
 it('[TC-SPL-65-09] sends the message, then shows the new status and history without the form', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
@@ -282,6 +303,7 @@ it('[TC-SPL-65-09] sends the message, then shows the new status and history with
   });
 });
 
+// SPL-65 AC-2 Test-10
 it('[TC-SPL-65-10] refuses a blank message without calling the server', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: underReviewDetail }) });
   render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
@@ -293,6 +315,7 @@ it('[TC-SPL-65-10] refuses a blank message without calling the server', async ()
   expect(request).toHaveBeenCalledTimes(1);
 });
 
+// SPL-65 AC-2 Test-10
 it('[TC-SPL-65-10] keeps the form and message when the server refuses the request', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
@@ -306,6 +329,7 @@ it('[TC-SPL-65-10] keeps the form and message when the server refuses the reques
   expect((screen.getByLabelText('Clarification for the Event Organiser') as HTMLTextAreaElement).value).toBe('Why?');
 });
 
+// SPL-65 AC-6 Test-11
 it('[TC-SPL-65-11] lists the clarification history newest first', async () => {
   renderDetail({
     ...fullDetail, status: 'returned_for_clarification', status_label: 'Returned for clarification',
@@ -326,6 +350,7 @@ const approvedAnswer = {
   message: 'Request approved. Event planning can begin.',
 };
 
+// SPL-67 AC-1 Test-10
 it('[TC-SPL-67-10] shows the approve button only while the event is under review', async () => {
   renderDetail(fullDetail);
   expect(await screen.findByText('Harbour Hall')).toBeTruthy();
@@ -335,6 +360,7 @@ it('[TC-SPL-67-10] shows the approve button only while the event is under review
   expect(await screen.findByRole('button', { name: 'Approve request' })).toBeTruthy();
 });
 
+// SPL-67 AC-3 Test-11
 it('[TC-SPL-67-11] approves, shows the message, the new status and the decision-maker', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
@@ -352,6 +378,7 @@ it('[TC-SPL-67-11] approves, shows the message, the new status and the decision-
   expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/approve', { method: 'POST' });
 });
 
+// SPL-67 AC-6 Test-12
 it('[TC-SPL-67-12] shows the server message and keeps the button when approval is refused', async () => {
   const request = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })

@@ -26,6 +26,7 @@ function uniqueName() {
   return `E2E Submission ${Date.now()}`;
 }
 
+// SPL-55 AC-5 Test-10
 test('TC-CS-E03-S5-10 an organiser submits from the interface and sees a confirmation', async ({
   page,
 }) => {
@@ -52,6 +53,7 @@ test('TC-CS-E03-S5-10 an organiser submits from the interface and sees a confirm
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+// SPL-55 AC-5 Test-11
 test('TC-CS-E03-S5-11 a role that may not submit is not offered the control', async ({ page }) => {
   await signIn(page, coordinator);
 
@@ -74,6 +76,7 @@ test('TC-CS-E03-S5-11 a role that may not submit is not offered the control', as
   expect([401, 403]).toContain(refused);
 });
 
+// SPL-55 AC-6 Test-12,13
 test('TC-CS-E03-S5-12 and TC-13 an incomplete request cannot submit until required fields are entered', async ({
   page,
 }) => {

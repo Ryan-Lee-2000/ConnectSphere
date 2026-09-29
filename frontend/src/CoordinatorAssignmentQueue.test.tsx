@@ -26,6 +26,8 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+// SPL-59 AC-NA Test-06
+// SPL-60 AC-NA Test-07
 it('stays hidden for accounts without the Event Operations Manager role', async () => {
   const request = vi.fn(async () => response({ error: 'Access denied.' }, 403));
   const { container } = render(<CoordinatorAssignmentQueue accessToken="token" request={request} />);
@@ -33,6 +35,8 @@ it('stays hidden for accounts without the Event Operations Manager role', async 
   expect(request).toHaveBeenCalledWith('/api/event-requests/awaiting-assignment');
 });
 
+// SPL-59 AC-1,2,3 Test-01
+// SPL-59 AC-4 Test-02
 it('lists submitted requests in server order with a matching count', async () => {
   const request = vi.fn(async () => response({ events: [harbourSummit, galaNight], count: 2 }));
   render(<CoordinatorAssignmentQueue accessToken="token" request={request} />);
@@ -45,6 +49,7 @@ it('lists submitted requests in server order with a matching count', async () =>
   expect(within(rows[1]).getByText('Not provided')).toBeTruthy();
 });
 
+// SPL-59 AC-6 Test-03
 it('shows an empty state when no requests are awaiting assignment', async () => {
   const request = vi.fn(async () => response({ events: [], count: 0 }));
   render(<CoordinatorAssignmentQueue accessToken="token" request={request} />);
@@ -52,6 +57,7 @@ it('shows an empty state when no requests are awaiting assignment', async () => 
   expect(screen.getByText('0 events awaiting assignment')).toBeTruthy();
 });
 
+// SPL-60 AC-2,4,5,6,7 Test-01
 it('assigns the chosen coordinator and refreshes the queue', async () => {
   let assigned = false;
   const request = vi.fn(async (path: string, init?: RequestInit) => {
@@ -81,6 +87,7 @@ it('assigns the chosen coordinator and refreshes the queue', async () => {
   expect(await screen.findByRole('heading', { name: 'No events are awaiting assignment' })).toBeTruthy();
 });
 
+// SPL-60 AC-8 Test-05
 it('explains why assignment is unavailable when no coordinator is active', async () => {
   const reason = 'No active Event Coordinator is available, so this event cannot be assigned yet.';
   const request = vi.fn(async (path: string) => path === '/api/event-requests/awaiting-assignment'
@@ -93,6 +100,7 @@ it('explains why assignment is unavailable when no coordinator is active', async
   expect(screen.getByRole('button', { name: 'Confirm assignment' })).toHaveProperty('disabled', true);
 });
 
+// SPL-60 AC-NA Test-Supporting
 it('keeps the panel open and shows the server refusal when assignment fails', async () => {
   const refusal = 'This event already has an Event Coordinator. Reassign it instead.';
   const request = vi.fn(async (path: string, init?: RequestInit) => {

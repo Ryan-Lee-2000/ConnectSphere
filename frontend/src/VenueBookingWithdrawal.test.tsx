@@ -23,6 +23,7 @@ function api(latest: object | null, withdrawal?: { status: number; body: unknown
 }
 const withdrawCalls = (request: ReturnType<typeof vi.fn>) => request.mock.calls.filter(([path]) => String(path).endsWith('/withdraw'));
 
+// SPL-78 AC-1,6 Test-22
 it('[TC-SPL-78-22] offers Withdraw only for a Requested booking and confirms first', async () => {
   for (const status of ['approved', 'withdrawn']) {
     const request = api({ ...BOOKING, status });
@@ -45,6 +46,7 @@ it('[TC-SPL-78-22] offers Withdraw only for a Requested booking and confirms fir
   expect(withdrawCalls(request)).toEqual([['/api/event-requests/12/venue-bookings/41/withdraw', { method: 'POST' }]]);
 });
 
+// SPL-78 AC-2,4,6 Test-23
 it('[TC-SPL-78-23] shows the withdrawal record after success, and keeps the request details', async () => {
   const onWithdrawn = vi.fn();
   const request = api(BOOKING, { status: 200, body: { booking: WITHDRAWN } });
@@ -61,6 +63,7 @@ it('[TC-SPL-78-23] shows the withdrawal record after success, and keeps the requ
   expect(onWithdrawn).toHaveBeenCalledTimes(1);
 });
 
+// SPL-78 AC-2,4,6 Test-23
 it('[TC-SPL-78-23] shows the server refusal verbatim and never marks the request withdrawn', async () => {
   const onWithdrawn = vi.fn();
   const request = api(BOOKING, { status: 409, body: { error: 'Only a Requested venue-booking request can be withdrawn.' } });
@@ -75,6 +78,7 @@ it('[TC-SPL-78-23] shows the server refusal verbatim and never marks the request
   expect(onWithdrawn).not.toHaveBeenCalled();
 });
 
+// SPL-78 AC-1,6 Test-22
 it('[TC-SPL-78-22] shows nothing when the event has no venue-booking request yet', async () => {
   const request = api(null);
   const { container } = render(<VenueBookingPanel api={request} eventId={12} />);

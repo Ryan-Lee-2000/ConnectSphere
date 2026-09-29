@@ -126,6 +126,7 @@ def audit_rows(app, event_id: int):
 
 
 # TC-SPL-70-01
+# SPL-70 AC-1,4 Test-01
 def test_tc_spl_70_01_assigned_coordinator_begins_review_and_records_audit_evidence(app, client):
     event_id = assigned_request(app)
 
@@ -162,6 +163,7 @@ def test_tc_spl_70_01_assigned_coordinator_begins_review_and_records_audit_evide
     assert rows[0].changed_at is not None
 
 
+# SPL-70 AC-2 Test-02
 @pytest.mark.parametrize("token", ["manager", "organiser"])
 # TC-SPL-70-02
 def test_tc_spl_70_02_non_coordinator_role_is_refused_without_changing_event(app, client, token):
@@ -175,6 +177,7 @@ def test_tc_spl_70_02_non_coordinator_role_is_refused_without_changing_event(app
 
 
 # TC-SPL-70-02
+# SPL-70 AC-2 Test-02
 def test_tc_spl_70_02_unassigned_coordinator_is_refused_without_changing_event(app, client):
     event_id = assigned_request(app)
 
@@ -186,6 +189,7 @@ def test_tc_spl_70_02_unassigned_coordinator_is_refused_without_changing_event(a
 
 
 # TC-SPL-70-03
+# SPL-70 AC-2 Test-03
 def test_tc_spl_70_03_event_not_in_submitted_is_refused_without_a_second_transition(app, client):
     event_id = assigned_request(app, status="under_review")
 
@@ -197,6 +201,7 @@ def test_tc_spl_70_03_event_not_in_submitted_is_refused_without_a_second_transit
 
 
 # TC-SPL-70-04
+# SPL-70 AC-3 Test-04
 def test_tc_spl_70_04_client_cannot_supply_an_arbitrary_target_status(app, client):
     event_id = assigned_request(app)
 
@@ -208,6 +213,7 @@ def test_tc_spl_70_04_client_cannot_supply_an_arbitrary_target_status(app, clien
 
 
 # TC-SPL-70-03
+# SPL-70 AC-2 Test-03
 def test_tc_spl_70_03_repeating_begin_review_is_refused_and_keeps_one_audit_record(app, client):
     event_id = assigned_request(app)
     assert begin_review(client, event_id).status_code == 200

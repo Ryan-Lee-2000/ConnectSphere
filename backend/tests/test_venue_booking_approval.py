@@ -278,6 +278,7 @@ def assert_still_requested(app, booking_id):
 
 
 # TC-SPL-81-01
+# SPL-81 AC-1 Test-01
 def test_tc_spl_81_01_venue_staff_approve_a_requested_booking(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -293,6 +294,7 @@ def test_tc_spl_81_01_venue_staff_approve_a_requested_booking(app, client, reque
 
 
 # TC-SPL-81-02
+# SPL-81 AC-1 Test-02
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("coordinator", 403), ("organiser", 403), ("manager", 403), (None, 401)],
@@ -307,6 +309,7 @@ def test_tc_spl_81_02_other_roles_and_no_session_are_refused(
 
 
 # TC-SPL-81-03
+# SPL-81 AC-1 Test-03
 @pytest.mark.parametrize("status", ["approved", "rejected", "withdrawn", "cancelled"])
 def test_tc_spl_81_03_only_a_requested_booking_is_approvable(app, client, requested, status):
     booking_id = requested["booking"]["id"]
@@ -321,6 +324,7 @@ def test_tc_spl_81_03_only_a_requested_booking_is_approvable(app, client, reques
 
 
 # TC-SPL-81-04
+# SPL-81 AC-1 Test-04
 @pytest.mark.parametrize("status", ["confirmed", "completed", "cancelled", "postponed"])
 def test_tc_spl_81_04_event_must_be_in_planning(app, client, requested, status):
     booking_id = requested["booking"]["id"]
@@ -337,6 +341,7 @@ def test_tc_spl_81_04_event_must_be_in_planning(app, client, requested, status):
 
 
 # TC-SPL-81-05
+# SPL-81 AC-1 Test-05
 def test_tc_spl_81_05_unknown_booking_is_refused(app, client, requested):
     unknown = approve(client, 999999, {})
     out_of_range = approve(client, 2**31, {})
@@ -350,6 +355,7 @@ def test_tc_spl_81_05_unknown_booking_is_refused(app, client, requested):
 
 
 # TC-SPL-81-06
+# SPL-81 AC-2 Test-06
 def test_tc_spl_81_06_own_and_adjacent_slots_are_not_conflicts(app, client, requested):
     next_day = make_event(app, "Harbour Talk", day=EVENT_DATE + timedelta(days=1), start=time(13))
     neighbour = request_booking(client, next_day, requested["venue"])
@@ -361,6 +367,7 @@ def test_tc_spl_81_06_own_and_adjacent_slots_are_not_conflicts(app, client, requ
 
 
 # TC-SPL-81-06 — a venue with no preparation buffers records only the event slot
+# SPL-81 AC-2 Test-06
 def test_tc_spl_81_06_venue_without_preparation_slots_is_approved(app, client):
     event_id, venue_id = make_event(app), add_venue(app, "Studio One")
     with Session(app.extensions["engine"]) as session:
@@ -382,6 +389,7 @@ def test_tc_spl_81_06_venue_without_preparation_slots_is_approved(app, client):
 
 
 # TC-SPL-81-07
+# SPL-81 AC-2 Test-07
 @pytest.mark.parametrize("slot", ["AM", "PM", "NIGHT"])
 def test_tc_spl_81_07_operational_block_on_any_slot_refuses(app, client, requested, slot):
     booking_id = requested["booking"]["id"]
@@ -395,6 +403,7 @@ def test_tc_spl_81_07_operational_block_on_any_slot_refuses(app, client, request
 
 
 # TC-SPL-81-08
+# SPL-81 AC-2 Test-08
 @pytest.mark.parametrize("other_status", ["requested", "approved"])
 def test_tc_spl_81_08_other_active_booking_on_a_slot_refuses(app, client, requested, other_status):
     booking_id = requested["booking"]["id"]
@@ -410,6 +419,7 @@ def test_tc_spl_81_08_other_active_booking_on_a_slot_refuses(app, client, reques
 
 
 # TC-SPL-81-09
+# SPL-81 AC-2 Test-09
 def test_tc_spl_81_09_inactive_bookings_and_removed_blocks_do_not_conflict(app, client, requested):
     removed = block(client, requested["venue"], EVENT_DATE, "PM")
     remove_block(client, requested["venue"], removed)
@@ -422,6 +432,7 @@ def test_tc_spl_81_09_inactive_bookings_and_removed_blocks_do_not_conflict(app, 
 
 
 # TC-SPL-81-10
+# SPL-81 AC-2 Test-10
 def test_tc_spl_81_10_recheck_uses_recorded_slots(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = occupancy_rows(app, booking_id)
@@ -442,6 +453,7 @@ def test_tc_spl_81_10_recheck_uses_recorded_slots(app, client, requested):
 
 
 # TC-SPL-81-11
+# SPL-81 AC-3 Test-11
 @pytest.mark.parametrize(
     ("start", "end", "blocked_day", "blocked_slot", "words"),
     [
@@ -469,6 +481,7 @@ def test_tc_spl_81_11_refusal_names_singapore_date_and_slot(
 
 
 # TC-SPL-81-13
+# SPL-81 AC-4 Test-13
 def test_tc_spl_81_13_approval_records_actor_time_and_note(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = stored(app, booking_id)
@@ -504,6 +517,7 @@ def test_tc_spl_81_13_approval_records_actor_time_and_note(app, client, requeste
 
 
 # TC-SPL-81-14
+# SPL-81 AC-4 Test-14
 @pytest.mark.parametrize(
     ("kwargs", "stored_note"),
     [
@@ -525,6 +539,7 @@ def test_tc_spl_81_14_note_is_optional_and_bounded(app, client, requested, kwarg
 
 
 # TC-SPL-81-14
+# SPL-81 AC-4 Test-14
 @pytest.mark.parametrize(
     "body",
     [
@@ -552,6 +567,7 @@ def test_tc_spl_81_14_nothing_else_can_be_supplied(app, client, requested, body)
 
 
 # TC-SPL-81-15
+# SPL-81 AC-5 Test-15
 def test_tc_spl_81_15_approved_slots_stay_occupied(app, client, requested):
     assert approve(client, requested["booking"]["id"], {}).status_code == 200
     other = make_event(app, "Harbour Talk")
@@ -569,6 +585,7 @@ def test_tc_spl_81_15_approved_slots_stay_occupied(app, client, requested):
 
 
 # TC-SPL-81-16
+# SPL-81 AC-5 Test-16
 def test_tc_spl_81_16_occupancy_rows_are_kept_as_they_were(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = occupancy_rows(app, booking_id)
@@ -583,6 +600,7 @@ def test_tc_spl_81_16_occupancy_rows_are_kept_as_they_were(app, client, requeste
 
 
 # TC-SPL-81-17
+# SPL-81 AC-6 Test-17
 @pytest.mark.parametrize(
     "refusal",
     [
@@ -622,6 +640,7 @@ def test_tc_spl_81_17_refusals_change_nothing(app, client, requested, refusal):
 
 
 # TC-SPL-81-18
+# SPL-81 AC-6 Test-18
 def test_tc_spl_81_18_conflict_rolls_back_status_and_audit_together(app, client, requested):
     booking_id = requested["booking"]["id"]
     blocked = block(client, requested["venue"], EVENT_DATE, "NIGHT")
@@ -644,6 +663,7 @@ def test_tc_spl_81_18_conflict_rolls_back_status_and_audit_together(app, client,
 
 
 # TC-SPL-81-21
+# SPL-81 AC-1 Test-21
 def test_tc_spl_81_21_venue_staff_read_a_request_for_review(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = snapshot(app, booking_id)
@@ -678,6 +698,7 @@ def test_tc_spl_81_21_venue_staff_read_a_request_for_review(app, client, request
 
 
 # TC-SPL-81-21
+# SPL-81 AC-1 Test-21
 @pytest.mark.parametrize(
     ("token", "booking", "expected"),
     [
@@ -698,6 +719,7 @@ def test_tc_spl_81_21_others_cannot_read_a_request_for_review(
 
 
 # TC-SPL-81-22
+# SPL-81 AC-2 Test-22
 def test_tc_spl_81_22_review_marker_kept_when_block_removed(app, client, requested):
     booking_id = requested["booking"]["id"]
     blocked = block(client, requested["venue"], EVENT_DATE, "PM")

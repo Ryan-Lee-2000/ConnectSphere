@@ -224,6 +224,7 @@ def requested(app, client):
 
 
 # TC-SPL-80-01
+# SPL-80 AC-1 Test-01
 def test_tc_spl_80_01_venue_staff_retrieve_the_pending_queue(client, requested):
     response = pending(client)
 
@@ -233,6 +234,7 @@ def test_tc_spl_80_01_venue_staff_retrieve_the_pending_queue(client, requested):
 
 
 # TC-SPL-80-02
+# SPL-80 AC-1 Test-02
 def test_tc_spl_80_02_queue_spans_every_client_organisation(app, client, requested):
     """AC1's "organisation-wide" is the venue operator's whole estate, not one client."""
 
@@ -256,6 +258,7 @@ def test_tc_spl_80_02_queue_spans_every_client_organisation(app, client, request
 
 
 # TC-SPL-80-03
+# SPL-80 AC-1 Test-03
 @pytest.mark.parametrize(
     ("token", "expected"),
     [
@@ -281,6 +284,7 @@ def test_tc_spl_80_03_other_roles_and_no_session_are_refused(client, requested, 
 
 
 # TC-SPL-80-04
+# SPL-80 AC-2 Test-04
 def test_tc_spl_80_04_queue_item_carries_every_identifying_field(client, requested):
     item = pending(client).json["requests"][0]
 
@@ -299,6 +303,7 @@ def test_tc_spl_80_04_queue_item_carries_every_identifying_field(client, request
 
 
 # TC-SPL-80-05
+# SPL-80 AC-2 Test-05
 def test_tc_spl_80_05_venue_without_preparation_reports_no_slots(app, client):
     event_id = make_event(app)
     venue_id = add_venue(app, "Riverside Room", setup=0, turnaround=0, slots=("AM", "PM"))
@@ -311,6 +316,7 @@ def test_tc_spl_80_05_venue_without_preparation_reports_no_slots(app, client):
 
 
 # TC-SPL-80-19
+# SPL-80 AC-1,2 Test-19
 def test_tc_spl_80_19_a_review_marked_booking_still_appears_in_the_queue(app, client, requested):
     """AC1/AC2: SPL-89's marker is informational (TC-SPL-80-16 shows the flag). It must not act
     as a sixth "excluded" status alongside Approved/Rejected/Withdrawn/Cancelled — a booking still
@@ -342,6 +348,7 @@ def test_tc_spl_80_19_a_review_marked_booking_still_appears_in_the_queue(app, cl
 
 
 # TC-SPL-80-06
+# SPL-80 AC-5 Test-06
 @pytest.mark.parametrize("status", ["approved", "rejected", "withdrawn", "cancelled"])
 def test_tc_spl_80_06_non_requested_statuses_are_excluded(app, client, requested, status):
     set_status(app, requested["booking"]["id"], status)
@@ -353,6 +360,7 @@ def test_tc_spl_80_06_non_requested_statuses_are_excluded(app, client, requested
 
 
 # TC-SPL-80-07
+# SPL-80 AC-5 Test-07
 def test_tc_spl_80_07_request_leaves_the_queue_when_it_leaves_requested(client, requested):
     assert pending(client).json["count"] == 1
 
@@ -372,6 +380,7 @@ def test_tc_spl_80_07_request_leaves_the_queue_when_it_leaves_requested(client, 
 
 
 # TC-SPL-80-08
+# SPL-80 AC-6 Test-08
 def test_tc_spl_80_08_empty_queue_is_explicit(client):
     response = pending(client)
 
@@ -383,6 +392,7 @@ def test_tc_spl_80_08_empty_queue_is_explicit(client):
 
 
 # TC-SPL-80-09
+# SPL-80 AC-NA Test-09
 def test_tc_spl_80_09_oldest_request_first_nulls_last(app, client):
     """The longest-waiting request is first, and rows with no request time sort last.
 
@@ -414,6 +424,7 @@ def test_tc_spl_80_09_oldest_request_first_nulls_last(app, client):
 
 
 # TC-SPL-80-10
+# SPL-80 AC-3 Test-10
 def test_tc_spl_80_10_decision_view_carries_the_event_information(client, requested):
     event = review(client, requested["booking"]["id"]).json["event"]
 
@@ -436,6 +447,7 @@ def test_tc_spl_80_10_decision_view_carries_the_event_information(client, reques
 
 
 # TC-SPL-80-11
+# SPL-80 AC-3 Test-11
 def test_tc_spl_80_11_spl81_keys_are_unchanged(client, requested):
     """Widening the payload for AC3 must not disturb the contract SPL-81 already relies on."""
 
@@ -454,6 +466,7 @@ def test_tc_spl_80_11_spl81_keys_are_unchanged(client, requested):
 
 
 # TC-SPL-80-12
+# SPL-80 AC-4 Test-12
 def test_tc_spl_80_12_personal_attendee_information_is_not_disclosed(client, requested):
     """Asserted over the whole body, so a field added to `event_requests` cannot leak silently."""
 

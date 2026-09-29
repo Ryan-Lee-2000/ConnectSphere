@@ -183,6 +183,7 @@ def _approve(booking_id, token, note):
 
 
 # TC-SPL-81-19
+# SPL-81 AC-7 Test-19
 def test_tc_spl_81_19_concurrent_approvals_exactly_one_succeeds(engine, pg_url):
     ids, organisation_id, venue_id = _seed_accounts(engine)
     app = create_app(
@@ -222,6 +223,7 @@ def test_tc_spl_81_19_concurrent_approvals_exactly_one_succeeds(engine, pg_url):
 
 
 # TC-SPL-81-20
+# SPL-81 AC-7,6 Test-20
 def test_tc_spl_81_20_approval_racing_withdrawal_has_one_outcome(engine, pg_url):
     ids, organisation_id, venue_id = _seed_accounts(engine)
     app = create_app(
@@ -257,6 +259,7 @@ def test_tc_spl_81_20_approval_racing_withdrawal_has_one_outcome(engine, pg_url)
         app.extensions["engine"].dispose()
 
 
+# SPL-81 AC-NA Test-Supporting
 def test_spl_81_migration_adds_nullable_approval_columns_with_an_approver_key(engine):
     """Supporting verification: the additive SPL-81 columns and the approver foreign key."""
 

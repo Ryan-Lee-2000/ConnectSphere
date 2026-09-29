@@ -7,6 +7,10 @@ function response(body: unknown, status = 200) {
 }
 
 describe('EventRequestDrafts', () => {
+  // SPL-56 AC-2 Test-002
+  // SPL-57 AC-1 Test-001
+  // SPL-58 AC-1 Test-001
+  // SPL-58 AC-3 Test-003
   it('separates drafts and submitted requests and confirms deletion', async () => {
     const request = vi.fn(async (path: string, init?: RequestInit) => {
       if (init?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -28,6 +32,7 @@ describe('EventRequestDrafts', () => {
     expect(screen.getByText('Ready event')).toBeTruthy();
   });
 
+  // SPL-57 AC-1 Test-001
   it('reopens a draft into the event request form and returns to the list afterwards', async () => {
     const draftDetail = {
       id: 1, name: 'Early idea', purpose: null, description: null, proposed_date: null,
@@ -66,6 +71,7 @@ describe('EventRequestDrafts', () => {
   });
 
   // CS-E06-S4 AC4
+  // SPL-67 AC-4 Test-13
   it('[TC-SPL-67-13] shows the organiser who approved the request', async () => {
     const request = vi.fn(async () => response({ event_requests: [
       { id: 1, name: 'Forum', status: 'planning', status_label: 'In planning', status_explanation: 'Approved.', status_changed_at: null, last_saved_at: null, proposed_date: null, coordinator: { id: 'alice', name: 'Alice Tan' }, approved_by: { id: 'alice', name: 'Alice Tan' }, approved_at: '2026-09-27T10:00:00+08:00' },

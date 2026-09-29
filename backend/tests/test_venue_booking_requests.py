@@ -246,6 +246,7 @@ HARBOUR_PM_CLAIM = {
 
 
 # TC-SPL-77-01
+# SPL-77 AC-1,6 Test-01
 def test_tc_spl_77_01_assigned_coordinator_requests_a_suitable_free_venue(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
 
@@ -261,6 +262,7 @@ def test_tc_spl_77_01_assigned_coordinator_requests_a_suitable_free_venue(app, c
 
 
 # TC-SPL-77-02
+# SPL-77 AC-1 Test-02
 def test_tc_spl_77_02_unassigned_coordinator_is_refused_without_disclosure(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
 
@@ -275,6 +277,7 @@ def test_tc_spl_77_02_unassigned_coordinator_is_refused_without_disclosure(app, 
 
 
 # TC-SPL-77-03
+# SPL-77 AC-1 Test-03
 @pytest.mark.parametrize(
     ("token", "expected_status"),
     [("venue-staff", 403), ("organiser", 403), ("manager", 403), (None, 401)],
@@ -289,6 +292,7 @@ def test_tc_spl_77_03_other_roles_and_no_session_are_refused(app, client, token,
 
 
 # TC-SPL-77-04
+# SPL-77 AC-1 Test-04
 @pytest.mark.parametrize("status", NON_PLANNING_STATUSES)
 def test_tc_spl_77_04_events_outside_planning_are_refused(app, client, status):
     event_id, venue_id = make_event(app, status=status), add_venue(app)
@@ -304,6 +308,7 @@ def test_tc_spl_77_04_events_outside_planning_are_refused(app, client, status):
 
 
 # TC-SPL-77-05
+# SPL-77 AC-2 Test-05
 def test_tc_spl_77_05_unsuitable_venue_is_refused_naming_each_failed_check(app, client):
     event_id = make_event(app)
     riverside = add_venue(
@@ -331,6 +336,7 @@ def test_tc_spl_77_05_unsuitable_venue_is_refused_naming_each_failed_check(app, 
 
 
 # TC-SPL-77-06
+# SPL-77 AC-2 Test-06
 def test_tc_spl_77_06_venue_unable_to_host_timing_or_preparation_is_refused(app, client):
     event_id = make_event(app)
     morning_annex = add_venue(app, "Morning Annex", slots=("AM",), setup=0, turnaround=0)
@@ -344,6 +350,7 @@ def test_tc_spl_77_06_venue_unable_to_host_timing_or_preparation_is_refused(app,
 
 
 # TC-SPL-77-07
+# SPL-77 AC-2 Test-07
 @pytest.mark.parametrize(
     ("layout", "expected_status", "stored_layout"),
     [
@@ -369,6 +376,7 @@ def test_tc_spl_77_07_selected_layout_capacity_boundary(
 
 
 # TC-SPL-77-07 — SPL-77 assumption: the booked layout may differ from the preferred layout.
+# SPL-77 AC-2 Test-07
 def test_tc_spl_77_07_selected_layout_may_differ_from_the_preferred_layout(app, client):
     event_id = make_event(app, preferred_layout="theatre")
     venue_id = add_venue(app)
@@ -383,6 +391,7 @@ def test_tc_spl_77_07_selected_layout_may_differ_from_the_preferred_layout(app, 
 
 
 # TC-SPL-77-08
+# SPL-77 AC-3 Test-08
 def test_tc_spl_77_08_pm_event_derives_same_day_setup_and_turnaround(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
 
@@ -395,6 +404,7 @@ def test_tc_spl_77_08_pm_event_derives_same_day_setup_and_turnaround(app, client
 
 
 # TC-SPL-77-09
+# SPL-77 AC-3 Test-09
 @pytest.mark.parametrize(
     ("start", "end", "venue", "expected"),
     [
@@ -435,6 +445,7 @@ def test_tc_spl_77_09_preparation_crosses_days_or_is_absent(
 
 
 # TC-SPL-77-10
+# SPL-77 AC-3,6 Test-10
 @pytest.mark.parametrize(
     "forged",
     [
@@ -458,6 +469,7 @@ def test_tc_spl_77_10_client_supplied_date_or_slots_are_refused(app, client, for
 
 
 # TC-SPL-77-11
+# SPL-77 AC-4 Test-11
 @pytest.mark.parametrize("active_status", ["requested", "approved"])
 def test_tc_spl_77_11_second_request_refused_while_one_is_active(app, client, active_status):
     event_id = make_event(app)
@@ -480,6 +492,7 @@ def test_tc_spl_77_11_second_request_refused_while_one_is_active(app, client, ac
 
 
 # TC-SPL-77-12
+# SPL-77 AC-4 Test-12
 @pytest.mark.parametrize("inactive_status", ["withdrawn", "rejected", "cancelled"])
 def test_tc_spl_77_12_inactive_earlier_booking_does_not_block(app, client, inactive_status):
     event_id, venue_id = make_event(app), add_venue(app)
@@ -505,6 +518,7 @@ def test_tc_spl_77_12_inactive_earlier_booking_does_not_block(app, client, inact
 
 
 # TC-SPL-77-14
+# SPL-77 AC-5,7 Test-14
 def test_tc_spl_77_14_event_slot_conflict_is_refused_and_named(app, client):
     venue_id = add_venue(app)
     harbour_talk = make_event(app, "Harbour Talk")
@@ -521,6 +535,7 @@ def test_tc_spl_77_14_event_slot_conflict_is_refused_and_named(app, client):
 
 
 # TC-SPL-77-15
+# SPL-77 AC-5 Test-15
 @pytest.mark.parametrize("conflict", ["setup-block", "turnaround-booking"])
 def test_tc_spl_77_15_preparation_slot_conflict_refuses_atomically(app, client, conflict):
     event_id, venue_id = make_event(app), add_venue(app)
@@ -543,6 +558,7 @@ def test_tc_spl_77_15_preparation_slot_conflict_refuses_atomically(app, client, 
 
 
 # TC-SPL-77-16
+# SPL-77 AC-5 Test-16
 def test_tc_spl_77_16_earliest_conflict_is_reported(app, client):
     event_id = make_event(app, start=time(7), end=time(12))
     venue_id = add_venue(app)
@@ -557,6 +573,7 @@ def test_tc_spl_77_16_earliest_conflict_is_reported(app, client):
 
 
 # TC-SPL-77-17
+# SPL-77 AC-5 Test-17
 @pytest.mark.parametrize(
     "situation",
     ["removed-block", "other-venue-booking", "non-adjacent-booking", "next-day-block"],
@@ -593,6 +610,7 @@ def test_tc_spl_77_17_non_conflicting_occupancy_does_not_block(app, client, situ
 
 
 # TC-SPL-77-19
+# SPL-77 AC-6 Test-19
 def test_tc_spl_77_19_created_booking_records_every_field(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
     before = datetime.now(SINGAPORE)
@@ -632,6 +650,7 @@ def test_tc_spl_77_19_created_booking_records_every_field(app, client):
 
 
 # TC-SPL-77-20
+# SPL-77 AC-6 Test-20
 @pytest.mark.parametrize(
     "forged",
     [
@@ -655,6 +674,7 @@ def test_tc_spl_77_20_forged_identity_status_or_review_fields_are_refused(app, c
 
 
 # TC-SPL-77-21
+# SPL-77 AC-7 Test-21
 def test_tc_spl_77_21_requested_slots_leave_venue_search(app, client):
     coastal_forum = make_event(app)
     harbour_talk = make_event(app, "Harbour Talk")
@@ -670,6 +690,7 @@ def test_tc_spl_77_21_requested_slots_leave_venue_search(app, client):
 
 
 # TC-SPL-77-22
+# SPL-77 AC-7 Test-22
 def test_tc_spl_77_22_unheld_slots_stay_available(app, client):
     coastal_forum = make_event(app)
     harbour_talk = make_event(app, "Harbour Talk", start=time(7), end=time(12))
@@ -683,6 +704,7 @@ def test_tc_spl_77_22_unheld_slots_stay_available(app, client):
 
 
 # TC-SPL-77-02 — boundary partitions: an out-of-range event id, and an unknown venue.
+# SPL-77 AC-1 Test-02
 def test_tc_spl_77_02_out_of_range_event_and_unknown_venue_are_not_found(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
     unassigned = request_booking(client, event_id, venue_id, token="other-coordinator")
@@ -698,6 +720,7 @@ def test_tc_spl_77_02_out_of_range_event_and_unknown_venue_are_not_found(app, cl
 
 
 # TC-SPL-77-06 — boundary partition: a Planning event with no recorded time cannot be assessed.
+# SPL-77 AC-2 Test-06
 def test_tc_spl_77_06_event_without_a_recorded_time_fails_timing(app, client):
     event_id = make_event(app, start=None, end=None)
     venue_id = add_venue(app)
@@ -710,6 +733,7 @@ def test_tc_spl_77_06_event_without_a_recorded_time_fails_timing(app, client):
 
 
 # TC-SPL-77-20 — malformed partitions: only a positive venue id and a short, non-blank layout.
+# SPL-77 AC-6 Test-20
 @pytest.mark.parametrize(
     "body",
     [

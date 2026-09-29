@@ -26,6 +26,9 @@ it('asks unauthenticated visitors to sign in', () => {
   expect(screen.getByRole('heading', { name: 'Sign in to view venues' })).toBeTruthy();
 });
 
+// SPL-50 AC-1 Test-001
+// SPL-50 AC-2 Test-002
+// SPL-50 AC-3 Test-003
 it('shows a coordinator the catalogue as read-only', async () => {
   const request = vi.fn(async (path: string) => {
     if (path === '/api/venues') return response({ venues: [{ id: 1, name: 'Harbour Hall', location: 'Marina Centre' }], capabilities: { can_manage: false } });
@@ -48,6 +51,7 @@ it('shows a coordinator the catalogue as read-only', async () => {
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'Harbour Hall' })).toBeNull());
 });
 
+// SPL-50 AC-4 Test-004
 it('shows the appropriate empty state when no venues exist', async () => {
   const request = vi.fn(async () => response({ venues: [], capabilities: { can_manage: false } }));
   render(<VenueCatalogue accessToken="token" request={request} />);
@@ -55,6 +59,7 @@ it('shows the appropriate empty state when no venues exist', async () => {
   expect(screen.getByText('Venue profiles will appear here when Venue Staff add them.')).toBeTruthy();
 });
 
+// SPL-47 AC-1 Test-001
 it('lets venue staff create a complete venue profile with all slots and preparation requirements', async () => {
   const created = { ...venue, id: 2, name: 'Orchid Room', layouts: [{ id: 8, layout: 'classroom', capacity: 60 }] };
   const request = vi.fn(async (path: string, init?: RequestInit) => {
@@ -96,6 +101,7 @@ it('lets venue staff create a complete venue profile with all slots and preparat
   expect(await screen.findByText('Venue and its room layouts created.')).toBeTruthy();
 });
 
+// SPL-47 AC-1 Test-003
 it('requires a venue name and at least one operating slot before saving', async () => {
   const request = vi.fn(async () => response({ venues: [], capabilities: { can_manage: true } }));
   render(<VenueCatalogue accessToken="token" request={request} />);
@@ -108,6 +114,7 @@ it('requires a venue name and at least one operating slot before saving', async 
   expect(save).toHaveProperty('disabled', false);
 });
 
+// SPL-89 AC-1,3 Test-06
 it('TC-SPL-89-06 lets venue staff record operational unavailability for a selected venue', async () => {
   const createdBlock = {
     id: 9,
@@ -226,6 +233,7 @@ it('stages layout edits until Save venue is pressed', async () => {
   expect(JSON.parse(updateCall?.[1]?.body as string).layouts).toEqual([{ layout: 'classroom', capacity: 240 }]);
 });
 
+// SPL-49 AC-1 Test-001
 it('sends every editable venue attribute when Venue Staff save an update', async () => {
   const updated = {
     ...venue,

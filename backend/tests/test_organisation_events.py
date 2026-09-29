@@ -106,6 +106,8 @@ def seed_event(app, *, organiser, organisation_id, name, status="submitted"):
         return event.id
 
 
+# SPL-45 AC-1,2,3,4 Test-01
+# SPL-45 AC-6 Test-03
 def test_tc_cs_e01_s3_01_lists_own_and_colleague_submitted_events_only(organisation_app, client):
     mine = seed_event(
         organisation_app,
@@ -155,6 +157,7 @@ def test_tc_cs_e01_s3_01_lists_own_and_colleague_submitted_events_only(organisat
     }
 
 
+# SPL-45 AC-5 Test-02
 def test_tc_cs_e01_s3_02_opens_the_approved_read_only_detail(organisation_app, client):
     event_id = seed_event(
         organisation_app,
@@ -185,6 +188,8 @@ def test_tc_cs_e01_s3_02_opens_the_approved_read_only_detail(organisation_app, c
     }
 
 
+# SPL-45 AC-6,7 Test-03
+# SPL-45 AC-2 Test-04
 @pytest.mark.parametrize("hidden_status", ["submitted", "draft"])
 def test_tc_cs_e01_s3_03_cross_client_and_draft_direct_requests_reveal_nothing(
     organisation_app, client, hidden_status
@@ -204,6 +209,7 @@ def test_tc_cs_e01_s3_03_cross_client_and_draft_direct_requests_reveal_nothing(
     assert "Protected event information" not in response.get_data(as_text=True)
 
 
+# SPL-45 AC-8 Test-05
 def test_tc_cs_e01_s3_04_supplied_identifiers_cannot_change_the_scope(organisation_app, client):
     hidden_id = seed_event(
         organisation_app,
@@ -235,6 +241,7 @@ def test_tc_cs_e01_s3_04_supplied_identifiers_cannot_change_the_scope(organisati
     assert detail.status_code == 404
 
 
+# SPL-45 AC-9 Test-06
 def test_tc_cs_e01_s3_05_empty_organisation_is_a_success(client):
     response = client.get("/api/organisation/events", headers=headers("other-organiser"))
 
@@ -242,6 +249,7 @@ def test_tc_cs_e01_s3_05_empty_organisation_is_a_success(client):
     assert response.json == {"events": []}
 
 
+# SPL-45 AC-1 Test-07
 @pytest.mark.parametrize("identity", ["coordinator", "unassigned-organiser"])
 def test_tc_cs_e01_s3_06_requires_the_role_and_trusted_membership(client, identity):
     response = client.get("/api/organisation/events", headers=headers(identity))

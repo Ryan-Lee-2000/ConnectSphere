@@ -31,6 +31,7 @@ function api(latest: object | null, status: object) {
   })) as unknown as ApiRequest;
 }
 
+// SPL-79 AC-3 Test-08
 it('[TC-SPL-79-08] shows the current status apart from the history', async () => {
   render(<VenueBookingPanel api={api(BOOKING, STATUS)} eventId={12} />);
 
@@ -41,6 +42,7 @@ it('[TC-SPL-79-08] shows the current status apart from the history', async () =>
   expect(within(history).getAllByRole('listitem').map(item => item.querySelector('strong')?.textContent)).toEqual(['Requested', 'Withdrawn']);
 });
 
+// SPL-79 AC-6 Test-15
 it('[TC-SPL-79-15] tells the coordinator when no request exists', async () => {
   const empty = { venue_booking_request: null, current_status: null, history: [], review: null, earlier_requests: [], message: 'No venue-booking request has been made for this event yet.' };
   render(<VenueBookingPanel api={api(null, empty)} eventId={12} emptyMessage />);
@@ -50,6 +52,7 @@ it('[TC-SPL-79-15] tells the coordinator when no request exists', async () => {
   expect(screen.queryByRole('list', { name: 'History' })).toBeNull();
 });
 
+// SPL-79 AC-2 Test-19
 it('[TC-SPL-79-19] lists each change with who, when and any note', async () => {
   const rejected = {
     ...STATUS,
@@ -74,6 +77,7 @@ it('[TC-SPL-79-19] lists each change with who, when and any note', async () => {
   expect(items[1].textContent).toContain('Stage under repair');
 });
 
+// SPL-79 AC-7 Test-20
 it('[TC-SPL-79-20] shows the review warning and earlier requests', async () => {
   const marked = {
     ...STATUS,
