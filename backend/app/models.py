@@ -313,6 +313,14 @@ class VenueBooking(Base):
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approval_note: Mapped[str | None] = mapped_column(Text)
+    # SPL-82. Who rejected a Requested booking, when, the required reason and the optional
+    # alternative suggestion; all four stay null unless rejected.
+    rejected_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    rejection_alternative_suggestion: Mapped[str | None] = mapped_column(Text)
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(

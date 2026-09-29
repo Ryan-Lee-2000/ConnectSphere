@@ -1,4 +1,5 @@
-"""Venue Staff review and approval of a Requested venue booking for SPL-81 (CS-E10-S3).
+"""Venue Staff review, approval and rejection of a Requested venue booking for SPL-81 (CS-E10-S3)
+and SPL-82 (CS-E10-S4).
 
 Approval rechecks the slots recorded on the request (SPL-87), not slots re-derived from venue
 settings changed afterwards (Q120). The booking row is locked for the whole transaction, the
@@ -6,6 +7,11 @@ recorded slots are locked with SPL-83's slot locks so blocks and other claims qu
 SPL-83's ``transition_booking_status`` performs the final operational-block recheck. A conflict
 rolls back the status and the approval record together
 (docs/development/SPL-77-integration-contract.md).
+
+Rejection commits nothing, so it rechecks neither slots nor the event's status
+(docs/tasks/SPL-82.md): only the booking's own ``Requested`` status gates it, the same rule SPL-78's
+withdrawal already uses. ``transition_booking_status`` frees its occupancy through the same shared
+lifecycle rule.
 """
 
 from datetime import date, datetime
@@ -28,9 +34,13 @@ from app.venue_slot_locks import lock_venue_slots
 PLANNING = "planning"
 REQUESTED = "requested"
 APPROVED = "approved"
+REJECTED = "rejected"
 MAX_NOTE_LENGTH = 1000
+MAX_REASON_LENGTH = 1000
+MAX_SUGGESTION_LENGTH = 1000
 NOT_FOUND = "Venue-booking request not found."
 ONLY_REQUESTED = "Only a Requested venue-booking request can be approved."
+ONLY_REQUESTED_TO_REJECT = "Only a Requested venue-booking request can be rejected."
 ONLY_PLANNING = "The event must be in Planning for its venue booking to be approved."
 SLOT_NAMES = {"AM": "AM", "PM": "PM", "NIGHT": "Night"}
 
@@ -86,6 +96,34 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                 actor_account_id=g.user_id,
                 changed_at=booking.approved_at,
                 note=note,
+            )
+            session.commit()
+            return jsonify(booking=serialize_venue_booking(session, booking))
+
+    @app.post("/api/venue-bookings/<int:booking_id>/reject")
+    @require_roles(Role.VENUE_STAFF)
+    def reject_venue_booking(booking_id: int):
+        reason, alternative_suggestion = _rejection_body()
+        with Session(app.extensions["engine"]) as session:
+            # Row lock: a concurrent approval or withdrawal waits here, then sees Rejected (AC7).
+            booking = _booking(session, booking_id, lock=True)
+            if booking.status != REQUESTED:
+                abort(409, ONLY_REQUESTED_TO_REJECT)
+            transition_booking_status(session, booking, REJECTED)
+            booking.rejected_by_account_id = g.user_id
+            booking.rejected_at = datetime.now(SINGAPORE)
+            booking.rejection_reason = reason
+            booking.rejection_alternative_suggestion = alternative_suggestion
+            # SPL-79: the rejection is appended to the booking's status history, reason as its note.
+            record_booking_transition(
+                session,
+                booking.id,
+                action="reject",
+                previous_status=REQUESTED,
+                resulting_status=REJECTED,
+                actor_account_id=g.user_id,
+                changed_at=booking.rejected_at,
+                note=reason,
             )
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
@@ -152,6 +190,36 @@ def _approval_note() -> str | None:
     if len(note) > MAX_NOTE_LENGTH:
         abort(400, f"Keep the approval note to {MAX_NOTE_LENGTH} characters or fewer.")
     return note or None
+
+
+def _rejection_body() -> tuple[str, str | None]:
+    """A required, non-blank reason and an optional alternative suggestion; nothing else (AC2, AC6).
+
+    The two are kept as separate fields rather than one free-text box, so a rejection cannot carry
+    a suggestion with no reason, and the required reason is never buried inside optional text
+    (docs/tasks/SPL-82.md).
+    """
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not set(data) <= {"reason", "alternative_suggestion"}:
+        abort(400, "Rejection accepts only a reason and an optional alternative suggestion.")
+    reason = data.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        abort(400, "A rejection reason is required.")
+    reason = reason.strip()
+    if len(reason) > MAX_REASON_LENGTH:
+        abort(400, f"Keep the rejection reason to {MAX_REASON_LENGTH} characters or fewer.")
+    suggestion = data.get("alternative_suggestion")
+    if suggestion is not None:
+        if not isinstance(suggestion, str):
+            abort(400, "The alternative suggestion must be text.")
+        suggestion = suggestion.strip() or None
+        if suggestion and len(suggestion) > MAX_SUGGESTION_LENGTH:
+            abort(
+                400,
+                f"Keep the alternative suggestion to {MAX_SUGGESTION_LENGTH} characters or fewer.",
+            )
+    return reason, suggestion
 
 
 def _day_name(day: date) -> str:
