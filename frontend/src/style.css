@@ -678,3 +678,29 @@ button { touch-action: manipulation; }
 .venue-booking-review__subheading { margin: var(--space-5) 0 var(--space-3); font-size: 1rem; }
 .request-flag { display: inline-flex; align-items: center; gap: var(--space-1); margin-left: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius-sm); background: var(--color-warning-surface, #fff0b3); color: var(--color-ink, #172b4d); font-size: .7rem; font-weight: 700; white-space: nowrap; }
 .request-preparation { display: block; margin-top: 2px; color: var(--color-muted-slate); font-size: .72rem; }
+
+/* SPL-88 (CS-E11-S1): venue occupancy calendar. Each state carries its own colour so Available and
+   Not operated can never read alike (AC5), and a multi-reason cell stacks its reasons (AC4). */
+.occupancy-calendar { display: grid; gap: var(--space-4); }
+.occupancy-calendar h1, .occupancy-calendar .eyebrow { margin: 0; }
+.occupancy-calendar__controls { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; }
+.occupancy-calendar__controls label { display: grid; gap: var(--space-1); font-size: .78rem; font-weight: 700; }
+.occupancy-calendar__grid { display: grid; gap: 2px; overflow-x: auto; }
+.occupancy-calendar__row { display: grid; grid-template-columns: minmax(120px, 160px) repeat(3, minmax(140px, 1fr)); gap: 2px; align-items: stretch; }
+.occupancy-calendar__row--head { position: sticky; top: 0; color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.occupancy-calendar__date { display: flex; align-items: center; padding: var(--space-2) var(--space-3); font-weight: 700; }
+.occupancy-cell { display: grid; gap: 2px; align-content: start; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); font-size: .8rem; }
+.occupancy-cell strong { font-size: .78rem; }
+.occupancy-cell__reason { display: grid; gap: 1px; }
+.occupancy-cell__reason-label { color: var(--color-muted-slate); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.occupancy-cell__reason-detail { color: var(--color-muted-slate); font-size: .72rem; }
+.occupancy-cell--available { background: var(--color-raised-surface); }
+.occupancy-cell--requested { background: #fff7e6; }
+.occupancy-cell--booked { background: #e6f0ff; }
+.occupancy-cell--preparation { background: #f1ecff; }
+.occupancy-cell--blocked { background: #ffe9e6; }
+.occupancy-cell--not_operated { background: repeating-linear-gradient(135deg, #f4f5f7, #f4f5f7 6px, #ebecf0 6px, #ebecf0 12px); color: var(--color-muted-slate); }
+@media (max-width: 720px) {
+  .occupancy-calendar__row { grid-template-columns: minmax(96px, 1fr) repeat(3, minmax(104px, 1fr)); }
+  .occupancy-cell__reason-detail { display: none; }
+}

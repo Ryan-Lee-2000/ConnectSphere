@@ -18,6 +18,7 @@ import { OrganisationEvents } from './OrganisationEvents';
 import { AssignedEvents } from './AssignedEvents';
 import { PendingBookingRequests } from './PendingBookingRequests';
 import { VenueBookingReview } from './VenueBookingReview';
+import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -63,6 +64,11 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace/booking-requests') return role === 'venue_staff';
   // SPL-81. Venue Staff review and approve one venue-booking request.
   if (/^\/workspace\/venue-bookings\/\d+$/.test(requestedPath)) return role === 'venue_staff';
+  // SPL-88. The operational calendar, for the three roles that schedule venues.
+  if (requestedPath === '/workspace/venue-calendar') {
+    return role === 'venue_staff' || role === 'event_coordinator'
+      || role === 'event_operations_manager';
+  }
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -385,6 +391,8 @@ function Workspace({
   const venueBookingId = venueBookingMatch ? Number(venueBookingMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
+    : safePath === '/workspace/venue-calendar'
+      ? 'Venue occupancy calendar workspace'
     : safePath === '/workspace/booking-requests'
       ? 'Booking requests workspace'
     : safePath === '/workspace/assignments'
@@ -459,6 +467,12 @@ function Workspace({
           href="/workspace/venues"
           onClick={event => { event.preventDefault(); navigate('/workspace/venues'); }}
         >Venue catalogue</a>}
+        {/* SPL-88: the operational calendar, for the three roles that schedule venues. */}
+        {(venueRole || managerRole) && <a
+          aria-current={safePath === '/workspace/venue-calendar' ? 'page' : undefined}
+          href="/workspace/venue-calendar"
+          onClick={event => { event.preventDefault(); navigate('/workspace/venue-calendar'); }}
+        >Venue calendar</a>}
         {organiserRole && <a
           aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
           href="/workspace/event-requests"
@@ -543,6 +557,11 @@ function Workspace({
             eventId={assignedEventId}
             key={`${activeRole}:assigned-events:${assignedEventId ?? 'list'}`}
             onNavigate={navigate}
+          />
+        ) : safePath === '/workspace/venue-calendar' ? (
+          <VenueOccupancyCalendarPage
+            accessToken={session.access_token}
+            key={`${activeRole}:venue-calendar`}
           />
         ) : safePath === '/workspace/venues' ? (
           <VenueCatalogue
