@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CircleAlert, Check } from 'lucide-react';
+import { CircleAlert, Check, X } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
 
 // SPL-81 (CS-E10-S3): Venue Staff review one venue-booking request and approve it with an optional
-// note. SPL-80's pending list links here; SPL-82 can add Reject beside Approve.
+// note. SPL-80's pending list links here. SPL-82 (CS-E10-S4) adds Reject beside Approve, with a
+// required reason and an optional free-text alternative suggestion — two separate fields, so a
+// rejection can never carry a suggestion with no reason (docs/tasks/SPL-82.md).
 
 type Person = { id: string; name: string };
 type ReviewedBooking = VenueBooking & {
   requested_by: Person | null; requested_at: string | null;
   approved_by: Person | null; approved_at: string | null; approval_note: string | null;
+  rejected_by: Person | null; rejected_at: string | null; rejection_reason: string | null;
+  rejection_alternative_suggestion: string | null;
 };
 type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string };
 type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
@@ -27,6 +31,8 @@ type DecisionEvent = {
 type ReviewBody = { booking: ReviewedBooking; event: DecisionEvent; review: Review };
 
 const MAX_NOTE_LENGTH = 1000;
+const MAX_REASON_LENGTH = 1000;
+const MAX_SUGGESTION_LENGTH = 1000;
 const STATUS_NAMES: Record<string, string> = {
   requested: 'Requested', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled',
 };
@@ -48,6 +54,10 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
   const [note, setNote] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [rejectingForm, setRejectingForm] = useState(false);
+  const [reason, setReason] = useState('');
+  const [suggestion, setSuggestion] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,6 +87,29 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       setBody({ ...body, booking: next.booking });
     } catch { setError('Could not approve this request. Try again.'); }
     finally { setApproving(false); setConfirming(false); }
+  }
+
+  // SPL-82: the button is already disabled without a reason, but the guard is repeated here so a
+  // double click or a stale render can never send a second or empty rejection.
+  async function reject() {
+    if (!body || rejecting || !reason.trim()) return;
+    setRejecting(true); setError(null);
+    try {
+      const response = await api(`/api/venue-bookings/${bookingId}/reject`, {
+        method: 'POST',
+        // Only the two fields the server accepts (AC6); the suggestion is left out when blank.
+        body: JSON.stringify(
+          suggestion.trim() ? { reason, alternative_suggestion: suggestion } : { reason },
+        ),
+      });
+      // A 409 (no longer Requested) or 400 shows the server's own message, so the screen can
+      // never claim a rejection the server refused.
+      if (!response.ok) { setError(await responseError(response, 'Could not reject this request. Try again.')); return; }
+      const next = await response.json() as { booking?: ReviewedBooking };
+      if (!next.booking) throw new Error('Invalid response');
+      setBody({ ...body, booking: next.booking });
+    } catch { setError('Could not reject this request. Try again.'); }
+    finally { setRejecting(false); setRejectingForm(false); }
   }
 
   if (!body) {
@@ -143,18 +176,46 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
           {booking.approval_note ? <> Note: {booking.approval_note}</> : null}</span>
       </p>
     )}
+    {booking.status === 'rejected' && booking.rejected_by && booking.rejected_at && (
+      <p className="venue-booking-review__outcome venue-booking-review__outcome--rejected" role="status">
+        <X size={16} aria-hidden="true" />
+        <span>Rejected by {booking.rejected_by.name} on {timeName(booking.rejected_at)}.
+          {booking.rejection_reason ? <> Reason: {booking.rejection_reason}</> : null}
+          {booking.rejection_alternative_suggestion ? <> Suggested alternative: {booking.rejection_alternative_suggestion}</> : null}
+        </span>
+      </p>
+    )}
     {booking.status === 'requested' && <div className="venue-booking-review__decision">
-      <label>Approval note (optional)
-        <textarea maxLength={MAX_NOTE_LENGTH} onChange={change => setNote(change.target.value)} rows={3} value={note} />
-      </label>
-      {!confirming && (
-        <button className="button button--primary" onClick={() => { setConfirming(true); setError(null); }} type="button">Approve booking</button>
+      {!rejectingForm && (
+        <label>Approval note (optional)
+          <textarea maxLength={MAX_NOTE_LENGTH} onChange={change => setNote(change.target.value)} rows={3} value={note} />
+        </label>
+      )}
+      {!confirming && !rejectingForm && (
+        <div className="venue-booking-review__actions">
+          <button className="button button--primary" onClick={() => { setConfirming(true); setError(null); }} type="button">Approve booking</button>
+          <button className="button button--secondary" onClick={() => { setRejectingForm(true); setError(null); }} type="button">Reject booking</button>
+        </div>
       )}
       {confirming && (
         <div className="venue-booking-panel__confirm" role="group" aria-label="Confirm approval">
           <p>Approve this request? Its event, setup and turnaround slots stay reserved for {event.name}. Every slot is rechecked first.</p>
           <button className="button button--primary" disabled={approving} onClick={() => void approve()} type="button">{approving ? 'Approving…' : 'Confirm approval'}</button>
           <button className="button" disabled={approving} onClick={() => setConfirming(false)} type="button">Keep reviewing</button>
+        </div>
+      )}
+      {/* SPL-82: reason and suggestion are two separate boxes, so a suggestion can never stand in
+          for the required reason. Confirm stays disabled until the reason has real text. */}
+      {rejectingForm && (
+        <div className="venue-booking-panel__confirm" role="group" aria-label="Reject request">
+          <label>Rejection reason
+            <textarea maxLength={MAX_REASON_LENGTH} onChange={change => setReason(change.target.value)} rows={3} value={reason} />
+          </label>
+          <label>Alternative suggestion (optional)
+            <textarea maxLength={MAX_SUGGESTION_LENGTH} onChange={change => setSuggestion(change.target.value)} rows={2} value={suggestion} />
+          </label>
+          <button className="button button--primary" disabled={rejecting || !reason.trim()} onClick={() => void reject()} type="button">{rejecting ? 'Rejecting…' : 'Confirm rejection'}</button>
+          <button className="button" disabled={rejecting} onClick={() => setRejectingForm(false)} type="button">Keep reviewing</button>
         </div>
       )}
     </div>}

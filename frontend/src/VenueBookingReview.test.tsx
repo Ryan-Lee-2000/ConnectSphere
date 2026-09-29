@@ -10,6 +10,7 @@ const BOOKING = {
   expected_attendance: 150, status: 'requested', requested_by: { id: 'casey', name: 'Casey Lim' },
   requested_at: '2026-09-27T21:15:00+08:00', requires_review: false, review_trigger_block_id: null, review_marked_at: null,
   withdrawn_by: null, withdrawn_at: null, approved_by: null, approved_at: null, approval_note: null,
+  rejected_by: null, rejected_at: null, rejection_reason: null, rejection_alternative_suggestion: null,
 };
 // SPL-80 (CS-E10-S2 AC3) widened this payload with the event information Venue Staff need in
 // order to decide. SPL-81's own cases below are unaffected: id, name and status are unchanged.
@@ -106,4 +107,57 @@ it('[TC-SPL-80-17] shows the event details needed to decide, and no registration
   // AC4: the server sends an allowlist, so there is nothing attendee-facing to render anywhere.
   expect(document.body.textContent).not.toContain('registration');
   expect(document.body.textContent).not.toContain('Registration');
+});
+
+// QA-SPL-82 TC-SPL-82-18/-19: Reject sits beside Approve with a required reason and an optional
+// suggestion, and the outcome replaces both actions once the request is decided.
+it('[TC-SPL-82-18] rejects with a reason and an optional alternative suggestion', async () => {
+  const rejected = {
+    ...BOOKING, status: 'rejected',
+    rejected_by: { id: 'valerie', name: 'Valerie Tan' }, rejected_at: '2026-09-28T10:05:00+08:00',
+    rejection_reason: 'The PA system is under repair that week.',
+    rejection_alternative_suggestion: 'The Riverside Room is free the same afternoon.',
+  };
+  const request = api(
+    { booking: BOOKING, event: EVENT, review: UNMARKED },
+    reply(200, { booking: rejected }),
+  );
+  render(<VenueBookingReview accessToken="token" bookingId={41} request={request} />);
+
+  expect(await screen.findByRole('button', { name: 'Approve booking' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Reject booking' }));
+  const form = screen.getByRole('group', { name: 'Reject request' });
+  // The reason is required: confirming is disabled until something is typed.
+  expect(within(form).getByRole('button', { name: 'Confirm rejection' })).toHaveProperty('disabled', true);
+
+  fireEvent.change(within(form).getByLabelText('Rejection reason'), { target: { value: 'The PA system is under repair that week.' } });
+  fireEvent.change(within(form).getByLabelText('Alternative suggestion (optional)'), { target: { value: 'The Riverside Room is free the same afternoon.' } });
+  expect(within(form).getByRole('button', { name: 'Confirm rejection' })).toHaveProperty('disabled', false);
+  fireEvent.click(within(form).getByRole('button', { name: 'Confirm rejection' }));
+
+  expect((await screen.findByRole('status')).textContent).toContain('Rejected by Valerie Tan on 28 Sept 2026, 10:05 am');
+  const [path, init] = request.mock.calls.find(([, call]) => call?.method === 'POST')!;
+  expect(path).toBe('/api/venue-bookings/41/reject');
+  expect(JSON.parse(String(init.body))).toEqual({
+    reason: 'The PA system is under repair that week.',
+    alternative_suggestion: 'The Riverside Room is free the same afternoon.',
+  });
+  expect(screen.getByRole('status').textContent).toContain('Reason: The PA system is under repair that week.');
+  expect(screen.getByRole('status').textContent).toContain('Suggested alternative: The Riverside Room is free the same afternoon.');
+  // A decided request offers neither action any more.
+  expect(screen.queryByRole('button', { name: 'Approve booking' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reject booking' })).toBeNull();
+});
+
+it('[TC-SPL-82-19] cancelling the reject form returns to both actions without submitting', async () => {
+  const request = api({ booking: BOOKING, event: EVENT, review: UNMARKED });
+  render(<VenueBookingReview accessToken="token" bookingId={41} request={request} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject booking' }));
+  fireEvent.change(screen.getByLabelText('Rejection reason'), { target: { value: 'Not needed' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Keep reviewing' }));
+
+  expect(screen.getByRole('button', { name: 'Approve booking' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Reject booking' })).toBeTruthy();
+  expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
 });
