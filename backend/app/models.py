@@ -476,7 +476,16 @@ class EventStatusHistory(Base):
 
 
 class ClarificationRequest(Base):
-    """One clarification an Event Coordinator asked of the organiser; rows are never edited."""
+    """One coordinator question and, once supplied, its organiser response evidence."""
+
+    __table_args__ = (
+        CheckConstraint(
+            "(response is null and respondent_account_id is null and responded_at is null) or "
+            "(response is not null and respondent_account_id is not null "
+            "and responded_at is not null)",
+            name="ck_clarification_requests_response_complete",
+        ),
+    )
 
     __tablename__ = "clarification_requests"
 
@@ -489,4 +498,10 @@ class ClarificationRequest(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    author: Mapped[Account] = relationship()
+    author: Mapped[Account] = relationship(foreign_keys=[author_account_id])
+    response: Mapped[str | None] = mapped_column(Text)
+    respondent_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    respondent: Mapped[Account | None] = relationship(foreign_keys=[respondent_account_id])

@@ -166,6 +166,10 @@ def test_qa_spl65_063_migration_creates_the_locked_down_clarification_table(engi
         "message": ("text", "NO"),
         "author_account_id": ("uuid", "NO"),
         "created_at": ("timestamp with time zone", "NO"),
+        # SPL-66 extends the same protected history row with optional response evidence.
+        "response": ("text", "YES"),
+        "respondent_account_id": ("uuid", "YES"),
+        "responded_at": ("timestamp with time zone", "YES"),
     }
     assert "ix_clarification_requests_event_request_id" in indexes
     assert rls is True

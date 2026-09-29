@@ -30,6 +30,7 @@ from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
 REQUEST_CLARIFICATION = "request_clarification"
+RESPOND_CLARIFICATION = "respond_clarification"
 APPROVE = "approve"
 REJECT = "reject"
 WITHDRAW = "withdraw"
@@ -58,6 +59,10 @@ TRANSITION_RULES = {
     REQUEST_CLARIFICATION: TransitionRule(
         previous_status=UNDER_REVIEW,
         resulting_status=RETURNED_FOR_CLARIFICATION,
+    ),
+    RESPOND_CLARIFICATION: TransitionRule(
+        previous_status=RETURNED_FOR_CLARIFICATION,
+        resulting_status=UNDER_REVIEW,
     ),
     # Approval lets planning begin; it books nothing and confirms nothing (Q80).
     APPROVE: TransitionRule(
@@ -156,6 +161,71 @@ def register_event_review_routes(app: Flask) -> None:
             session.commit()
             actor = session.get(Account, g.user_id)
             event = session.get(EventRequest, event_request_id)
+            return jsonify(
+                event=_serialize_event(event),
+                transition=_serialize_transition(audit, actor),
+                clarifications=serialize_clarifications(event),
+            )
+
+    @app.post(
+        "/api/event-requests/<int:event_request_id>/clarifications/<int:clarification_id>/respond"
+    )
+    @require_roles(Role.EVENT_ORGANISER)
+    def respond_to_clarification(event_request_id: int, clarification_id: int):
+        response_text = _clarification_response()
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest).where(
+                    EventRequest.id == event_request_id,
+                    EventRequest.organiser_account_id == g.user_id,
+                )
+            )
+            if event is None:
+                abort(404, "Event request not found.")
+            clarification = session.scalar(
+                select(ClarificationRequest).where(
+                    ClarificationRequest.id == clarification_id,
+                    ClarificationRequest.event_request_id == event_request_id,
+                )
+            )
+            if clarification is None:
+                abort(404, "Clarification request not found.")
+            if clarification.response is not None:
+                abort(409, "This clarification request has already been answered.")
+            # A returned event has one actionable question: the newest unanswered row. Keeping
+            # this rule on the server prevents stale browser tabs from answering an older cycle.
+            latest_outstanding = session.scalar(
+                select(ClarificationRequest.id)
+                .where(
+                    ClarificationRequest.event_request_id == event_request_id,
+                    ClarificationRequest.response.is_(None),
+                )
+                .order_by(ClarificationRequest.created_at.desc(), ClarificationRequest.id.desc())
+                .limit(1)
+            )
+            if latest_outstanding != clarification_id:
+                abort(409, "Respond to the latest outstanding clarification request.")
+            now = datetime.now(SINGAPORE)
+            try:
+                # The response evidence and status transition share this transaction so neither
+                # can be committed without the other.
+                audit = transition_event_status(
+                    session,
+                    event_request_id=event_request_id,
+                    action=RESPOND_CLARIFICATION,
+                    actor_account_id=g.user_id,
+                    changed_at=now,
+                )
+            except InvalidStatusTransition:
+                session.rollback()
+                abort(409, "A response is only accepted while clarification is outstanding.")
+            clarification.response = response_text
+            clarification.respondent_account_id = g.user_id
+            clarification.responded_at = now
+            session.commit()
+            session.expire_all()
+            event = session.get(EventRequest, event_request_id)
+            actor = session.get(Account, g.user_id)
             return jsonify(
                 event=_serialize_event(event),
                 transition=_serialize_transition(audit, actor),
@@ -370,6 +440,23 @@ def _clarification_message() -> str:
     if len(message) > MAX_CLARIFICATION_LENGTH:
         abort(400, f"Keep the clarification to {MAX_CLARIFICATION_LENGTH} characters or fewer.")
     return message
+
+
+def _clarification_response() -> str:
+    """Accept only the organiser's response; status and audit evidence stay server-owned."""
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {"response"}:
+        abort(400, "Send only a clarification response.")
+    response_text = data["response"]
+    if not isinstance(response_text, str) or not response_text.strip():
+        abort(400, "Enter a clarification response.")
+    response_text = response_text.strip()
+    if len(response_text) > MAX_CLARIFICATION_LENGTH:
+        abort(
+            400, f"Clarification response must be {MAX_CLARIFICATION_LENGTH} characters or fewer."
+        )
+    return response_text
 
 
 def _rejection_reason() -> str:

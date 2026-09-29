@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { ApiRequest } from './api';
+import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 import { EventRequestForm } from './EventRequestForm';
 
 const LOAD_FAILURE_MESSAGE =
   "We couldn't load your requests. Refresh the page or try again shortly.";
 const DELETE_FAILURE_MESSAGE = 'Could not delete the draft. Please try again.';
+const RESPONSE_FAILURE_MESSAGE = 'Could not send your response. Please try again.';
 
 // CS-E07-S1 shows the status of a submitted request; SPL-56/57/58 add the draft lifecycle
 // (save, reopen/resave/submit, delete). Both live on this one "my requests" screen since a
@@ -48,6 +50,9 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
   const [items, setItems] = useState<RequestSummary[] | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [responding, setResponding] = useState<{ id: number; name: string; clarifications: Clarification[] } | null>(null);
+  const [responseText, setResponseText] = useState('');
+  const [sendingResponse, setSendingResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const api: ApiRequest = request || ((path, init = {}) => fetch(path, {
     ...init,
@@ -85,6 +90,48 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
     }
   }
 
+  async function openClarification(item: RequestSummary) {
+    setError(null);
+    try {
+      // List rows intentionally stay compact; retrieve the trusted clarification history only
+      // when the responsible organiser chooses to answer it.
+      const response = await api(`/api/event-requests/${item.id}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.event_request?.clarifications)) {
+        setError(LOAD_FAILURE_MESSAGE);
+        return;
+      }
+      setResponding({ id: item.id, name: item.name, clarifications: payload.event_request.clarifications });
+      setResponseText('');
+    } catch {
+      setError(LOAD_FAILURE_MESSAGE);
+    }
+  }
+
+  async function sendClarificationResponse() {
+    const outstanding = responding?.clarifications.find(item => !item.response);
+    if (!responding || !outstanding || !responseText.trim()) return;
+    setSendingResponse(true);
+    setError(null);
+    try {
+      const response = await api(
+        `/api/event-requests/${responding.id}/clarifications/${outstanding.id}/respond`,
+        { method: 'POST', body: JSON.stringify({ response: responseText }) },
+      );
+      if (!response.ok) {
+        setError(RESPONSE_FAILURE_MESSAGE);
+        return;
+      }
+      setResponding(null);
+      setResponseText('');
+      await refresh();
+    } catch {
+      setError(RESPONSE_FAILURE_MESSAGE);
+    } finally {
+      setSendingResponse(false);
+    }
+  }
+
   if (editing !== null) return <EventRequestForm
     accessToken={accessToken}
     request={request}
@@ -93,6 +140,35 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
     onCancel={() => { setEditing(null); onUnsavedChanges?.(false); void refresh(); }}
     onSubmitted={() => { setEditing(null); onUnsavedChanges?.(false); void refresh(); }}
   />;
+
+  if (responding !== null) {
+    const outstanding = responding.clarifications.find(item => !item.response);
+    return <div className="event-request-status">
+      <p className="eyebrow">My requests</p>
+      <h1>Respond to clarification</h1>
+      <p>{responding.name}</p>
+      <ClarificationHistory clarifications={responding.clarifications} heading="Clarification history" />
+      {error && <div className="form-message form-message--error" role="alert"><span>{error}</span></div>}
+      {outstanding && <form onSubmit={event => { event.preventDefault(); void sendClarificationResponse(); }}>
+        <label className="form-field">
+          <span>Your response</span>
+          <textarea
+            maxLength={2000}
+            onChange={event => setResponseText(event.target.value)}
+            required
+            rows={6}
+            value={responseText}
+          />
+        </label>
+        <div className="form-actions">
+          <button className="button button--secondary" onClick={() => { setResponding(null); setError(null); }} type="button">Back to my requests</button>
+          <button className="button button--primary" disabled={sendingResponse || !responseText.trim()} type="submit">
+            {sendingResponse ? 'Sending response…' : 'Send response'}
+          </button>
+        </div>
+      </form>}
+    </div>;
+  }
 
   const drafts = items ? items.filter(item => item.status === 'draft') : [];
   const submitted = items ? mostRecentFirst(items.filter(item => item.status !== 'draft')) : [];
@@ -162,6 +238,10 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
               {item.rejected_by && item.rejection_reason && <span className="event-request-status__explanation">
                 Reason: {item.rejection_reason}
               </span>}
+              {item.status === 'returned_for_clarification' &&
+                <button className="button button--secondary" onClick={() => void openClarification(item)} type="button">
+                  Respond to clarification
+                </button>}
             </td>
             <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>
             <td>{item.status_changed_at ? new Date(item.status_changed_at).toLocaleString() : 'Not recorded'}</td>

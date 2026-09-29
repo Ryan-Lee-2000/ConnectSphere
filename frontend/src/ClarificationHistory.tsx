@@ -3,6 +3,9 @@ export type Clarification = {
   message: string;
   author: { id: string; name: string };
   created_at: string;
+  response?: string | null;
+  respondent?: { id: string; name: string } | null;
+  responded_at?: string | null;
 };
 
 function formatTimestamp(value: string) {
@@ -20,6 +23,13 @@ export function ClarificationHistory({ clarifications, heading }: { clarificatio
     <ol className="clarification-history__list">{clarifications.map(item => <li key={item.id}>
       <p className="clarification-history__meta">{item.author.name} · {formatTimestamp(item.created_at)}</p>
       <p className="clarification-history__message">{item.message}</p>
+      {item.response && <div className="clarification-history__response">
+        <p className="clarification-history__meta">
+          Response from {item.respondent?.name ?? 'Event Organiser'}
+          {item.responded_at ? ` · ${formatTimestamp(item.responded_at)}` : ''}
+        </p>
+        <p className="clarification-history__message">{item.response}</p>
+      </div>}
     </li>)}</ol>
   </section>;
 }

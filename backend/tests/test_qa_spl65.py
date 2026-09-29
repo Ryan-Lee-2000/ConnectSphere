@@ -852,7 +852,16 @@ def test_qa_spl65_040_clarification_shape_exposes_only_the_intended_fields(world
 
     [item] = organiser_view(client, event_id)["clarifications"]
 
-    assert set(item) == {"id", "message", "author", "created_at"}
+    # SPL-66 extends the public history with response evidence while keeping internal fields hidden.
+    assert set(item) == {
+        "id",
+        "message",
+        "author",
+        "created_at",
+        "response",
+        "respondent",
+        "responded_at",
+    }
     assert set(item["author"]) == {"id", "name"}
 
 
@@ -1040,6 +1049,7 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
     assert set(TRANSITION_RULES) == {
         "begin_review",
         "request_clarification",
+        "respond_clarification",
         "approve",
         "reject",
         "withdraw",

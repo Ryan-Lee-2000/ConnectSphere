@@ -242,6 +242,7 @@ def main():
             "backend/tests/test_qa_spl65_postgres.py",
             "backend/tests/test_qa_spl67_postgres.py",
             "backend/tests/test_qa_spl68_postgres.py",
+            "backend/tests/test_respond_clarification_postgres.py",
             "backend/tests/test_venue_booking_requests_postgres.py",
             "backend/tests/test_venue_booking_withdrawals_postgres.py",
             "backend/tests/test_venue_booking_status_postgres.py",
