@@ -189,6 +189,7 @@ def test_tc_cs_e03_s5_03_a_request_stored_before_this_story_remains_readable(app
 # --- AC2: refuse an incomplete submission naming every missing mandatory field ---
 
 
+# SPL-51 AC-2 Test-003
 # SPL-55 AC-2,3 Test-04
 def test_tc_cs_e03_s5_04_empty_submission_names_every_missing_field(app, client):
     response = client.post("/api/event-requests", json={}, headers=headers())
@@ -226,6 +227,7 @@ def test_tc_cs_e03_s5_05_partial_submission_names_only_what_is_missing(client):
     assert "purpose" not in response.json["missing_fields"]
 
 
+# SPL-51 AC-2 Test-004
 # SPL-55 AC-2 Test-06
 def test_tc_cs_e03_s5_06_blank_sits_in_the_same_partition_as_absent(client):
     refused = client.post(
