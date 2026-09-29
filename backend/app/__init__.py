@@ -16,6 +16,7 @@ from .venue_booking_queue import register_venue_booking_queue_routes
 from .venue_booking_requests import register_venue_booking_request_routes
 from .venue_booking_status import register_venue_booking_status_routes
 from .venue_booking_withdrawals import register_venue_booking_withdrawal_routes
+from .venue_occupancy_calendar import register_venue_occupancy_calendar_routes
 from .venue_operational_blocks import register_venue_operational_block_routes
 from .venues import register_venue_routes
 
@@ -108,6 +109,7 @@ def create_app(test_config=None):
     register_venue_booking_status_routes(app)
     register_venue_booking_approval_routes(app)
     register_venue_booking_queue_routes(app)
+    register_venue_occupancy_calendar_routes(app)
     register_event_request_routes(app)
     register_coordinator_assignment_routes(app)
     register_event_review_routes(app)

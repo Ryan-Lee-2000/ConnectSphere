@@ -27,7 +27,15 @@ def register_venue_routes(app: Flask) -> None:
             return jsonify(venue=_serialize_venue(venue)), 201
 
     @app.get("/api/venues")
-    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR, Role.EVENT_ORGANISER)
+    # SPL-88 adds the Event Operations Manager: the occupancy calendar is open to them, and its
+    # venue picker reads this list. The summary is only id, name and location, so this grants no
+    # booking, organisation or personal information beyond what the role already sees.
+    @require_roles(
+        Role.VENUE_STAFF,
+        Role.EVENT_COORDINATOR,
+        Role.EVENT_ORGANISER,
+        Role.EVENT_OPERATIONS_MANAGER,
+    )
     def list_venues():
         with Session(app.extensions["engine"]) as session:
             venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
