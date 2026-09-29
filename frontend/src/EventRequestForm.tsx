@@ -126,6 +126,16 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
   const venueLayoutOptions = selectedVenue ? selectedVenue.layouts.map(item => item.layout) : [];
   const venueFacilityOptions = selectedVenue ? selectedVenue.facilities : [];
   const venueAccessibilityOptions = selectedVenue ? selectedVenue.accessibility_features : [];
+  const catalogueLocations = Array.from(
+    new Set(
+      venues
+        .map(venue => venue.location)
+        .filter((value): value is string => Boolean(value && value.trim()))
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const locationOptions = locationPreference && !catalogueLocations.includes(locationPreference)
+    ? [...catalogueLocations, locationPreference]
+    : catalogueLocations;
   const preferredRoomLayout = layoutChoice === OTHERS ? layoutOtherText.trim() : layoutChoice;
   const requiredFacilities = [
     ...selectedFacilities,
@@ -474,7 +484,12 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
           onChange={event => setAccessibilityOthersText(event.target.value)}
         />}
       </fieldset>
-      <label>Location preference<input value={locationPreference} onChange={event => setLocationPreference(event.target.value)} /></label>
+      <label>Location preference
+        <select value={locationPreference} onChange={event => setLocationPreference(event.target.value)}>
+          <option value="">No preference</option>
+          {locationOptions.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </label>
       <fieldset>
         <legend>Time slot</legend>
         <div className="slot-options">
