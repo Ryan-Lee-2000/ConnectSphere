@@ -97,6 +97,12 @@ rules at `POST /api/event-requests/<id>/request-clarification`. The route also a
 `clarification_requests` row (message, author, time) in the same transaction, so each request is
 kept as history. The organiser reads the messages with the request; replying is a later story.
 
+SPL-69 adds `withdraw` from `submitted`, `under_review` or `returned_for_clarification` to the
+terminal `withdrawn` status. The same conditional transition records the actual prior status.
+Withdrawal actor, time and optional note remain on the event request for ordinary authorised reads,
+while the append-only status history remains the audit trail. No client-provided target status,
+actor or timestamp is accepted.
+
 ## Event-request submission foundation
 
 SPL-51 adds an additive `event_requests` aggregate with zero or more child

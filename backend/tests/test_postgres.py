@@ -72,6 +72,21 @@ def test_empty_baseline_migration_is_rerunnable():
             "review_marked_at",
             "review_marked_by_account_id",
         } <= set(booking_columns)
+        withdrawal_columns = {
+            column["name"]: column for column in inspect(engine).get_columns("event_requests")
+        }
+        assert withdrawal_columns["withdrawn_by_account_id"]["nullable"] is True
+        assert withdrawal_columns["withdrawn_at"]["nullable"] is True
+        assert withdrawal_columns["withdrawal_note"]["nullable"] is True
+        assert any(
+            constraint["name"] == "ck_event_requests_withdrawal_complete"
+            for constraint in inspect(engine).get_check_constraints("event_requests")
+        )
+        assert any(
+            foreign_key["constrained_columns"] == ["withdrawn_by_account_id"]
+            and foreign_key["referred_table"] == "accounts"
+            for foreign_key in inspect(engine).get_foreign_keys("event_requests")
+        )
         with engine.connect() as conn:
             assert set(
                 conn.execute(text("select version_num from alembic_version")).scalars()

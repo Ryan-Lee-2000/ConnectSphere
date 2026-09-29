@@ -20,6 +20,7 @@ from app.event_requests import (
     serialize_approval,
     serialize_clarifications,
     serialize_rejection,
+    serialize_withdrawal,
 )
 from app.event_statuses import EVENT_REQUEST_STATUSES, status_label
 from app.models import (
@@ -421,6 +422,7 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         "clarifications": serialize_clarifications(event),
         **serialize_approval(event),
         **serialize_rejection(event),
+        **serialize_withdrawal(event),
     }
 
 

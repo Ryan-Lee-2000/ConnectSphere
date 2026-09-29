@@ -1042,6 +1042,7 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
         "request_clarification",
         "approve",
         "reject",
+        "withdraw",
     }
     assert TRANSITION_RULES["begin_review"].resulting_status == "under_review"
 

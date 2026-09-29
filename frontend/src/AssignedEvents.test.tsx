@@ -457,3 +457,69 @@ it('[TC-SPL-68-14] cancelling, or a refused rejection, keeps the event under rev
   expect((await screen.findByRole('alert')).textContent).toContain('Only an event under review can be rejected.');
   expect(screen.getByRole('button', { name: 'Confirm rejection' })).toBeTruthy();
 });
+
+const withdrawnAnswer = {
+  event: {
+    ...assigned, status: 'withdrawn', status_label: 'Withdrawn',
+    withdrawn_by: { id: 'a', name: 'Alice Tan' }, withdrawn_at: '2026-09-29T10:00:00+08:00',
+    withdrawal_note: 'Organiser withdrew by email.',
+  },
+  message: 'Withdrawal recorded. This request will not be reviewed further.',
+};
+
+// TC-SPL-69-11
+it('[TC-SPL-69-11] offers withdrawal in each permitted review state only', async () => {
+  for (const status of ['submitted', 'under_review', 'returned_for_clarification']) {
+    renderDetail({ ...fullDetail, status, status_label: status });
+    expect(await screen.findByRole('button', { name: 'Record withdrawal' })).toBeTruthy();
+    cleanup();
+  }
+  renderDetail({ ...fullDetail, status: 'planning', status_label: 'In planning' });
+  expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Record withdrawal' })).toBeNull();
+});
+
+// TC-SPL-69-12
+it('[TC-SPL-69-12] confirms withdrawal with an optional note and shows retained evidence', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => withdrawnAnswer });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Record withdrawal' }));
+  fireEvent.change(screen.getByLabelText('Withdrawal note (optional)'), {
+    target: { value: 'Organiser withdrew by email.' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+
+  expect(await screen.findByText('Withdrawal recorded. This request will not be reviewed further.')).toBeTruthy();
+  expect((screen.getByRole('rowheader', { name: 'Withdrawal recorded by' })).closest('tr')!.textContent).toContain('Alice Tan');
+  expect((screen.getByRole('rowheader', { name: 'Withdrawal note' })).closest('tr')!.textContent).toContain('Organiser withdrew by email.');
+  expect(screen.queryByRole('button', { name: 'Record withdrawal' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Approve request' })).toBeNull();
+  expect(request).toHaveBeenLastCalledWith('/api/event-requests/12/withdraw', {
+    method: 'POST', body: JSON.stringify({ note: 'Organiser withdrew by email.' }),
+  });
+});
+
+// TC-SPL-69-13
+it('[TC-SPL-69-13] cancels locally and preserves the form when withdrawal is refused', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: underReviewDetail }) })
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Only a Submitted, Under Review, or Returned for Clarification event can be withdrawn.' }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Record withdrawal' }));
+  fireEvent.change(screen.getByLabelText('Withdrawal note (optional)'), { target: { value: 'Keep this.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Keep reviewing' }));
+  expect(screen.getByRole('button', { name: 'Record withdrawal' })).toBeTruthy();
+  expect(request).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Record withdrawal' }));
+  fireEvent.change(screen.getByLabelText('Withdrawal note (optional)'), { target: { value: 'Retry note.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Only a Submitted, Under Review, or Returned for Clarification event can be withdrawn.',
+  );
+  expect((screen.getByLabelText('Withdrawal note (optional)') as HTMLTextAreaElement).value).toBe('Retry note.');
+});

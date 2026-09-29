@@ -607,6 +607,20 @@ def serialize_rejection(event: EventRequest) -> dict[str, Any]:
     }
 
 
+def serialize_withdrawal(event: EventRequest) -> dict[str, Any]:
+    """Who recorded withdrawal, when and the optional note (CS-E06-S6)."""
+
+    return {
+        "withdrawn_by": (
+            {"id": event.withdrawer.id, "name": event.withdrawer.display_name}
+            if event.withdrawer
+            else None
+        ),
+        "withdrawn_at": _singapore_time(event.withdrawn_at) if event.withdrawn_at else None,
+        "withdrawal_note": event.withdrawal_note,
+    }
+
+
 def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
     """Every clarification asked of this request, newest first (CS-E06-S2)."""
 
@@ -701,6 +715,7 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "coordinator": _coordinator(event),
         **serialize_approval(event),
         **serialize_rejection(event),
+        **serialize_withdrawal(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

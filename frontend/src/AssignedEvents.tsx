@@ -49,6 +49,9 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   rejected_by: { id: string; name: string } | null;
   rejected_at: string | null;
   rejection_reason: string | null;
+  withdrawn_by: { id: string; name: string } | null;
+  withdrawn_at: string | null;
+  withdrawal_note: string | null;
 }>;
 
 const NOT_PROVIDED = 'Not provided';
@@ -89,6 +92,10 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
         ['Rejection reason', formatText(event.rejection_reason)] as [string, ReactNode],
       ] : []),
       ...(event.approved_by ? [['Approved by', `${event.approved_by.name}, ${formatTimestamp(event.approved_at)}`] as [string, ReactNode]] : []),
+      ...(event.withdrawn_by ? [
+        ['Withdrawal recorded by', `${event.withdrawn_by.name}, ${formatTimestamp(event.withdrawn_at)}`] as [string, ReactNode],
+        ['Withdrawal note', formatText(event.withdrawal_note)] as [string, ReactNode],
+      ] : []),
       ['Purpose', formatText(event.purpose)],
       ['Description', formatText(event.description)],
       ['Proposed date', formatDate(event.proposed_date)],
@@ -163,6 +170,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [clarification, setClarification] = useState('');
   const [rejecting, setRejecting] = useState<'closed' | 'reason' | 'confirm'>('closed');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawalNote, setWithdrawalNote] = useState('');
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
 
@@ -175,6 +184,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     setClarification('');
     setRejecting('closed');
     setRejectionReason('');
+    setWithdrawing(false);
+    setWithdrawalNote('');
     setBookingStageOnLoad(false);
     void (async () => {
       try {
@@ -323,6 +334,34 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     }
   }
 
+  async function withdraw() {
+    if (!event || !['submitted', 'under_review', 'returned_for_clarification'].includes(event.status) || transitioning) return;
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/withdraw`, {
+        method: 'POST',
+        body: JSON.stringify({ note: withdrawalNote }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not record the withdrawal. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event }));
+        setWithdrawing(false);
+        setWithdrawalNote('');
+        setNotice(body.message || 'Withdrawal recorded. This request will not be reviewed further.');
+      } else {
+        setError('Could not record the withdrawal. Try again.');
+      }
+    } catch {
+      setError('Could not record the withdrawal. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   const back = <a className="organisation-events__back" href="/workspace/assigned-events"
     onClick={click => follow(click, '/workspace/assigned-events')}>Back to my assigned events</a>;
 
@@ -427,6 +466,26 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           </button>
         </div>
       </div>}
+      {['submitted', 'under_review', 'returned_for_clarification'].includes(event.status) && !withdrawing && <div className="organisation-events__actions">
+        <button type="button" className="button button--secondary" disabled={transitioning}
+          onClick={() => setWithdrawing(true)}>Record withdrawal</button>
+      </div>}
+      {['submitted', 'under_review', 'returned_for_clarification'].includes(event.status) && withdrawing && <form className="request-form rejection-form"
+        onSubmit={submit => { submit.preventDefault(); void withdraw(); }}>
+        <p><strong>Record this request as withdrawn?</strong> It will remain available for reference and cannot continue through review or planning.</p>
+        <div className="field">
+          <label htmlFor="withdrawal-note">Withdrawal note (optional)</label>
+          <textarea id="withdrawal-note" rows={3} maxLength={2000} value={withdrawalNote}
+            onChange={change => setWithdrawalNote(change.target.value)} />
+        </div>
+        <div className="organisation-events__actions">
+          <button type="button" className="button button--secondary" disabled={transitioning}
+            onClick={() => { setWithdrawing(false); setWithdrawalNote(''); setError(null); }}>Keep reviewing</button>
+          <button type="submit" className="button button--primary" disabled={transitioning}>
+            {transitioning ? 'Recording withdrawal…' : 'Confirm withdrawal'}
+          </button>
+        </div>
+      </form>}
       {event.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
       {event.status === 'planning' && <div className="organisation-events__actions organisation-events__actions--planning">
         <div><span className="organisation-events__planning-label">Next step</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>
