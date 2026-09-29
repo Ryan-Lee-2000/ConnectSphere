@@ -148,6 +148,7 @@ def booking_block_race(engine):
         session.commit()
 
 
+# SPL-83 AC-2,4 Test-06
 def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_bookings):
     barrier = threading.Barrier(2, timeout=10)
     first_lock_threads: set[int] = set()
@@ -206,6 +207,7 @@ def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_b
         )
 
 
+# SPL-89 AC-5 Test-09
 def test_tc_spl_89_09_booking_and_block_writes_cannot_create_unmarked_overlap(
     engine, booking_block_race
 ):

@@ -5,6 +5,7 @@ from alembic import command
 from alembic.config import Config
 
 
+# SPL-128 AC-8 Test-08
 def test_can_generate_a_revision_without_touching_project_migrations(tmp_path):
     source = Path(__file__).resolve().parents[1] / "migrations"
     target = tmp_path / "migrations"

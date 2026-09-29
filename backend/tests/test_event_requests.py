@@ -109,6 +109,10 @@ def create_event(client, *, identity="organiser-one", **overrides):
     return response.json["event_request"]
 
 
+# SPL-51 AC-1 Test-001
+# SPL-51 AC-6 Test-012
+# SPL-53 AC-1 Test-002
+# SPL-53 AC-2 Test-004
 def test_organiser_creates_complete_request_with_server_owned_identity_and_equipment(
     client, event_app
 ):
@@ -138,6 +142,7 @@ def test_organiser_creates_complete_request_with_server_owned_identity_and_equip
         assert stored.organisation_id == created["organisation_id"]
 
 
+# SPL-51 AC-6 Test-013
 @pytest.mark.parametrize("field", ["organiser_account_id", "organisation_id", "status"])
 def test_client_cannot_submit_server_owned_fields(client, field):
     response = client.post(
@@ -150,6 +155,8 @@ def test_client_cannot_submit_server_owned_fields(client, field):
     assert response.json == {"error": f"Unexpected event request field: {field}."}
 
 
+# SPL-52 AC-4 Test-010
+# SPL-54 AC-3 Test-007
 def test_organisers_see_only_their_own_requests_while_coordinator_sees_all(client):
     first = create_event(client, name="First organiser request")
     second = create_event(client, identity="organiser-two", name="Second organiser request")
@@ -176,6 +183,7 @@ def test_organisers_see_only_their_own_requests_while_coordinator_sees_all(clien
     assert coordinator_detail.json["event_request"]["id"] == first["id"]
 
 
+# SPL-56 AC-3 Test-003
 def test_drafts_are_visible_only_to_their_creator_even_with_a_coordinator_role(client, event_app):
     submitted = create_event(client)
     with Session(event_app.extensions["engine"]) as session:
@@ -235,6 +243,12 @@ def test_database_allows_name_only_draft_but_not_incomplete_submitted_request(ev
             session.commit()
 
 
+# SPL-56 AC-1 Test-001
+# SPL-56 AC-2 Test-002
+# SPL-57 AC-2 Test-002
+# SPL-57 AC-3 Test-003
+# SPL-57 AC-4 Test-004
+# SPL-58 AC-2 Test-002
 def test_draft_lifecycle_preserves_id_and_last_saved_time(client):
     created_response = client.post(
         "/api/event-requests/drafts", json={"name": "  Early idea  "}, headers=headers()
@@ -283,6 +297,8 @@ def test_draft_lifecycle_preserves_id_and_last_saved_time(client):
     )
 
 
+# SPL-58 AC-1 Test-001
+# SPL-58 AC-3 Test-003
 def test_draft_save_delete_are_creator_only_and_never_expose_to_coordinator(client):
     response = client.post(
         "/api/event-requests/drafts", json={"name": "Private draft"}, headers=headers()
@@ -323,6 +339,7 @@ def test_draft_rejects_forged_identity_and_invalid_fields(client):
     )
 
 
+# SPL-57 AC-2 Test-002
 def test_reopened_draft_retains_optional_fields_and_replaces_equipment_lines(client):
     created = client.post(
         "/api/event-requests/drafts", json=event_payload(), headers=headers()
@@ -371,6 +388,12 @@ def test_event_request_routes_enforce_declared_roles(client):
 # refuses the whole submission and names every missing field at once, so those two cases moved
 # to test_event_request_submission.py (TC-CS-E03-S5-04, -05 and -06). The per-field messages
 # below still apply to values that are present but invalid.
+# SPL-51 AC-3 Test-005,007
+# SPL-51 AC-4 Test-009
+# SPL-52 AC-1 Test-002
+# SPL-53 AC-2 Test-005
+# SPL-54 AC-1 Test-003
+# SPL-128 AC-7 Test-07
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
@@ -413,6 +436,7 @@ def test_invalid_request_is_rejected_without_creating_partial_rows(
         assert session.scalars(select(EventRequest)).all() == []
 
 
+# SPL-51 AC-5 Test-010
 def test_slot_mapping_uses_the_shared_venue_windows(client):
     am_only = create_event(client, start_time="07:00", end_time="12:00")
     night_only = create_event(client, start_time="19:00", end_time="23:59")
@@ -437,6 +461,7 @@ def _add_venue(event_app, **overrides):
         return venue.id
 
 
+# SPL-52 AC-2 Test-003
 def test_organiser_selects_a_venue_whose_operating_slots_cover_the_request(client, event_app):
     venue_id = _add_venue(event_app, operating_slots=["AM"])
 
@@ -445,6 +470,7 @@ def test_organiser_selects_a_venue_whose_operating_slots_cover_the_request(clien
     assert created["venue_id"] == venue_id
 
 
+# SPL-52 AC-2 Test-004
 def test_unknown_venue_id_is_rejected(client):
     response = client.post(
         "/api/event-requests", json=event_payload(venue_id=999), headers=headers()
@@ -454,6 +480,7 @@ def test_unknown_venue_id_is_rejected(client):
     assert response.json == {"error": "Venue not found."}
 
 
+# SPL-52 AC-2 Test-005
 def test_venue_id_is_rejected_when_the_time_falls_outside_its_operating_slots(client, event_app):
     venue_id = _add_venue(event_app, operating_slots=["NIGHT"])
 
@@ -467,6 +494,7 @@ def test_venue_id_is_rejected_when_the_time_falls_outside_its_operating_slots(cl
     assert response.json == {"error": "Selected time is not available for this venue."}
 
 
+# SPL-89 AC-2 Test-05
 def test_tc_spl_89_05_active_block_makes_event_request_slot_unavailable(client, event_app):
     venue_id = _add_venue(event_app, operating_slots=["AM"])
     proposed_date = date.today() + timedelta(days=7)
@@ -501,6 +529,7 @@ def test_tc_spl_89_05_active_block_makes_event_request_slot_unavailable(client, 
         assert session.scalars(select(EventRequest)).all() == []
 
 
+# SPL-52 AC-3 Test-008
 def test_null_venue_id_bypasses_the_slot_availability_check(client):
     created = create_event(client, venue_id=None)
 

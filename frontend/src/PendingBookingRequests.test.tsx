@@ -39,6 +39,7 @@ function queue(body: unknown) {
 
 describe('PendingBookingRequests', () => {
   // TC-SPL-80-13
+  // SPL-80 AC-1,2 Test-13
   it('[TC-SPL-80-13] lists pending requests with event, venue, date, slots and requester', async () => {
     render(<PendingBookingRequests
       accessToken="token"
@@ -60,6 +61,7 @@ describe('PendingBookingRequests', () => {
   });
 
   // TC-SPL-80-14
+  // SPL-80 AC-3 Test-14
   it('[TC-SPL-80-14] opens the review page for the chosen request', async () => {
     const onOpen = vi.fn();
     render(<PendingBookingRequests
@@ -78,6 +80,7 @@ describe('PendingBookingRequests', () => {
   });
 
   // TC-SPL-80-15
+  // SPL-80 AC-6 Test-15
   it('[TC-SPL-80-15] tells Venue Staff when nothing is awaiting review', async () => {
     render(<PendingBookingRequests
       accessToken="token"
@@ -92,6 +95,7 @@ describe('PendingBookingRequests', () => {
   });
 
   // TC-SPL-80-16
+  // SPL-80 AC-1,2 Test-16
   it('[TC-SPL-80-16] flags a request marked for review', async () => {
     render(<PendingBookingRequests
       accessToken="token"

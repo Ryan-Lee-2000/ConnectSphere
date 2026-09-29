@@ -170,6 +170,7 @@ def _race(app, marker, calls):
 
 
 # TC-SPL-77-13
+# SPL-77 AC-4 Test-13
 def test_tc_spl_77_13_concurrent_requests_for_one_event_create_one_booking(engine, pg_url):
     ids, event_ids, venue_ids = _seed(engine, events=["alice"], venues={"Venue A": 0, "Venue B": 0})
     app = _app(pg_url, ids)
@@ -197,6 +198,7 @@ def test_tc_spl_77_13_concurrent_requests_for_one_event_create_one_booking(engin
 
 
 # TC-SPL-77-18
+# SPL-77 AC-5 Test-18
 def test_tc_spl_77_18_concurrent_requests_for_one_slot_yield_one_booking(engine, pg_url):
     ids, event_ids, venue_ids = _seed(engine, events=["alice", "bob"], venues={"Shared Hall": 1})
     app = _app(pg_url, ids)
@@ -227,6 +229,7 @@ def test_tc_spl_77_18_concurrent_requests_for_one_slot_yield_one_booking(engine,
         assert session.scalar(select(func.count(VenueBooking.id))) == 1
 
 
+# SPL-77 AC-NA Test-Supporting
 def test_spl_77_migration_adds_nullable_request_columns_with_a_requester_key(engine):
     """Supporting verification: the additive SPL-77 columns and the requester foreign key."""
 

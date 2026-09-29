@@ -132,6 +132,7 @@ def assert_nothing_recorded(app, event_id: int, status: str):
 
 
 # TC-SPL-65-01
+# SPL-65 AC-1,3,4 Test-01
 def test_tc_spl_65_01_assigned_coordinator_requests_clarification_and_it_is_recorded(app, client):
     event_id = assigned_request(app)
 
@@ -158,6 +159,7 @@ def test_tc_spl_65_01_assigned_coordinator_requests_clarification_and_it_is_reco
 
 
 # TC-SPL-65-02
+# SPL-65 AC-2 Test-02
 @pytest.mark.parametrize("message", ["", "   \n\t ", None, 7])
 def test_tc_spl_65_02_blank_or_invalid_message_is_refused(app, client, message):
     event_id = assigned_request(app)
@@ -169,6 +171,7 @@ def test_tc_spl_65_02_blank_or_invalid_message_is_refused(app, client, message):
 
 
 # TC-SPL-65-02
+# SPL-65 AC-2 Test-02
 def test_tc_spl_65_02_message_is_stored_trimmed(app, client):
     event_id = assigned_request(app)
 
@@ -178,6 +181,7 @@ def test_tc_spl_65_02_message_is_stored_trimmed(app, client):
 
 
 # TC-SPL-65-02
+# SPL-65 AC-2 Test-02
 def test_tc_spl_65_02_overlong_message_is_refused(app, client):
     event_id = assigned_request(app)
 
@@ -188,6 +192,7 @@ def test_tc_spl_65_02_overlong_message_is_refused(app, client):
 
 
 # TC-SPL-65-03
+# SPL-65 AC-1 Test-03
 @pytest.mark.parametrize("token", ["manager", "organiser"])
 def test_tc_spl_65_03_other_roles_are_refused(app, client, token):
     event_id = assigned_request(app)
@@ -197,6 +202,7 @@ def test_tc_spl_65_03_other_roles_are_refused(app, client, token):
 
 
 # TC-SPL-65-03
+# SPL-65 AC-1 Test-03
 def test_tc_spl_65_03_unassigned_coordinator_is_refused(app, client):
     event_id = assigned_request(app)
 
@@ -205,6 +211,7 @@ def test_tc_spl_65_03_unassigned_coordinator_is_refused(app, client):
 
 
 # TC-SPL-65-04
+# SPL-65 AC-7 Test-04
 @pytest.mark.parametrize("status", ["submitted", "returned_for_clarification", "approved"])
 def test_tc_spl_65_04_refused_outside_under_review(app, client, status):
     event_id = assigned_request(app, status=status)
@@ -214,6 +221,7 @@ def test_tc_spl_65_04_refused_outside_under_review(app, client, status):
 
 
 # TC-SPL-65-05
+# SPL-65 AC-4 Test-05
 def test_tc_spl_65_05_client_cannot_supply_a_target_status(app, client):
     event_id = assigned_request(app)
 
@@ -224,6 +232,7 @@ def test_tc_spl_65_05_client_cannot_supply_a_target_status(app, client):
 
 
 # TC-SPL-65-06
+# SPL-65 AC-5 Test-06
 def test_tc_spl_65_06_organiser_retrieves_the_message_with_the_request(app, client):
     event_id = assigned_request(app)
     assert ask(client, event_id).status_code == 200
@@ -240,6 +249,7 @@ def test_tc_spl_65_06_organiser_retrieves_the_message_with_the_request(app, clie
 
 
 # TC-SPL-65-07
+# SPL-65 AC-6 Test-07
 def test_tc_spl_65_07_history_is_kept_when_clarification_is_requested_again(app, client):
     event_id = assigned_request(app)
     assert ask(client, event_id, body={"message": "First question"}).status_code == 200
@@ -260,6 +270,7 @@ def test_tc_spl_65_07_history_is_kept_when_clarification_is_requested_again(app,
 
 
 # TC-SPL-65-08
+# SPL-65 AC-5,6 Test-08
 def test_tc_spl_65_08_coordinator_detail_lists_the_history(app, client):
     event_id = assigned_request(app)
     assert ask(client, event_id).status_code == 200

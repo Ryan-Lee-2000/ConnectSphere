@@ -223,6 +223,7 @@ def assert_untouched(app, event_id, before):
 # ---- AC1: only the assigned Event Coordinator can approve a request that is Under Review --------
 
 
+# SPL-67 AC-1,3 Test-001
 def test_qa_spl67_001_assigned_coordinator_approves_an_event_under_review(client):
     """QA-SPL-67-001 [Functional] AC1,3: the assigned coordinator approves a real request."""
 
@@ -233,6 +234,7 @@ def test_qa_spl67_001_assigned_coordinator_approves_an_event_under_review(client
     assert response.json["event"]["status"] == "planning"
 
 
+# SPL-67 AC-1,6 Test-002
 def test_qa_spl67_002_unassigned_coordinator_gets_not_found(world, client):
     """QA-SPL-67-002 [Negative] AC1,6: another coordinator sees nothing and changes nothing."""
 
@@ -244,6 +246,7 @@ def test_qa_spl67_002_unassigned_coordinator_gets_not_found(world, client):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-003
 @pytest.mark.parametrize("token", ["owner", "colleague", "stranger", "manager", "attendee"])
 def test_qa_spl67_003_every_other_role_is_refused(world, client, token):
     """QA-SPL-67-003 [Negative] AC1,6: organisers, manager and attendee cannot approve."""
@@ -255,6 +258,7 @@ def test_qa_spl67_003_every_other_role_is_refused(world, client, token):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-004
 def test_qa_spl67_004_no_bearer_token_is_unauthenticated(world, client):
     """QA-SPL-67-004 [Security] AC1,6: an anonymous request is a 401 and changes nothing."""
 
@@ -265,6 +269,7 @@ def test_qa_spl67_004_no_bearer_token_is_unauthenticated(world, client):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-005
 @pytest.mark.parametrize("header", ["Bearer ", "Bearer    ", "Basic alice", "alice"])
 def test_qa_spl67_005_a_malformed_authorization_header_is_unauthenticated(world, client, header):
     """QA-SPL-67-005 [Security] AC1,6: a blank or non-Bearer credential is refused."""
@@ -278,6 +283,7 @@ def test_qa_spl67_005_a_malformed_authorization_header_is_unauthenticated(world,
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-006
 def test_qa_spl67_006_deactivated_coordinator_cannot_approve(world, client):
     """QA-SPL-67-006 [Security] AC1,6: an assigned but deactivated coordinator is refused."""
 
@@ -291,6 +297,7 @@ def test_qa_spl67_006_deactivated_coordinator_cannot_approve(world, client):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1 Test-007
 def test_qa_spl67_007_reassignment_moves_the_right_to_approve(world, client):
     """QA-SPL-67-007 [Functional] AC1: after reassignment only the new coordinator may approve."""
 
@@ -303,6 +310,7 @@ def test_qa_spl67_007_reassignment_moves_the_right_to_approve(world, client):
     assert snapshot(world, event_id)[0]["approved_by_account_id"] == BOB
 
 
+# SPL-67 AC-1,6 Test-008
 def test_qa_spl67_008_a_coordinator_cannot_approve_a_colleagues_event(world, client):
     """QA-SPL-67-008 [Negative] AC1,6: assignment is per event, not per role."""
 
@@ -316,6 +324,7 @@ def test_qa_spl67_008_a_coordinator_cannot_approve_a_colleagues_event(world, cli
     assert approve(client, mine, token="alice").status_code == 200
 
 
+# SPL-67 AC-1,6 Test-009
 def test_qa_spl67_009_an_unassigned_event_cannot_be_approved_by_anyone(world, client):
     """QA-SPL-67-009 [Negative] AC1,6: no assignment means no coordinator may approve."""
 
@@ -327,6 +336,7 @@ def test_qa_spl67_009_an_unassigned_event_cannot_be_approved_by_anyone(world, cl
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-010
 def test_qa_spl67_010_a_missing_event_is_not_found(client):
     """QA-SPL-67-010 [Negative] AC1,6: an id that does not exist is a 404, same as unassigned."""
 
@@ -335,6 +345,7 @@ def test_qa_spl67_010_a_missing_event_is_not_found(client):
     assert response.json == {"error": NOT_ASSIGNED}
 
 
+# SPL-67 AC-1,6 Test-011
 def test_qa_spl67_011_an_id_beyond_the_supported_range_is_not_found(client):
     """QA-SPL-67-011 [Boundary] AC1,6: ids above MAX_EVENT_REQUEST_ID never reach the database."""
 
@@ -342,12 +353,14 @@ def test_qa_spl67_011_an_id_beyond_the_supported_range_is_not_found(client):
     assert approve(client, 2**31).status_code == 404
 
 
+# SPL-67 AC-1,6 Test-012
 def test_qa_spl67_012_a_non_numeric_id_is_not_routed(client):
     """QA-SPL-67-012 [Negative] AC1,6: only integer ids reach the endpoint (403/404)."""
 
     assert client.post("/api/event-requests/abc/approve", headers=h()).status_code in (403, 404)
 
 
+# SPL-67 AC-1,6 Test-013
 def test_qa_spl67_013_only_post_is_allowed(world, client):
     """QA-SPL-67-013 [Negative] AC1,6: only POST approves; other verbs are refused (403/405)."""
 
@@ -359,6 +372,7 @@ def test_qa_spl67_013_only_post_is_allowed(world, client):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-014
 def test_qa_spl67_014_approval_needs_the_review_to_have_begun(world, client):
     """QA-SPL-67-014 [Functional] AC1,6: a Submitted event cannot skip begin-review."""
 
@@ -375,6 +389,7 @@ def test_qa_spl67_014_approval_needs_the_review_to_have_begun(world, client):
 # ---- AC2: approval is refused while a clarification request is outstanding ----------------------
 
 
+# SPL-67 AC-2,6 Test-015
 def test_qa_spl67_015_approval_is_refused_after_clarification_is_requested(world, client):
     """QA-SPL-67-015 [Functional] AC2,6: an outstanding clarification blocks approval."""
 
@@ -388,6 +403,7 @@ def test_qa_spl67_015_approval_is_refused_after_clarification_is_requested(world
     assert before[0]["status"] == "returned_for_clarification"
 
 
+# SPL-67 AC-2,6 Test-016
 def test_qa_spl67_016_a_refused_approval_keeps_the_clarification_history(world, client):
     """QA-SPL-67-016 [Functional] AC2,6: the clarification and its audit row are not disturbed."""
 
@@ -401,6 +417,7 @@ def test_qa_spl67_016_a_refused_approval_keeps_the_clarification_history(world, 
     assert columns["approved_by_account_id"] is None
 
 
+# SPL-67 AC-2,6 Test-017
 def test_qa_spl67_017_repeated_attempts_stay_refused_and_write_nothing(world, client):
     """QA-SPL-67-017 [Negative] AC2,6: ten attempts on an outstanding clarification all fail."""
 
@@ -411,6 +428,7 @@ def test_qa_spl67_017_repeated_attempts_stay_refused_and_write_nothing(world, cl
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-2,4 Test-018
 def test_qa_spl67_018_the_organiser_still_sees_it_returned_after_a_refused_approval(client):
     """QA-SPL-67-018 [Functional] AC2,4: the organiser's view is unchanged by the refusal."""
 
@@ -424,6 +442,7 @@ def test_qa_spl67_018_the_organiser_still_sees_it_returned_after_a_refused_appro
     assert len(seen["clarifications"]) == 1
 
 
+# SPL-67 AC-2,3 Test-019
 def test_qa_spl67_019_approval_succeeds_once_the_event_is_back_under_review(world, client):
     """QA-SPL-67-019 [Functional] AC2,3: refused while outstanding, allowed once resolved.
 
@@ -438,6 +457,7 @@ def test_qa_spl67_019_approval_succeeds_once_the_event_is_back_under_review(worl
     assert snapshot(world, event_id)[0]["status"] == "planning"
 
 
+# SPL-67 AC-2,6 Test-020
 def test_qa_spl67_020_the_refusal_names_the_required_status(client):
     """QA-SPL-67-020 [Functional] AC2,6: the display message tells the coordinator why."""
 
@@ -446,6 +466,7 @@ def test_qa_spl67_020_the_refusal_names_the_required_status(client):
     assert approve(client, event_id).json["error"] == WRONG_STATUS
 
 
+# SPL-67 AC-2,6 Test-021
 def test_qa_spl67_021_only_the_assigned_coordinator_learns_the_refusal_reason(client):
     """QA-SPL-67-021 [Security] AC2,6: another coordinator gets 404, not the 409 reason."""
 
@@ -457,6 +478,7 @@ def test_qa_spl67_021_only_the_assigned_coordinator_learns_the_refusal_reason(cl
 # ---- AC3: records the decision-maker and date and time, and changes the event to Planning -------
 
 
+# SPL-67 AC-3 Test-022
 def test_qa_spl67_022_the_event_moves_to_planning(world, client):
     """QA-SPL-67-022 [Functional] AC3: the response and the stored event are Planning."""
 
@@ -467,6 +489,7 @@ def test_qa_spl67_022_the_event_moves_to_planning(world, client):
     assert snapshot(world, event_id)[0]["status"] == "planning"
 
 
+# SPL-67 AC-3 Test-023
 def test_qa_spl67_023_the_display_message_is_returned(client):
     """QA-SPL-67-023 [Functional] AC3: the success message travels with the response."""
 
@@ -474,6 +497,7 @@ def test_qa_spl67_023_the_display_message_is_returned(client):
     assert approve(client, event_id).json["message"] == SUCCESS_MESSAGE
 
 
+# SPL-67 AC-3 Test-024
 def test_qa_spl67_024_the_decision_maker_is_recorded(world, client):
     """QA-SPL-67-024 [Functional] AC3: the coordinator's id and name are stored and returned."""
 
@@ -483,6 +507,7 @@ def test_qa_spl67_024_the_decision_maker_is_recorded(world, client):
     assert snapshot(world, event_id)[0]["approved_by_account_id"] == ALICE
 
 
+# SPL-67 AC-3 Test-025
 def test_qa_spl67_025_the_decision_time_is_recorded_between_the_request_bounds(world, client):
     """QA-SPL-67-025 [Functional] AC3: approved_at is the server clock at the time of approval."""
 
@@ -495,6 +520,7 @@ def test_qa_spl67_025_the_decision_time_is_recorded_between_the_request_bounds(w
     assert before <= stored <= after
 
 
+# SPL-67 AC-3 Test-026
 def test_qa_spl67_026_the_time_is_returned_in_singapore_time(client):
     """QA-SPL-67-026 [Functional] AC3: the API states the time with the +08:00 offset."""
 
@@ -504,6 +530,7 @@ def test_qa_spl67_026_the_time_is_returned_in_singapore_time(client):
     assert datetime.fromisoformat(stamped).utcoffset() == timedelta(hours=8)
 
 
+# SPL-67 AC-3,6 Test-027
 def test_qa_spl67_027_the_client_cannot_choose_the_decision_maker_or_time(world, client):
     """QA-SPL-67-027 [Security] AC3,6: a submitted approver or time is refused, not stored."""
 
@@ -518,6 +545,7 @@ def test_qa_spl67_027_the_client_cannot_choose_the_decision_maker_or_time(world,
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-3 Test-028
 def test_qa_spl67_028_an_audit_row_records_the_transition(world, client):
     """QA-SPL-67-028 [Functional] AC3: action, previous and resulting status and the actor."""
 
@@ -529,6 +557,7 @@ def test_qa_spl67_028_an_audit_row_records_the_transition(world, client):
     assert row.changed_at is not None
 
 
+# SPL-67 AC-3 Test-029
 def test_qa_spl67_029_the_response_transition_block_matches_the_audit_row(client):
     """QA-SPL-67-029 [API] AC3: the transition object carries the audit evidence."""
 
@@ -541,6 +570,7 @@ def test_qa_spl67_029_the_response_transition_block_matches_the_audit_row(client
     assert body["transition"]["changed_at"] == body["event"]["approved_at"]
 
 
+# SPL-67 AC-3 Test-030
 def test_qa_spl67_030_the_audit_time_and_the_decision_time_are_one_instant(world, client):
     """QA-SPL-67-030 [White-box] AC3: audit changed_at, approved_at and status_changed_at agree."""
 
@@ -551,6 +581,7 @@ def test_qa_spl67_030_the_audit_time_and_the_decision_time_are_one_instant(world
     assert row.changed_at == columns["approved_at"] == columns["status_changed_at"]
 
 
+# SPL-67 AC-3 Test-031
 def test_qa_spl67_031_exactly_one_audit_row_is_written(world, client):
     """QA-SPL-67-031 [Functional] AC3: begin-review then approve leaves two rows, in order."""
 
@@ -559,6 +590,7 @@ def test_qa_spl67_031_exactly_one_audit_row_is_written(world, client):
     assert snapshot(world, event_id)[1] == [BEGIN_REVIEW, APPROVE]
 
 
+# SPL-67 AC-3 Test-032
 def test_qa_spl67_032_the_decision_survives_a_fresh_session(world, client):
     """QA-SPL-67-032 [Functional] AC3: the outcome is persisted, not held in memory."""
 
@@ -570,6 +602,7 @@ def test_qa_spl67_032_the_decision_survives_a_fresh_session(world, client):
         assert event.approver.display_name == "Alice Tan"
 
 
+# SPL-67 AC-3,4 Test-033
 def test_qa_spl67_033_the_coordinator_detail_shows_the_decision(client):
     """QA-SPL-67-033 [Functional] AC3,4: GET assigned detail returns status and approver."""
 
@@ -582,6 +615,7 @@ def test_qa_spl67_033_the_coordinator_detail_shows_the_decision(client):
     assert detail["approved_at"]
 
 
+# SPL-67 AC-3 Test-034
 def test_qa_spl67_034_the_detail_shows_no_decision_before_approval(client):
     """QA-SPL-67-034 [Functional] AC3: an undecided request has null approval fields."""
 
@@ -590,6 +624,7 @@ def test_qa_spl67_034_the_detail_shows_no_decision_before_approval(client):
     assert (detail["approved_by"], detail["approved_at"]) == (None, None)
 
 
+# SPL-67 AC-1,3 Test-035
 def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
     """QA-SPL-67-035 [White-box] AC1,3: the server-owned rule table is exactly as specified."""
 
@@ -599,6 +634,7 @@ def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
     assert set(TRANSITION_RULES) == {BEGIN_REVIEW, REQUEST_CLARIFICATION, APPROVE, "reject"}
 
 
+# SPL-67 AC-1,3 Test-036
 def test_qa_spl67_036_the_policy_function_applies_the_rule_and_records_evidence(world, client):
     """QA-SPL-67-036 [White-box] AC1,3: transition_event_status(approve) updates and audits."""
 
@@ -621,6 +657,7 @@ def test_qa_spl67_036_the_policy_function_applies_the_rule_and_records_evidence(
         assert session.get(EventRequest, event_id).status == "planning"
 
 
+# SPL-67 AC-1,6 Test-037
 @pytest.mark.parametrize("status", OTHER_STATUSES)
 def test_qa_spl67_037_the_policy_function_refuses_every_other_status(world, client, status):
     """QA-SPL-67-037 [White-box] AC1,6: the conditional UPDATE matches no row, nothing is added."""
@@ -641,6 +678,7 @@ def test_qa_spl67_037_the_policy_function_refuses_every_other_status(world, clie
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-038
 def test_qa_spl67_038_a_stale_read_cannot_approve_twice(world, client):
     """QA-SPL-67-038 [White-box] AC1,6: the compare-and-swap loses if the status changed first."""
 
@@ -669,6 +707,7 @@ def test_qa_spl67_038_a_stale_read_cannot_approve_twice(world, client):
     assert len(approvals(world, event_id)) == 1
 
 
+# SPL-67 AC-3,6 Test-039
 def test_qa_spl67_039_the_decision_and_the_transition_commit_together(world, client):
     """QA-SPL-67-039 [White-box] AC3,6: a failure recording the approver rolls everything back."""
 
@@ -692,6 +731,7 @@ def test_qa_spl67_039_the_decision_and_the_transition_commit_together(world, cli
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-3,4 Test-040
 def test_qa_spl67_040_serialize_approval_is_null_before_a_decision(world, client):
     """QA-SPL-67-040 [White-box] AC3,4: the serialiser reports no approver for a new request."""
 
@@ -703,6 +743,7 @@ def test_qa_spl67_040_serialize_approval_is_null_before_a_decision(world, client
         }
 
 
+# SPL-67 AC-3,4 Test-041
 def test_qa_spl67_041_serialize_approval_reports_the_approver_in_singapore_time(world, client):
     """QA-SPL-67-041 [White-box] AC3,4: offset-less means Singapore; UTC is converted to +08:00."""
 
@@ -719,6 +760,7 @@ def test_qa_spl67_041_serialize_approval_reports_the_approver_in_singapore_time(
         session.rollback()
 
 
+# SPL-67 AC-3 Test-042
 def test_qa_spl67_042_the_planning_status_exists_with_its_label(client):
     """QA-SPL-67-042 [White-box] AC3: the vocabulary already owns Planning; no new status added."""
 
@@ -730,6 +772,7 @@ def test_qa_spl67_042_the_planning_status_exists_with_its_label(client):
 # ---- AC4: the responsible Event Organiser can retrieve the approval outcome ---------------------
 
 
+# SPL-67 AC-4 Test-043
 def test_qa_spl67_043_the_organiser_retrieves_the_outcome(client):
     """QA-SPL-67-043 [Functional] AC4: status, approver and time are on their own request."""
 
@@ -744,6 +787,7 @@ def test_qa_spl67_043_the_organiser_retrieves_the_outcome(client):
     assert outcome["approved_at"]
 
 
+# SPL-67 AC-4 Test-044
 def test_qa_spl67_044_the_organiser_sees_no_outcome_before_approval(client):
     """QA-SPL-67-044 [Functional] AC4: the fields are present and null while undecided."""
 
@@ -755,6 +799,7 @@ def test_qa_spl67_044_the_organiser_sees_no_outcome_before_approval(client):
     assert (outcome["approved_by"], outcome["approved_at"]) == (None, None)
 
 
+# SPL-67 AC-4 Test-045
 def test_qa_spl67_045_the_outcome_appears_in_the_organisers_request_list(client):
     """QA-SPL-67-045 [Functional] AC4: the status table's data source carries the decision."""
 
@@ -770,6 +815,7 @@ def test_qa_spl67_045_the_outcome_appears_in_the_organisers_request_list(client)
     assert listed[waiting]["approved_by"] is None
 
 
+# SPL-67 AC-3,4 Test-046
 def test_qa_spl67_046_the_retrieved_time_equals_the_time_returned_to_the_coordinator(client):
     """QA-SPL-67-046 [Functional] AC3,4: both parties see one decision time."""
 
@@ -781,6 +827,7 @@ def test_qa_spl67_046_the_retrieved_time_equals_the_time_returned_to_the_coordin
     assert datetime.fromisoformat(outcome["approved_at"]) == datetime.fromisoformat(decided)
 
 
+# SPL-67 AC-4 Test-047
 def test_qa_spl67_047_repeated_reads_return_the_same_outcome(client):
     """QA-SPL-67-047 [Functional] AC4: reading the outcome is idempotent."""
 
@@ -793,6 +840,7 @@ def test_qa_spl67_047_repeated_reads_return_the_same_outcome(client):
     assert reads[0] == reads[1] == reads[2]
 
 
+# SPL-67 AC-4 Test-048
 def test_qa_spl67_048_an_organiser_from_another_client_cannot_retrieve_it(client):
     """QA-SPL-67-048 [Security] AC4: a stranger gets 404 on the request and 404 on the org view."""
 
@@ -803,6 +851,7 @@ def test_qa_spl67_048_an_organiser_from_another_client_cannot_retrieve_it(client
     assert org_view.status_code == 404
 
 
+# SPL-67 AC-4 Test-049
 def test_qa_spl67_049_an_unauthenticated_reader_is_refused(client):
     """QA-SPL-67-049 [Security] AC4: no token, no outcome."""
 
@@ -811,6 +860,7 @@ def test_qa_spl67_049_an_unauthenticated_reader_is_refused(client):
     assert client.get(f"/api/event-requests/{event_id}").status_code == 401
 
 
+# SPL-67 AC-4 Test-050
 def test_qa_spl67_050_a_colleague_cannot_use_the_organiser_route_to_read_it(client):
     """QA-SPL-67-050 [Security] AC4: the outcome is on the responsible organiser's own route."""
 
@@ -819,6 +869,7 @@ def test_qa_spl67_050_a_colleague_cannot_use_the_organiser_route_to_read_it(clie
     assert client.get(f"/api/event-requests/{event_id}", headers=h("colleague")).status_code == 404
 
 
+# SPL-67 AC-4 Test-051
 def test_qa_spl67_051_the_read_only_organisation_view_does_not_leak_the_approver(client):
     """QA-SPL-67-051 [Security] AC4: colleagues in the client organisation get no approval keys."""
 
@@ -830,6 +881,7 @@ def test_qa_spl67_051_the_read_only_organisation_view_does_not_leak_the_approver
     assert "approved_at" not in seen.json["event"]
 
 
+# SPL-67 AC-4 Test-052
 def test_qa_spl67_052_the_assigned_coordinator_can_also_read_the_outcome(client):
     """QA-SPL-67-052 [Functional] AC4: the coordinator's own read shows the same decision."""
 
@@ -839,6 +891,7 @@ def test_qa_spl67_052_the_assigned_coordinator_can_also_read_the_outcome(client)
     assert seen["approved_by"]["id"] == ALICE
 
 
+# SPL-67 AC-4 Test-053
 def test_qa_spl67_053_the_outcome_names_the_coordinator_shown_as_responsible(client):
     """QA-SPL-67-053 [Functional] AC4: approver and responsible coordinator agree."""
 
@@ -851,6 +904,7 @@ def test_qa_spl67_053_the_outcome_names_the_coordinator_shown_as_responsible(cli
 # ---- AC5: approval does not book a venue, reserve equipment, enable registration, confirm -------
 
 
+# SPL-67 AC-5 Test-054
 def test_qa_spl67_054_approval_changes_only_the_decision_columns(world, client):
     """QA-SPL-67-054 [White-box] AC5: every other stored column of the request is identical."""
 
@@ -862,6 +916,7 @@ def test_qa_spl67_054_approval_changes_only_the_decision_columns(world, client):
     assert changed == APPROVAL_COLUMNS
 
 
+# SPL-67 AC-5 Test-055
 def test_qa_spl67_055_no_venue_booking_is_created(world, client):
     """QA-SPL-67-055 [Functional] AC5: the booking table stays empty."""
 
@@ -872,6 +927,7 @@ def test_qa_spl67_055_no_venue_booking_is_created(world, client):
         assert session.get(EventRequest, event_id).venue_id is None
 
 
+# SPL-67 AC-5 Test-056
 def test_qa_spl67_056_registration_stays_as_the_organiser_left_it(world, client):
     """QA-SPL-67-056 [Functional] AC5: registration is neither enabled nor disabled."""
 
@@ -886,6 +942,7 @@ def test_qa_spl67_056_registration_stays_as_the_organiser_left_it(world, client)
         assert (event.registration_required, event.registration_notes) == (True, "Ticketed")
 
 
+# SPL-67 AC-5 Test-057
 def test_qa_spl67_057_equipment_requirements_are_untouched(world, client):
     """QA-SPL-67-057 [Functional] AC5: no equipment line is added, removed or changed."""
 
@@ -906,6 +963,7 @@ def test_qa_spl67_057_equipment_requirements_are_untouched(world, client):
     assert before == after == [("Podium", 2)]
 
 
+# SPL-67 AC-5 Test-058
 def test_qa_spl67_058_the_event_is_planning_not_confirmed_or_approved(client):
     """QA-SPL-67-058 [Functional] AC5: approval never yields a confirmed or booked status."""
 
@@ -916,6 +974,7 @@ def test_qa_spl67_058_the_event_is_planning_not_confirmed_or_approved(client):
     assert TRANSITION_RULES[APPROVE].resulting_status not in {"confirmed", "approved"}
 
 
+# SPL-67 AC-5 Test-059
 def test_qa_spl67_059_the_venue_and_slots_the_organiser_asked_for_are_kept(world, client):
     """QA-SPL-67-059 [Functional] AC5: date, time, layout, facilities stay as submitted."""
 
@@ -936,6 +995,7 @@ def test_qa_spl67_059_the_venue_and_slots_the_organiser_asked_for_are_kept(world
         assert after[key] == before[key], key
 
 
+# SPL-67 AC-5 Test-060
 def test_qa_spl67_060_no_clarification_or_reassignment_side_effect(world, client):
     """QA-SPL-67-060 [White-box] AC5: no clarification row, and the assignment is unchanged."""
 
@@ -950,6 +1010,7 @@ def test_qa_spl67_060_no_clarification_or_reassignment_side_effect(world, client
         assert session.scalars(select(ClarificationRequest)).all() == []
 
 
+# SPL-67 AC-5,6 Test-061
 def test_qa_spl67_061_other_events_are_not_affected(world, client):
     """QA-SPL-67-061 [Functional] AC5,6: approving one request leaves the others as they were."""
 
@@ -960,6 +1021,7 @@ def test_qa_spl67_061_other_events_are_not_affected(world, client):
     assert_untouched(world, bystander, untouched)
 
 
+# SPL-67 AC-5 Test-062
 def test_qa_spl67_062_the_response_offers_no_booking_or_confirmation(client):
     """QA-SPL-67-062 [API] AC5: the approve payload carries no venue, booking or registration."""
 
@@ -972,6 +1034,7 @@ def test_qa_spl67_062_the_response_offers_no_booking_or_confirmation(client):
 # ---- AC6: an invalid or unauthorised attempt leaves the event unchanged --------------------------
 
 
+# SPL-67 AC-1,6 Test-063
 @pytest.mark.parametrize("status", OTHER_STATUSES)
 def test_qa_spl67_063_every_status_other_than_under_review_is_refused(world, client, status):
     """QA-SPL-67-063 [Boundary] AC1,6: 11 statuses, each a 409 that changes nothing."""
@@ -985,6 +1048,7 @@ def test_qa_spl67_063_every_status_other_than_under_review_is_refused(world, cli
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-6 Test-064
 @pytest.mark.parametrize(
     "body",
     [
@@ -1011,6 +1075,7 @@ def test_qa_spl67_064_a_client_supplied_body_is_refused(world, client, body):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-6 Test-065
 def test_qa_spl67_065_a_malformed_body_is_refused(world, client):
     """QA-SPL-67-065 [Negative] AC6: invalid JSON, or a non-JSON body, is a 400."""
 
@@ -1022,6 +1087,7 @@ def test_qa_spl67_065_a_malformed_body_is_refused(world, client):
     assert_untouched(world, event_id, before)
 
 
+# SPL-67 AC-1,6 Test-066
 @pytest.mark.parametrize("kwargs", [{}, {"json": {}}])
 def test_qa_spl67_066_no_body_or_an_empty_object_is_accepted(client, kwargs):
     """QA-SPL-67-066 [Boundary] AC1,6: the only accepted payloads carry no parameters."""
@@ -1030,6 +1096,7 @@ def test_qa_spl67_066_no_body_or_an_empty_object_is_accepted(client, kwargs):
     assert approve(client, event_id, **kwargs).status_code == 200
 
 
+# SPL-67 AC-6 Test-067
 def test_qa_spl67_067_a_query_string_cannot_choose_the_status(world, client):
     """QA-SPL-67-067 [Security] AC6: ?status=confirmed is ignored; the rule table decides."""
 
@@ -1039,6 +1106,7 @@ def test_qa_spl67_067_a_query_string_cannot_choose_the_status(world, client):
     assert snapshot(world, event_id)[0]["status"] == "planning"
 
 
+# SPL-67 AC-1,6 Test-068
 def test_qa_spl67_068_approving_twice_keeps_the_first_decision(world, client):
     """QA-SPL-67-068 [Negative] AC1,6: the second attempt is a 409; the record is kept."""
 
@@ -1057,6 +1125,7 @@ def test_qa_spl67_068_approving_twice_keeps_the_first_decision(world, client):
     )
 
 
+# SPL-67 AC-6 Test-069
 def test_qa_spl67_069_a_refused_attempt_does_not_move_the_status_timestamp(world, client):
     """QA-SPL-67-069 [Negative] AC6: status_changed_at is not touched by a refusal."""
 
@@ -1067,6 +1136,7 @@ def test_qa_spl67_069_a_refused_attempt_does_not_move_the_status_timestamp(world
     assert snapshot(world, event_id)[0]["status_changed_at"] == before
 
 
+# SPL-67 AC-6 Test-070
 def test_qa_spl67_070_a_refusal_writes_no_audit_row(world, client):
     """QA-SPL-67-070 [Negative] AC6: failed attempts leave no approve audit row."""
 
@@ -1077,6 +1147,7 @@ def test_qa_spl67_070_a_refusal_writes_no_audit_row(world, client):
     assert approvals(world, event_id) == []
 
 
+# SPL-67 AC-1,6 Test-071
 def test_qa_spl67_071_a_refused_attempt_can_be_followed_by_a_valid_one(world, client):
     """QA-SPL-67-071 [Functional] AC1,6: a refusal does not lock the event."""
 
@@ -1089,6 +1160,7 @@ def test_qa_spl67_071_a_refused_attempt_can_be_followed_by_a_valid_one(world, cl
 # ---- Cross-cutting: contract, performance, migration --------------------------------------------
 
 
+# SPL-67 AC-1,3 Test-072
 def test_qa_spl67_072_the_success_response_contract(client):
     """QA-SPL-67-072 [API] AC1,3: JSON content type and the exact response keys."""
 
@@ -1114,6 +1186,7 @@ def test_qa_spl67_072_the_success_response_contract(client):
     }
 
 
+# SPL-67 AC-6 Test-073
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("bob", 404), ("owner", 403), (None, 401)],
@@ -1128,6 +1201,7 @@ def test_qa_spl67_073_error_bodies_use_the_error_key(client, token, expected):
     assert isinstance(response.json["error"], str) and response.json["error"]
 
 
+# SPL-67 AC-3 Test-074
 def test_qa_spl67_074_approval_is_fast_and_uses_few_queries(world, client):
     """QA-SPL-67-074 [Performance] AC3: one approval is a handful of statements, well under 1s."""
 
@@ -1149,6 +1223,7 @@ def test_qa_spl67_074_approval_is_fast_and_uses_few_queries(world, client):
     assert len(statements) <= 20, statements
 
 
+# SPL-67 AC-1,3 Test-075
 def test_qa_spl67_075_thirty_events_approve_in_sequence(world, client):
     """QA-SPL-67-075 [Load] AC1,3: 30 sequential approvals all succeed inside 15 seconds."""
 
@@ -1167,6 +1242,7 @@ def test_qa_spl67_075_thirty_events_approve_in_sequence(world, client):
         )
 
 
+# SPL-67 AC-3 Test-076
 def test_qa_spl67_076_the_model_columns_are_nullable_and_reference_accounts(world):
     """QA-SPL-67-076 [White-box] AC3: approved_by is a nullable FK to accounts."""
 
@@ -1183,6 +1259,7 @@ def test_qa_spl67_076_the_model_columns_are_nullable_and_reference_accounts(worl
     )
 
 
+# SPL-67 AC-3 Test-077
 def test_qa_spl67_077_a_new_request_starts_without_a_decision(world, client):
     """QA-SPL-67-077 [White-box] AC3: submission leaves both approval columns null."""
 
@@ -1191,6 +1268,7 @@ def test_qa_spl67_077_a_new_request_starts_without_a_decision(world, client):
     assert (columns["approved_by_account_id"], columns["approved_at"]) == (None, None)
 
 
+# SPL-67 AC-3 Test-078
 def test_qa_spl67_078_the_migration_extends_the_clarification_head_as_the_only_head(client):
     """QA-SPL-67-078 [White-box] AC3: the migration extends the clarification head."""
 
@@ -1204,6 +1282,7 @@ def test_qa_spl67_078_the_migration_extends_the_clarification_head_as_the_only_h
     assert script.get_revision("s2_event_rejection").down_revision == "s2_event_approval"
 
 
+# SPL-67 AC-3 Test-079
 def test_qa_spl67_079_the_migration_source_adds_and_removes_both_columns(client):
     """QA-SPL-67-079 [White-box] AC3: upgrade adds, downgrade drops, both approval columns."""
 

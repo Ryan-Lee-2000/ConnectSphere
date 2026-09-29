@@ -25,6 +25,8 @@ function isolatedDate() {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// SPL-79 AC-1,2,3,6 Test-21
+// SPL-79 AC-NA Test-22
 test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, history and earlier request', async ({ page }) => {
   const name = `E2E Venue Status ${Date.now()}`;
 

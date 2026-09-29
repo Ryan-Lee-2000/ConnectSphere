@@ -28,6 +28,8 @@ function isolatedDate() {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// SPL-81 AC-1,4,5 Test-24
+// SPL-81 AC-NA Test-25
 test('TC-SPL-81-24 and TC-SPL-81-25: Venue Staff approve a request and the coordinator sees it', async ({ page }) => {
   // Five sign-ins across four roles: longer than the default budget for one journey.
   test.setTimeout(180_000);

@@ -26,6 +26,7 @@ from test_event_requests import create_event, event_payload, headers
 # ---------------------------------------------------------------------------
 
 
+# SPL-51 AC-3 Test-006
 def test_qa_spl51_006_proposed_date_of_today_is_the_accepted_lower_boundary(client):
     """QA-SPL-51-006 [Boundary Testing] AC3: today is not 'in the past'."""
 
@@ -34,6 +35,7 @@ def test_qa_spl51_006_proposed_date_of_today_is_the_accepted_lower_boundary(clie
     assert created["proposed_date"] == date.today().isoformat()
 
 
+# SPL-51 AC-4 Test-008
 def test_qa_spl51_008_smallest_valid_expected_attendance_is_accepted(client):
     """QA-SPL-51-008 [Boundary Testing] AC4: 1 is the lower valid boundary."""
 
@@ -47,6 +49,8 @@ def test_qa_spl51_008_smallest_valid_expected_attendance_is_accepted(client):
 # ---------------------------------------------------------------------------
 
 
+# SPL-52 AC-1 Test-001
+# SPL-128 AC-7 Test-07
 def test_qa_spl52_001_every_venue_requirement_field_round_trips_exactly(client):
     """QA-SPL-52-001 [Happy Flow] AC1: every venue field is stored and echoed back."""
 
@@ -68,6 +72,8 @@ def test_qa_spl52_001_every_venue_requirement_field_round_trips_exactly(client):
     assert created["venue_notes"] == "Near public transport"
 
 
+# SPL-52 AC-3 Test-007
+# SPL-128 AC-7 Test-07
 def test_qa_spl52_007_every_venue_requirement_field_is_optional_at_creation(client):
     """QA-SPL-52-007 [Boundary Testing] AC3: only the 6 mandatory core fields sent."""
 
@@ -96,6 +102,7 @@ def test_qa_spl52_007_every_venue_requirement_field_is_optional_at_creation(clie
     assert created["venue_id"] is None
 
 
+# SPL-52 AC-4 Test-009
 def test_qa_spl52_009_coordinator_sees_the_same_venue_fields_as_the_organiser(client):
     """QA-SPL-52-009 [Cross Cut Quality Expectations] AC4: visible to coordinator."""
 
@@ -122,6 +129,7 @@ def test_qa_spl52_009_coordinator_sees_the_same_venue_fields_as_the_organiser(cl
 # ---------------------------------------------------------------------------
 
 
+# SPL-53 AC-1,4 Test-001
 def test_qa_spl53_001_zero_equipment_lines_is_valid(client):
     """QA-SPL-53-001 [Boundary Testing] AC1/AC4: an explicit empty list is accepted."""
 
@@ -130,6 +138,8 @@ def test_qa_spl53_001_zero_equipment_lines_is_valid(client):
     assert created["equipment_requirements"] == []
 
 
+# SPL-53 AC-1 Test-003
+# SPL-53 AC-3 Test-010
 def test_qa_spl53_003_blank_equipment_type_is_rejected(client, event_app):
     """QA-SPL-53-003 [Negative Testing] AC1: whitespace-only equipment_type is refused."""
 
@@ -145,6 +155,7 @@ def test_qa_spl53_003_blank_equipment_type_is_rejected(client, event_app):
         assert session.scalars(select(EventRequest)).all() == []
 
 
+# SPL-53 AC-2 Test-006
 def test_qa_spl53_006_non_integer_equipment_quantity_is_rejected(client):
     """QA-SPL-53-006 [Negative Testing] AC2: a decimal quantity is refused."""
 
@@ -160,6 +171,7 @@ def test_qa_spl53_006_non_integer_equipment_quantity_is_rejected(client):
     }
 
 
+# SPL-53 AC-3 Test-007
 def test_qa_spl53_007_equipment_type_outside_any_catalogue_is_accepted(client):
     """QA-SPL-53-007 [Happy Flow] AC3: equipment_type is free text, by design.
 
@@ -178,6 +190,7 @@ def test_qa_spl53_007_equipment_type_outside_any_catalogue_is_accepted(client):
     assert created["equipment_requirements"][0]["equipment_type"] == equipment_type
 
 
+# SPL-53 AC-NA Test-008
 def test_qa_spl53_008_regression_equipment_requirements_matches_the_live_frontend_contract(client):
     """QA-SPL-53-008 [Regression] Re-verifies a former release-blocking defect is fixed.
 
@@ -202,6 +215,7 @@ def test_qa_spl53_008_regression_equipment_requirements_matches_the_live_fronten
     assert created_line["equipment_type"] == "Lectern"
 
 
+# SPL-53 AC-4 Test-009
 def test_qa_spl53_009_omitting_equipment_requirements_entirely_defaults_to_an_empty_list(client):
     """QA-SPL-53-009 [Boundary Testing] AC4: the key can be left out entirely, not just empty."""
 
@@ -219,6 +233,7 @@ def test_qa_spl53_009_omitting_equipment_requirements_entirely_defaults_to_an_em
 # ---------------------------------------------------------------------------
 
 
+# SPL-54 AC-1 Test-001
 def test_qa_spl54_001_registration_required_defaults_to_false_when_omitted(client):
     """QA-SPL-54-001 [Boundary Testing] AC1: the key can be left out entirely."""
 
@@ -232,6 +247,7 @@ def test_qa_spl54_001_registration_required_defaults_to_false_when_omitted(clien
     assert response.json["event_request"]["registration_required"] is False
 
 
+# SPL-54 AC-1,2 Test-002
 def test_qa_spl54_002_registration_required_true_with_notes_round_trips(client):
     """QA-SPL-54-002 [Happy Flow] AC1/AC2: explicit true plus free-text notes."""
 
@@ -243,6 +259,7 @@ def test_qa_spl54_002_registration_required_true_with_notes_round_trips(client):
     assert created["registration_notes"] == "Collect name and email"
 
 
+# SPL-54 AC-2 Test-004
 def test_qa_spl54_004_registration_notes_stay_null_when_false_and_omitted(client):
     """QA-SPL-54-004 [Boundary Testing] AC2: notes are not force-set when registration is off."""
 
@@ -255,6 +272,7 @@ def test_qa_spl54_004_registration_notes_stay_null_when_false_and_omitted(client
     assert response.json["event_request"]["registration_notes"] is None
 
 
+# SPL-54 AC-3 Test-006
 def test_qa_spl54_005_coordinator_sees_registration_fields(client):
     """QA-SPL-54-005 [Cross Cut Quality Expectations] AC3: visible to the Event Coordinator."""
 

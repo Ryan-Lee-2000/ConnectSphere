@@ -41,6 +41,7 @@ afterEach(() => {
 });
 
 describe('SPL-46 role context', () => {
+  // SPL-46 AC-1,2,7 Test-01
   it('requires a multi-role account to select an assigned role before entering the workspace', async () => {
     const request = appFetch(['event_organiser', 'attendee']);
     vi.stubGlobal('fetch', request);
@@ -55,6 +56,7 @@ describe('SPL-46 role context', () => {
     });
   });
 
+  // SPL-46 AC-3,10,11 Test-01
   it('switches only between assigned roles without replacing the authenticated session', async () => {
     const auth = gateway();
     vi.stubGlobal('fetch', appFetch(['venue_staff', 'attendee']));
@@ -74,6 +76,7 @@ describe('SPL-46 role context', () => {
     expect(auth.signOut).not.toHaveBeenCalled();
   });
 
+  // SPL-46 AC-6 Test-01
   it('persists the active role across a refresh in the same browser session', async () => {
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'attendee');
     vi.stubGlobal('fetch', appFetch(['event_organiser', 'attendee']));
@@ -84,6 +87,7 @@ describe('SPL-46 role context', () => {
     expect(screen.queryByRole('heading', { name: 'Which role are you working in?' })).toBeNull();
   });
 
+  // SPL-46 AC-12 Test-04
   it('enters a single-role workspace without showing a switch control', async () => {
     vi.stubGlobal('fetch', appFetch(['technical_support_staff']));
     render(<App authGateway={gateway()} />);
@@ -93,6 +97,7 @@ describe('SPL-46 role context', () => {
     expect(screen.queryByRole('combobox', { name: 'Active role' })).toBeNull();
   });
 
+  // SPL-46 AC-7,8,10 Test-05
   it('refuses an unassigned role without changing the active role', async () => {
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'attendee');
     vi.stubGlobal('fetch', appFetch(['event_organiser', 'attendee']));
@@ -106,6 +111,7 @@ describe('SPL-46 role context', () => {
     expect(screen.getByText('Attendee', { selector: '.eyebrow' })).toBeTruthy();
   });
 
+  // SPL-46 AC-9 Test-02
   it('redirects an unavailable direct page without changing the active role', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'attendee');
@@ -119,6 +125,7 @@ describe('SPL-46 role context', () => {
     expect(request).not.toHaveBeenCalledWith('/api/venues');
   });
 
+  // SPL-46 AC-5 Test-07
   it('leaves a clean page that is unavailable to the newly selected role', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
@@ -138,6 +145,7 @@ describe('SPL-46 role context', () => {
     );
   });
 
+  // SPL-46 AC-13 Test-08
   it('keeps the active role, current page, and unsaved information when a switch is cancelled', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
@@ -156,6 +164,7 @@ describe('SPL-46 role context', () => {
     expect(window.location.pathname).toBe('/workspace/venues');
   });
 
+  // SPL-46 AC-5,13 Test-09
   it('discards unsaved information and completes a confirmed role switch', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'venue_staff');
@@ -172,6 +181,7 @@ describe('SPL-46 role context', () => {
     expect(window.location.pathname).toBe('/workspace');
   });
 
+  // SPL-46 AC-4,10 Test-06
   it('uses active-role context to hide management actions without weakening server authorization', async () => {
     window.history.replaceState({}, '', '/workspace/venues');
     window.sessionStorage.setItem(activeRoleStorageKey(session.user.id), 'event_coordinator');
@@ -187,6 +197,7 @@ describe('SPL-46 role context', () => {
     expect(await screen.findByRole('button', { name: 'Create first venue' })).toBeTruthy();
   });
 
+  // SPL-46 AC-NA Test-10
   it('fails closed when trusted roles cannot be loaded', async () => {
     const request = appFetch(['attendee']);
     request.mockImplementation((input: RequestInfo | URL) => {

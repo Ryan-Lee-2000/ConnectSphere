@@ -129,6 +129,7 @@ def _seed(engine):
 
 
 # TC-SPL-82-17
+# SPL-82 AC-4 Test-17
 def test_tc_spl_82_17_rejection_frees_occupancy_on_postgresql(engine, pg_url):
     ids, booking_id = _seed(engine)
     app = create_app(

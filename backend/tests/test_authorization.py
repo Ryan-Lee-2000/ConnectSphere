@@ -68,6 +68,7 @@ def bearer(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+# SPL-44 AC-1,2,6 Test-01
 def test_tc_cs_e01_s2_01_current_account_reads_only_server_owned_roles(authorization_client):
     client, _ = authorization_client
 
@@ -80,6 +81,7 @@ def test_tc_cs_e01_s2_01_current_account_reads_only_server_owned_roles(authoriza
     assert response.json == {"roles": ["attendee", "technical_support_staff"]}
 
 
+# SPL-44 AC-1,3,4,9,10 Test-02
 def test_tc_cs_e01_s2_02_permitted_role_allows_the_operation(authorization_client):
     client, executions = authorization_client
 
@@ -90,6 +92,7 @@ def test_tc_cs_e01_s2_02_permitted_role_allows_the_operation(authorization_clien
     assert executions["organiser"] == 1
 
 
+# SPL-44 AC-5,7,9 Test-03
 def test_tc_cs_e01_s2_03_prohibited_role_refuses_without_side_effects(authorization_client):
     client, executions = authorization_client
 
@@ -100,6 +103,7 @@ def test_tc_cs_e01_s2_03_prohibited_role_refuses_without_side_effects(authorizat
     assert executions["organiser"] == 0
 
 
+# SPL-44 AC-3,4,9,10 Test-04
 def test_tc_cs_e01_s2_04_any_permitted_role_allows_multi_role_account(authorization_client):
     client, _ = authorization_client
 
@@ -109,6 +113,7 @@ def test_tc_cs_e01_s2_04_any_permitted_role_allows_multi_role_account(authorizat
     assert response.json == {"result": "protected multi-role result"}
 
 
+# SPL-44 AC-6,7,9 Test-05
 def test_tc_cs_e01_s2_05_submitted_claim_cannot_forge_authorization(authorization_client):
     client, executions = authorization_client
 
@@ -123,6 +128,7 @@ def test_tc_cs_e01_s2_05_submitted_claim_cannot_forge_authorization(authorizatio
     assert executions["organiser"] == 0
 
 
+# SPL-44 AC-5,7,9 Test-03
 def test_tc_cs_e01_s2_03_account_without_roles_is_refused(authorization_client):
     client, executions = authorization_client
 
@@ -133,6 +139,7 @@ def test_tc_cs_e01_s2_03_account_without_roles_is_refused(authorization_client):
     assert executions["organiser"] == 0
 
 
+# SPL-44 AC-7,8,9 Test-06
 def test_tc_cs_e01_s2_06_operation_without_rule_is_refused_by_default(authorization_client):
     client, executions = authorization_client
 

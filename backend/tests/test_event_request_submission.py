@@ -115,6 +115,7 @@ def stored_request_count(app):
 # --- AC1: record when the request was submitted, from a source the caller cannot control ---
 
 
+# SPL-55 AC-1 Test-01
 def test_tc_cs_e03_s5_01_stores_a_submitted_request_with_its_submission_time(client):
     before = datetime.now(SINGAPORE)
     response = submit(client)
@@ -135,6 +136,7 @@ def test_tc_cs_e03_s5_01_stores_a_submitted_request_with_its_submission_time(cli
     assert read_back.json["event_request"]["submitted_at"] == created["submitted_at"]
 
 
+# SPL-55 AC-1 Test-02
 def test_tc_cs_e03_s5_02_caller_cannot_set_the_submission_time(client):
     response = client.post(
         "/api/event-requests",
@@ -151,6 +153,7 @@ def test_tc_cs_e03_s5_02_caller_cannot_set_the_submission_time(client):
     assert not honest.json["event_request"]["submitted_at"].startswith("2020")
 
 
+# SPL-55 AC-1 Test-03
 def test_tc_cs_e03_s5_03_a_request_stored_before_this_story_remains_readable(app, client):
     # A request written by CS-E03-S1 before the additive migration has no submission time.
     with Session(app.extensions["engine"]) as session:
@@ -186,6 +189,7 @@ def test_tc_cs_e03_s5_03_a_request_stored_before_this_story_remains_readable(app
 # --- AC2: refuse an incomplete submission naming every missing mandatory field ---
 
 
+# SPL-55 AC-2,3 Test-04
 def test_tc_cs_e03_s5_04_empty_submission_names_every_missing_field(app, client):
     response = client.post("/api/event-requests", json={}, headers=headers())
 
@@ -203,6 +207,7 @@ def test_tc_cs_e03_s5_04_empty_submission_names_every_missing_field(app, client)
     assert stored_request_count(app) == 0
 
 
+# SPL-55 AC-2 Test-05
 def test_tc_cs_e03_s5_05_partial_submission_names_only_what_is_missing(client):
     response = client.post(
         "/api/event-requests",
@@ -221,6 +226,7 @@ def test_tc_cs_e03_s5_05_partial_submission_names_only_what_is_missing(client):
     assert "purpose" not in response.json["missing_fields"]
 
 
+# SPL-55 AC-2 Test-06
 def test_tc_cs_e03_s5_06_blank_sits_in_the_same_partition_as_absent(client):
     refused = client.post(
         "/api/event-requests",
@@ -245,6 +251,7 @@ def test_tc_cs_e03_s5_06_blank_sits_in_the_same_partition_as_absent(client):
 # --- AC3: a refused submission stores nothing at all ---
 
 
+# SPL-55 AC-3 Test-07
 def test_tc_cs_e03_s5_07_a_refusal_writes_no_equipment_lines_either(app, client):
     response = client.post(
         "/api/event-requests",
@@ -270,6 +277,7 @@ def test_tc_cs_e03_s5_07_a_refusal_writes_no_equipment_lines_either(app, client)
 # --- AC4: a submitted request cannot be changed by the organiser ---
 
 
+# SPL-55 AC-4 Test-08
 def test_tc_cs_e03_s5_08_a_submitted_request_cannot_be_amended_or_deleted(client):
     created = submit(client).json["event_request"]
     path = f"/api/event-requests/{created['id']}"
@@ -288,6 +296,7 @@ def test_tc_cs_e03_s5_08_a_submitted_request_cannot_be_amended_or_deleted(client
     assert client.get(path, headers=headers()).json["event_request"]["name"] == created["name"]
 
 
+# SPL-55 AC-4 Test-09
 def test_tc_cs_e03_s5_09_submitting_again_does_not_alter_the_earlier_request(client):
     first = submit(client).json["event_request"]
     second = submit(client, name="Second Request").json["event_request"]
@@ -305,6 +314,7 @@ def test_tc_cs_e03_s5_09_submitting_again_does_not_alter_the_earlier_request(cli
 # --- AC7: only an Event Organiser may submit ---
 
 
+# SPL-55 AC-7 Test-14
 @pytest.mark.parametrize("token", ["coordinator", "venue-staff"])
 def test_tc_cs_e03_s5_14_only_event_organisers_may_submit(app, client, token):
     response = submit(client, token=token)
@@ -314,6 +324,7 @@ def test_tc_cs_e03_s5_14_only_event_organisers_may_submit(app, client, token):
     assert stored_request_count(app) == 0
 
 
+# SPL-55 AC-7 Test-15
 @pytest.mark.parametrize("authorization", [None, "Basic abc", "Bearer  "])
 def test_tc_cs_e03_s5_15_unauthenticated_submission_is_refused(app, client, authorization):
     request_headers = {"Authorization": authorization} if authorization else {}
@@ -324,6 +335,7 @@ def test_tc_cs_e03_s5_15_unauthenticated_submission_is_refused(app, client, auth
     assert stored_request_count(app) == 0
 
 
+# SPL-55 AC-7 Test-15
 def test_tc_cs_e03_s5_15b_an_unrecognised_token_is_refused(app, client):
     response = client.post(
         "/api/event-requests",

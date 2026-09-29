@@ -130,6 +130,7 @@ def _seed(engine):
 
 
 # TC-SPL-78-19
+# SPL-78 AC-6 Test-19
 def test_tc_spl_78_19_concurrent_withdrawals_succeed_once(engine, pg_url):
     ids, event_id, booking_id = _seed(engine)
     app = create_app(
@@ -184,6 +185,7 @@ def test_tc_spl_78_19_concurrent_withdrawals_succeed_once(engine, pg_url):
         )
 
 
+# SPL-78 AC-NA Test-Supporting
 def test_spl_78_migration_adds_nullable_withdrawal_columns_with_a_withdrawer_key(engine):
     """Supporting verification: the additive SPL-78 columns and the withdrawer foreign key."""
 

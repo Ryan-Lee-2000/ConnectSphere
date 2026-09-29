@@ -118,6 +118,7 @@ def assert_unchanged(app, event_id: int, status: str):
 
 
 # TC-SPL-67-01
+# SPL-67 AC-1,3 Test-01
 def test_tc_spl_67_01_assigned_coordinator_approves_and_the_decision_is_recorded(app, client):
     event_id = assigned_request(app)
 
@@ -139,6 +140,7 @@ def test_tc_spl_67_01_assigned_coordinator_approves_and_the_decision_is_recorded
 
 
 # TC-SPL-67-02
+# SPL-67 AC-1,6 Test-02
 @pytest.mark.parametrize("token", ["organiser", "manager"])
 def test_tc_spl_67_02_other_roles_are_refused_and_nothing_changes(app, client, token):
     event_id = assigned_request(app)
@@ -148,6 +150,7 @@ def test_tc_spl_67_02_other_roles_are_refused_and_nothing_changes(app, client, t
 
 
 # TC-SPL-67-03
+# SPL-67 AC-1,6 Test-03
 def test_tc_spl_67_03_an_unassigned_coordinator_gets_not_found_and_nothing_changes(app, client):
     event_id = assigned_request(app)
 
@@ -159,6 +162,7 @@ def test_tc_spl_67_03_an_unassigned_coordinator_gets_not_found_and_nothing_chang
 
 
 # TC-SPL-67-04
+# SPL-67 AC-1,6 Test-04
 @pytest.mark.parametrize(
     "status", ["submitted", "returned_for_clarification", "planning", "rejected"]
 )
@@ -173,6 +177,7 @@ def test_tc_spl_67_04_only_an_event_under_review_can_be_approved(app, client, st
 
 
 # TC-SPL-67-05
+# SPL-67 AC-6 Test-05
 @pytest.mark.parametrize("body", [{"status": "confirmed"}, {"a": 1}, [], "planning"])
 def test_tc_spl_67_05_a_client_supplied_status_or_body_is_refused(app, client, body):
     event_id = assigned_request(app)
@@ -184,6 +189,7 @@ def test_tc_spl_67_05_a_client_supplied_status_or_body_is_refused(app, client, b
 
 
 # TC-SPL-67-06
+# SPL-67 AC-6 Test-06
 def test_tc_spl_67_06_approving_twice_keeps_one_decision(app, client):
     event_id = assigned_request(app)
     first = approve(client, event_id)
@@ -198,6 +204,7 @@ def test_tc_spl_67_06_approving_twice_keeps_one_decision(app, client):
 
 
 # TC-SPL-67-07
+# SPL-67 AC-4 Test-07
 def test_tc_spl_67_07_the_organiser_retrieves_the_outcome_and_others_cannot(app, client):
     event_id = assigned_request(app)
     before = client.get(f"/api/event-requests/{event_id}", headers=headers("organiser"))
@@ -217,6 +224,7 @@ def test_tc_spl_67_07_the_organiser_retrieves_the_outcome_and_others_cannot(app,
 
 
 # TC-SPL-67-08
+# SPL-67 AC-3 Test-08
 def test_tc_spl_67_08_the_coordinator_detail_shows_the_decision(app, client):
     event_id = assigned_request(app)
     approve(client, event_id)
@@ -228,6 +236,7 @@ def test_tc_spl_67_08_the_coordinator_detail_shows_the_decision(app, client):
 
 
 # TC-SPL-67-09
+# SPL-67 AC-5 Test-09
 def test_tc_spl_67_09_approval_books_nothing_and_leaves_the_request_details_alone(app, client):
     event_id = assigned_request(app)
     with Session(app.extensions["engine"]) as session:

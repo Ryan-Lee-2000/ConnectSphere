@@ -57,6 +57,7 @@ def conflict_app(tmp_path):
     engine.dispose()
 
 
+# SPL-83 AC-1,3 Test-01
 @pytest.mark.parametrize("active_status", ["requested", "approved"])
 def test_tc_spl_83_01_active_booking_claims_event_and_preparation_slots(
     conflict_app, active_status
@@ -88,6 +89,7 @@ def test_tc_spl_83_01_active_booking_claims_event_and_preparation_slots(
         ]
 
 
+# SPL-83 AC-1,2,3 Test-02
 def test_tc_spl_83_02_operational_block_refuses_the_whole_claim_with_date_and_slot(
     conflict_app,
 ):
@@ -125,6 +127,7 @@ def test_tc_spl_83_02_operational_block_refuses_the_whole_claim_with_date_and_sl
         assert occupancy_for_booking(session, booking.id) == ()
 
 
+# SPL-83 AC-1,2,3 Test-03
 def test_tc_spl_83_03_requested_booking_refuses_a_second_claim_for_the_same_slot(
     conflict_app,
 ):
@@ -196,6 +199,7 @@ def test_tc_spl_83_03_requested_booking_refuses_a_second_claim_for_the_same_slot
         assert len(occupancy_for_booking(session, elsewhere.id)) == 1
 
 
+# SPL-83 AC-3 Test-04
 @pytest.mark.parametrize("terminal_status", ["rejected", "withdrawn", "cancelled"])
 def test_tc_spl_83_04_terminal_booking_releases_occupancy(conflict_app, terminal_status):
     engine = conflict_app.extensions["engine"]
@@ -232,6 +236,7 @@ def test_tc_spl_83_04_terminal_booking_releases_occupancy(conflict_app, terminal
         assert len(occupancy_for_booking(session, replacement.id)) == 3
 
 
+# SPL-83 AC-1,2,3 Test-05
 def test_tc_spl_83_05_approval_rechecks_operational_blocks_without_changing_booking(
     conflict_app,
 ):

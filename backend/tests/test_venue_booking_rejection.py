@@ -250,6 +250,7 @@ def assert_still_requested(app, booking_id):
 
 
 # TC-SPL-82-01
+# SPL-82 AC-1 Test-01
 def test_tc_spl_82_01_venue_staff_reject_a_requested_booking(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -263,6 +264,7 @@ def test_tc_spl_82_01_venue_staff_reject_a_requested_booking(app, client, reques
 
 
 # TC-SPL-82-13
+# SPL-82 AC-1,7 Test-13
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("coordinator", 403), ("organiser", 403), ("manager", 403), (None, 401)],
@@ -279,6 +281,7 @@ def test_tc_spl_82_13_other_roles_and_no_session_are_refused(
 
 
 # TC-SPL-82-14
+# SPL-82 AC-1 Test-14
 @pytest.mark.parametrize("status", ["approved", "rejected", "withdrawn", "cancelled"])
 def test_tc_spl_82_14_only_a_requested_booking_is_rejectable(app, client, requested, status):
     booking_id = requested["booking"]["id"]
@@ -293,6 +296,7 @@ def test_tc_spl_82_14_only_a_requested_booking_is_rejectable(app, client, reques
 
 
 # TC-SPL-82-09: the second judgement call — rejection does not recheck the event's status.
+# SPL-82 AC-1 Test-09
 @pytest.mark.parametrize("status", ["confirmed", "completed", "cancelled", "postponed"])
 def test_tc_spl_82_09_rejection_does_not_require_planning(app, client, requested, status):
     booking_id = requested["booking"]["id"]
@@ -305,6 +309,7 @@ def test_tc_spl_82_09_rejection_does_not_require_planning(app, client, requested
 
 
 # TC-SPL-82-15
+# SPL-82 AC-7 Test-15
 def test_tc_spl_82_15_unknown_booking_is_refused(app, client, requested):
     unknown = reject(client, 999999, {"reason": REASON})
     out_of_range = reject(client, 2**31, {"reason": REASON})
@@ -317,6 +322,7 @@ def test_tc_spl_82_15_unknown_booking_is_refused(app, client, requested):
 
 
 # TC-SPL-82-02
+# SPL-82 AC-2 Test-02
 def test_tc_spl_82_02_reason_is_required(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -326,6 +332,7 @@ def test_tc_spl_82_02_reason_is_required(app, client, requested):
 
 
 # TC-SPL-82-03
+# SPL-82 AC-2 Test-03
 @pytest.mark.parametrize("reason", ["", "   ", "\t\n"])
 def test_tc_spl_82_03_blank_reason_is_refused(app, client, requested, reason):
     booking_id = requested["booking"]["id"]
@@ -337,6 +344,7 @@ def test_tc_spl_82_03_blank_reason_is_refused(app, client, requested, reason):
 
 
 # TC-SPL-82-04
+# SPL-82 AC-2 Test-04
 def test_tc_spl_82_04_reason_length_is_bounded(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -349,6 +357,7 @@ def test_tc_spl_82_04_reason_length_is_bounded(app, client, requested):
 
 
 # TC-SPL-82-05
+# SPL-82 AC-2 Test-05
 def test_tc_spl_82_05_alternative_suggestion_is_optional(app, client, requested):
     with_suggestion = requested["booking"]["id"]
     response = reject(
@@ -366,6 +375,7 @@ def test_tc_spl_82_05_alternative_suggestion_is_optional(app, client, requested)
     assert stored(app, other)["rejection_alternative_suggestion"] is None
 
 
+# SPL-82 AC-2 Test-05
 @pytest.mark.parametrize(
     "suggestion",
     [None, "x" * 1000, "  The Riverside Room is free.  "],
@@ -379,6 +389,7 @@ def test_tc_spl_82_05_alternative_suggestion_values(app, client, requested, sugg
     assert response.status_code == 200, response.json
 
 
+# SPL-82 AC-2 Test-05
 def test_tc_spl_82_05_alternative_suggestion_length_is_bounded(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -388,6 +399,7 @@ def test_tc_spl_82_05_alternative_suggestion_length_is_bounded(app, client, requ
     assert_still_requested(app, booking_id)
 
 
+# SPL-82 AC-2 Test-05
 def test_tc_spl_82_05_alternative_suggestion_must_be_text(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -402,6 +414,7 @@ def test_tc_spl_82_05_alternative_suggestion_must_be_text(app, client, requested
 
 
 # TC-SPL-82-06
+# SPL-82 AC-3 Test-06
 def test_tc_spl_82_06_rejection_records_actor_time_and_reason(app, client, requested):
     booking_id = requested["booking"]["id"]
     before = stored(app, booking_id)
@@ -426,6 +439,7 @@ def test_tc_spl_82_06_rejection_records_actor_time_and_reason(app, client, reque
 
 
 # TC-SPL-82-07
+# SPL-82 AC-3 Test-07
 def test_tc_spl_82_07_rejection_is_appended_to_history_with_reason_as_note(app, client, requested):
     booking_id = requested["booking"]["id"]
 
@@ -446,6 +460,7 @@ def test_tc_spl_82_07_rejection_is_appended_to_history_with_reason_as_note(app, 
 
 
 # TC-SPL-82-08
+# SPL-82 AC-4 Test-08
 def test_tc_spl_82_08_rejected_slots_are_freed(app, client, requested):
     assert reject(client, requested["booking"]["id"], {"reason": REASON}).status_code == 200
     other = make_event(app, "Harbour Talk")
@@ -462,6 +477,7 @@ def test_tc_spl_82_08_rejected_slots_are_freed(app, client, requested):
     assert reclaim.status_code == 201, reclaim.json
 
 
+# SPL-82 AC-4 Test-08
 def test_tc_spl_82_08_occupancy_rows_are_deleted(app, client, requested):
     booking_id = requested["booking"]["id"]
     assert occupancy_rows(app, booking_id) != []
@@ -475,6 +491,7 @@ def test_tc_spl_82_08_occupancy_rows_are_deleted(app, client, requested):
 
 
 # TC-SPL-82-10
+# SPL-82 AC-5 Test-10
 def test_tc_spl_82_10_assigned_coordinator_reads_the_outcome(app, client, requested):
     booking_id = requested["booking"]["id"]
     assert (
@@ -496,6 +513,7 @@ def test_tc_spl_82_10_assigned_coordinator_reads_the_outcome(app, client, reques
 
 
 # TC-SPL-82-11
+# SPL-82 AC-5 Test-11
 def test_tc_spl_82_11_unassigned_coordinator_cannot_read_it(app, client, requested):
     booking_id = requested["booking"]["id"]
     assert reject(client, booking_id, {"reason": REASON}).status_code == 200
@@ -511,6 +529,7 @@ def test_tc_spl_82_11_unassigned_coordinator_cannot_read_it(app, client, request
 
 
 # TC-SPL-82-12
+# SPL-82 AC-6 Test-12
 @pytest.mark.parametrize(
     "body",
     [
@@ -531,6 +550,7 @@ def test_tc_spl_82_12_nothing_else_can_be_supplied(app, client, requested, body)
 
 
 # TC-SPL-82-16 — every refusal above leaves the booking, occupancy and history untouched
+# SPL-82 AC-7 Test-16
 @pytest.mark.parametrize(
     "refusal",
     ["wrong-role", "no-session", "not-requested", "blank-reason", "too-long", "unknown-field"],

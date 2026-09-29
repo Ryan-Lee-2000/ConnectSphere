@@ -217,6 +217,7 @@ def history_count(app):
 
 
 # TC-SPL-79-01
+# SPL-79 AC-1 Test-01
 def test_tc_spl_79_01_coordinator_retrieves_the_request_details(app, client, requested):
     response = status(client, requested["event"])
 
@@ -234,6 +235,7 @@ def test_tc_spl_79_01_coordinator_retrieves_the_request_details(app, client, req
 
 
 # TC-SPL-79-02
+# SPL-79 AC-1 Test-02
 @pytest.mark.parametrize(
     ("stored", "label"),
     [
@@ -263,6 +265,7 @@ def test_tc_spl_79_02_each_current_status_is_reported(app, client, requested, st
 
 
 # TC-SPL-79-03
+# SPL-79 AC-2 Test-03
 def test_tc_spl_79_03_request_and_withdrawal_are_recorded_in_order(app, client, requested):
     withdrawn = withdraw(client, requested["event"], requested["booking"]["id"]).json["booking"]
 
@@ -280,6 +283,7 @@ def test_tc_spl_79_03_request_and_withdrawal_are_recorded_in_order(app, client, 
 
 
 # TC-SPL-79-04
+# SPL-79 AC-2 Test-04
 @pytest.mark.parametrize(
     ("resulting", "text"),
     [("approved", "Confirmed with the hall manager"), ("rejected", "Stage under repair")],
@@ -303,6 +307,7 @@ def test_tc_spl_79_04_reason_or_note_stays_with_its_action(app, client, requeste
 
 
 # TC-SPL-79-05
+# SPL-79 AC-2 Test-05
 def test_tc_spl_79_05_history_is_ordered_by_action_time(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
     with Session(app.extensions["engine"]) as session:
@@ -336,6 +341,7 @@ def test_tc_spl_79_05_history_is_ordered_by_action_time(app, client):
 
 
 # TC-SPL-79-06 (b) — refused actions record nothing
+# SPL-79 AC-2 Test-06
 def test_tc_spl_79_06_refused_actions_record_nothing(app, client, requested):
     harbour_talk = make_event(app, "Harbour Talk")
     before = history_count(app)
@@ -355,6 +361,7 @@ def test_tc_spl_79_06_refused_actions_record_nothing(app, client, requested):
 
 
 # TC-SPL-79-07
+# SPL-79 AC-3 Test-07
 def test_tc_spl_79_07_current_status_is_separate_from_history(app, client, requested):
     before = status(client, requested["event"]).json
     assert before["current_status"]["status"] == "requested"
@@ -372,6 +379,7 @@ def test_tc_spl_79_07_current_status_is_separate_from_history(app, client, reque
 
 
 # TC-SPL-79-09
+# SPL-79 AC-4 Test-09
 def test_tc_spl_79_09_reading_changes_nothing(app, client, requested):
     before = snapshot(app, requested["event"])
 
@@ -382,6 +390,7 @@ def test_tc_spl_79_09_reading_changes_nothing(app, client, requested):
 
 
 # TC-SPL-79-10
+# SPL-79 AC-4 Test-10
 @pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
 def test_tc_spl_79_10_other_methods_change_nothing(app, client, requested, method):
     before = snapshot(app, requested["event"])
@@ -400,6 +409,7 @@ def test_tc_spl_79_10_other_methods_change_nothing(app, client, requested, metho
 
 
 # TC-SPL-79-11
+# SPL-79 AC-5 Test-11
 def test_tc_spl_79_11_unassigned_coordinator_is_refused(app, client, requested):
     refused = status(client, requested["event"], token="other-coordinator")
     unknown = status(client, 999999, token="other-coordinator")
@@ -412,6 +422,7 @@ def test_tc_spl_79_11_unassigned_coordinator_is_refused(app, client, requested):
 
 
 # TC-SPL-79-12
+# SPL-79 AC-5 Test-12
 @pytest.mark.parametrize(
     ("token", "expected"),
     [("venue-staff", 403), ("organiser", 403), ("manager", 403), (None, 401)],
@@ -423,6 +434,7 @@ def test_tc_spl_79_12_other_roles_and_no_session_are_refused(
 
 
 # TC-SPL-79-13
+# SPL-79 AC-5 Test-13
 def test_tc_spl_79_13_access_follows_the_current_assignment(app, client, requested):
     with Session(app.extensions["engine"]) as session:
         session.execute(
@@ -444,6 +456,7 @@ def test_tc_spl_79_13_access_follows_the_current_assignment(app, client, request
 
 
 # TC-SPL-79-14
+# SPL-79 AC-6 Test-14
 def test_tc_spl_79_14_no_request_returns_an_explicit_result(app, client):
     event_id = make_event(app)
 
@@ -493,6 +506,7 @@ def mark_for_review(app, venue_id, booking_id, *, remove_block=False):
 
 
 # TC-SPL-79-16
+# SPL-79 AC-7 Test-16
 def test_tc_spl_79_16_review_marker_names_block_and_time(app, client, requested):
     block_id = mark_for_review(app, requested["venue"], requested["booking"]["id"])
 
@@ -512,6 +526,7 @@ def test_tc_spl_79_16_review_marker_names_block_and_time(app, client, requested)
 
 
 # TC-SPL-79-17
+# SPL-79 AC-7 Test-17
 def test_tc_spl_79_17_unmarked_and_stored_marker_partitions(app, client, requested):
     unmarked = status(client, requested["event"]).json["review"]
     assert unmarked == {"requires_review": False, "marked_at": None, "trigger_block": None}
@@ -527,6 +542,7 @@ def test_tc_spl_79_17_unmarked_and_stored_marker_partitions(app, client, request
 
 
 # TC-SPL-79-18
+# SPL-79 AC-1,2,3 Test-18
 def test_tc_spl_79_18_latest_request_is_current_and_earlier_are_listed(app, client, requested):
     event_id, first = requested["event"], requested["booking"]["id"]
     withdraw(client, event_id, first)

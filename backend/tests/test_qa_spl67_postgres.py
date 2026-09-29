@@ -139,6 +139,7 @@ def _auth(who):
     return {"Authorization": f"Bearer {who}"}
 
 
+# SPL-67 AC-3 Test-080
 def test_qa_spl67_080_migration_adds_two_nullable_typed_columns_with_a_foreign_key(engine):
     """QA-SPL-67-080 [White-box / Migration] AC3: uuid and timestamptz columns, FK to accounts."""
 
@@ -176,6 +177,7 @@ def test_qa_spl67_080_migration_adds_two_nullable_typed_columns_with_a_foreign_k
     assert references == ["accounts"]
 
 
+# SPL-67 AC-3 Test-081
 def test_qa_spl67_081_the_database_refuses_an_unknown_approver(engine):
     """QA-SPL-67-081 [White-box] AC3: an approval cannot name an account that does not exist."""
 
@@ -189,6 +191,7 @@ def test_qa_spl67_081_the_database_refuses_an_unknown_approver(engine):
         session.rollback()
 
 
+# SPL-67 AC-3,6 Test-082
 def test_qa_spl67_082_existing_requests_survive_the_upgrade_with_no_decision(fresh_database):
     """QA-SPL-67-082 [Migration] AC3,6: rows created before the migration keep every value."""
 
@@ -230,6 +233,7 @@ def test_qa_spl67_082_existing_requests_survive_the_upgrade_with_no_decision(fre
         engine.dispose()
 
 
+# SPL-67 AC-3 Test-083
 def test_qa_spl67_083_downgrade_removes_the_columns_and_upgrade_restores_them(pg_url):
     """QA-SPL-67-083 [Migration] AC3: the migration reverses cleanly and can be re-applied."""
 
@@ -250,6 +254,7 @@ def test_qa_spl67_083_downgrade_removes_the_columns_and_upgrade_restores_them(pg
         engine.dispose()
 
 
+# SPL-67 AC-1,3,4 Test-084
 def test_qa_spl67_084_approval_end_to_end_on_postgres(engine, pg_url):
     """QA-SPL-67-084 [UAT] AC1,3,4: approve, then the organiser reads a timezone-aware outcome."""
 
@@ -273,6 +278,7 @@ def test_qa_spl67_084_approval_end_to_end_on_postgres(engine, pg_url):
     app.extensions["engine"].dispose()
 
 
+# SPL-67 AC-1,6 Test-085
 def test_qa_spl67_085_two_simultaneous_approvals_produce_one_decision(engine, pg_url):
     """QA-SPL-67-085 [Concurrency] AC1,6: a real row-lock race; exactly one approval wins."""
 
@@ -318,6 +324,7 @@ def test_qa_spl67_085_two_simultaneous_approvals_produce_one_decision(engine, pg
         assert len(rows) == 1
 
 
+# SPL-67 AC-5,6 Test-086
 def test_qa_spl67_086_the_status_constraint_still_rejects_unknown_statuses(engine):
     """QA-SPL-67-086 [White-box] AC5,6: approval added no status; the constraint is unchanged."""
 

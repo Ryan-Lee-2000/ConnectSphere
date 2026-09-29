@@ -129,6 +129,7 @@ def _seed(engine):
 
 
 # QA-SPL-65-063
+# SPL-65 AC-3 Test-063
 def test_qa_spl65_063_migration_creates_the_locked_down_clarification_table(engine):
     """QA-SPL-65-063 [White-box / Migration] AC3,6: columns, index and row-level security."""
 
@@ -172,6 +173,7 @@ def test_qa_spl65_063_migration_creates_the_locked_down_clarification_table(engi
 
 
 # QA-SPL-65-064
+# SPL-65 AC-4 Test-064
 def test_qa_spl65_064_database_constraint_accepts_the_new_status_and_rejects_others(engine):
     """QA-SPL-65-064 [White-box / Migration] AC4,7: the widened check constraint on PostgreSQL."""
 
@@ -191,6 +193,7 @@ def test_qa_spl65_064_database_constraint_accepts_the_new_status_and_rejects_oth
 
 
 # QA-SPL-65-065
+# SPL-65 AC-3 Test-065
 def test_qa_spl65_065_foreign_keys_and_not_null_protect_the_record(engine):
     """QA-SPL-65-065 [White-box] AC3: no orphan, anonymous or empty clarification can exist."""
 
@@ -209,6 +212,7 @@ def test_qa_spl65_065_foreign_keys_and_not_null_protect_the_record(engine):
 
 
 # QA-SPL-65-066
+# SPL-65 AC-6 Test-066
 def test_qa_spl65_066_deleting_an_event_cascades_to_its_clarifications_in_the_database(engine):
     """QA-SPL-65-066 [White-box] AC6: ON DELETE CASCADE, independent of the ORM."""
 
@@ -230,6 +234,7 @@ def test_qa_spl65_066_deleting_an_event_cascades_to_its_clarifications_in_the_da
 
 
 # QA-SPL-65-067
+# SPL-65 AC-4 Test-067
 def test_qa_spl65_067_downgrade_is_refused_while_an_event_is_returned_then_succeeds(pg_url, engine):
     """QA-SPL-65-067 [White-box / Migration] AC4: the migration is reversible without data loss."""
 
@@ -269,6 +274,7 @@ def test_qa_spl65_067_downgrade_is_refused_while_an_event_is_returned_then_succe
 
 
 # QA-SPL-65-068
+# SPL-65 AC-7 Test-068
 def test_qa_spl65_068_two_simultaneous_requests_record_exactly_one_clarification(engine):
     """QA-SPL-65-068 [Concurrency] AC7: the race is settled by the conditional UPDATE."""
 
@@ -327,6 +333,7 @@ def test_qa_spl65_068_two_simultaneous_requests_record_exactly_one_clarification
 
 
 # QA-SPL-65-069
+# SPL-65 AC-1 Test-069
 def test_qa_spl65_069_full_api_flow_runs_against_postgresql(pg_url, engine):
     """QA-SPL-65-069 [UAT / API] AC1-6: the real routes on the real database."""
 
@@ -355,6 +362,7 @@ def test_qa_spl65_069_full_api_flow_runs_against_postgresql(pg_url, engine):
 
 
 # QA-SPL-65-070
+# SPL-65 AC-1 Test-070
 @pytest.mark.parametrize("event_id", [2**31, 2**40, 2**63])
 def test_qa_spl65_070_out_of_range_event_ids_answer_404_not_500(pg_url, engine, event_id):
     """QA-SPL-65-070 [Boundary / Negative] AC1: ids are 32-bit; overflow is a 404."""
@@ -376,6 +384,7 @@ def test_qa_spl65_070_out_of_range_event_ids_answer_404_not_500(pg_url, engine, 
 
 
 # QA-SPL-65-071
+# SPL-65 AC-2 Test-071
 def test_qa_spl65_071_a_message_at_the_limit_is_stored_without_truncation(pg_url, engine):
     """QA-SPL-65-071 [Boundary] AC2,3: PostgreSQL returns all 2000 characters unchanged."""
 

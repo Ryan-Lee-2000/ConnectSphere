@@ -29,6 +29,7 @@ function isolatedDate() {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// SPL-80 AC-1,2,3,6 Test-18
 test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens for review', async ({ page }) => {
   const name = `E2E Pending Requests ${Date.now()}`;
   const purpose = 'Pending booking queue end-to-end check';
