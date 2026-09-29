@@ -19,6 +19,7 @@ from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
 from app.event_requests import SINGAPORE
 from app.models import EventRequest, Role, Venue, VenueBooking, VenueBookingOccupancy
 from app.venue_booking_history import record_booking_transition
+from app.venue_booking_queue import decision_event_details
 from app.venue_booking_requests import serialize_venue_booking
 from app.venue_booking_status import _review
 from app.venue_conflicts import VenueOccupancyConflict, transition_booking_status
@@ -43,7 +44,10 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             event = session.get(EventRequest, booking.event_request_id)
             return jsonify(
                 booking=serialize_venue_booking(session, booking),
-                event={"id": event.id, "name": event.name, "status": event.status},
+                # SPL-80 owns what Venue Staff need in order to decide (CS-E10-S2 AC3) and which
+                # event fields they may see at all (AC4). Additive: id, name and status are still
+                # returned with the same values this route has always returned.
+                event=decision_event_details(session, event),
                 review=_review(session, booking),
             )
 
