@@ -89,16 +89,21 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     finally { setApproving(false); setConfirming(false); }
   }
 
+  // SPL-82: the button is already disabled without a reason, but the guard is repeated here so a
+  // double click or a stale render can never send a second or empty rejection.
   async function reject() {
     if (!body || rejecting || !reason.trim()) return;
     setRejecting(true); setError(null);
     try {
       const response = await api(`/api/venue-bookings/${bookingId}/reject`, {
         method: 'POST',
+        // Only the two fields the server accepts (AC6); the suggestion is left out when blank.
         body: JSON.stringify(
           suggestion.trim() ? { reason, alternative_suggestion: suggestion } : { reason },
         ),
       });
+      // A 409 (no longer Requested) or 400 shows the server's own message, so the screen can
+      // never claim a rejection the server refused.
       if (!response.ok) { setError(await responseError(response, 'Could not reject this request. Try again.')); return; }
       const next = await response.json() as { booking?: ReviewedBooking };
       if (!next.booking) throw new Error('Invalid response');
@@ -199,6 +204,8 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
           <button className="button" disabled={approving} onClick={() => setConfirming(false)} type="button">Keep reviewing</button>
         </div>
       )}
+      {/* SPL-82: reason and suggestion are two separate boxes, so a suggestion can never stand in
+          for the required reason. Confirm stays disabled until the reason has real text. */}
       {rejectingForm && (
         <div className="venue-booking-panel__confirm" role="group" aria-label="Reject request">
           <label>Rejection reason

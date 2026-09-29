@@ -100,21 +100,34 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
 
+    # SPL-82 (CS-E10-S4). Default-deny: require_roles refuses every role but Venue Staff with 403,
+    # and a missing session is refused with 401 before this function runs (AC7).
     @app.post("/api/venue-bookings/<int:booking_id>/reject")
     @require_roles(Role.VENUE_STAFF)
     def reject_venue_booking(booking_id: int):
+        # Validate the body first, before touching the database, so an invalid rejection can
+        # never leave a half-written change behind (AC2, AC6, AC7).
         reason, alternative_suggestion = _rejection_body()
         with Session(app.extensions["engine"]) as session:
             # Row lock: a concurrent approval or withdrawal waits here, then sees Rejected (AC7).
             booking = _booking(session, booking_id, lock=True)
+            # AC1: only Requested. Approved, Rejected, Withdrawn and Cancelled are all refused.
+            # Deliberately no check on the event's status, unlike approval: rejecting commits no
+            # venue time, so there is nothing to protect (docs/tasks/SPL-82.md).
             if booking.status != REQUESTED:
                 abort(409, ONLY_REQUESTED_TO_REJECT)
+            # AC4: the shared SPL-83 lifecycle rule deletes the occupancy rows for any status that
+            # is not Requested or Approved, so the event, setup and turnaround slots are freed
+            # here with no rejection-specific code.
             transition_booking_status(session, booking, REJECTED)
+            # AC3: who, when and why are server-owned; the client only ever supplies the text.
             booking.rejected_by_account_id = g.user_id
             booking.rejected_at = datetime.now(SINGAPORE)
             booking.rejection_reason = reason
             booking.rejection_alternative_suggestion = alternative_suggestion
             # SPL-79: the rejection is appended to the booking's status history, reason as its note.
+            # That history panel already shows notes, which is how the coordinator sees the
+            # reason (AC5) without any new coordinator-facing screen.
             record_booking_transition(
                 session,
                 booking.id,
@@ -201,14 +214,18 @@ def _rejection_body() -> tuple[str, str | None]:
     """
 
     data = request.get_json(silent=True)
+    # AC6: an allowlist of exactly two keys. Sending venue_id, layout, event_slots or status is
+    # refused outright, rather than silently ignored, so rejecting can never amend the request.
     if not isinstance(data, dict) or not set(data) <= {"reason", "alternative_suggestion"}:
         abort(400, "Rejection accepts only a reason and an optional alternative suggestion.")
     reason = data.get("reason")
+    # AC2: "non-blank" means whitespace-only is refused too, not just an empty string.
     if not isinstance(reason, str) or not reason.strip():
         abort(400, "A rejection reason is required.")
     reason = reason.strip()
     if len(reason) > MAX_REASON_LENGTH:
         abort(400, f"Keep the rejection reason to {MAX_REASON_LENGTH} characters or fewer.")
+    # AC2: the suggestion is optional. Missing, null and blank all store as null.
     suggestion = data.get("alternative_suggestion")
     if suggestion is not None:
         if not isinstance(suggestion, str):
