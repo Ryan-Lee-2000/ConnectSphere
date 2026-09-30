@@ -88,4 +88,53 @@ describe('EventRequestDrafts', () => {
     expect(await screen.findByText(/Rejected by Alice Tan on/)).toBeTruthy();
     expect(screen.getByText('Reason: Clashes with exams.')).toBeTruthy();
   });
+
+  // TC-SPL-66-01
+  // SPL-66 AC-1,2,3,4
+  it('[TC-SPL-66-01] lets the responsible organiser answer the outstanding clarification', async () => {
+    let responded = false;
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path === '/api/event-requests/8') return response({ event_request: {
+        id: 8,
+        name: 'Community Forum',
+        clarifications: [{
+          id: 12,
+          message: 'Please confirm the attendance.',
+          author: { id: 'alice', name: 'Alice Tan' },
+          created_at: '2026-09-28T10:00:00+08:00',
+          response: null,
+          respondent: null,
+          responded_at: null,
+        }],
+      } });
+      if (path === '/api/event-requests/8/clarifications/12/respond' && init?.method === 'POST') {
+        responded = true;
+        expect(JSON.parse(String(init.body))).toEqual({ response: 'Attendance remains 120 people.' });
+        return response({ event: { id: 8, status: 'under_review' } });
+      }
+      if (path === '/api/event-requests') return response({ event_requests: [{
+        id: 8,
+        name: 'Community Forum',
+        status: responded ? 'under_review' : 'returned_for_clarification',
+        status_label: responded ? 'Under review' : 'Returned for clarification',
+        status_explanation: 'Response needed.',
+        status_changed_at: '2026-09-28T10:00:00+08:00',
+        last_saved_at: null,
+        coordinator: { id: 'alice', name: 'Alice Tan' },
+      }] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    render(<EventRequestDrafts accessToken="token" request={request} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Respond to clarification' }));
+    expect(await screen.findByText('Please confirm the attendance.')).toBeTruthy();
+    const field = screen.getByRole('textbox', { name: 'Your response' });
+    fireEvent.change(field, { target: { value: 'Attendance remains 120 people.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send response' }));
+
+    await waitFor(() => expect(responded).toBe(true));
+    expect(await screen.findByText('Under review')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Respond to clarification' })).toBeNull();
+  });
+
 });

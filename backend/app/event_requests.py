@@ -260,6 +260,9 @@ def register_event_request_routes(app: Flask) -> None:
                     selectinload(EventRequest.clarification_requests).joinedload(
                         ClarificationRequest.author
                     ),
+                    selectinload(EventRequest.clarification_requests).joinedload(
+                        ClarificationRequest.respondent
+                    ),
                 )
             )
             if event is None:
@@ -536,6 +539,9 @@ def _find_event_request(session: Session, event_request_id: int) -> EventRequest
             selectinload(EventRequest.clarification_requests).joinedload(
                 ClarificationRequest.author
             ),
+            selectinload(EventRequest.clarification_requests).joinedload(
+                ClarificationRequest.respondent
+            ),
         )
     )
     if event is None:
@@ -622,7 +628,7 @@ def serialize_withdrawal(event: EventRequest) -> dict[str, Any]:
 
 
 def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
-    """Every clarification asked of this request, newest first (CS-E06-S2)."""
+    """Every clarification and any organiser response, newest first (CS-E06-S2/S3)."""
 
     return [
         {
@@ -630,6 +636,15 @@ def serialize_clarifications(event: EventRequest) -> list[dict[str, Any]]:
             "message": row.message,
             "author": {"id": row.author.id, "name": row.author.display_name},
             "created_at": _singapore_time(row.created_at),
+            "response": getattr(row, "response", None),
+            "respondent": (
+                {"id": row.respondent.id, "name": row.respondent.display_name}
+                if getattr(row, "respondent", None)
+                else None
+            ),
+            "responded_at": (
+                _singapore_time(row.responded_at) if getattr(row, "responded_at", None) else None
+            ),
         }
         for row in event.clarification_requests
     ]
