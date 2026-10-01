@@ -50,13 +50,28 @@ it('[TC-SPL-72-07] lets a coordinator adjust the prefixed capacity and layout fi
   expect(screen.getByText('Fits 80 guests')).toBeTruthy();
 });
 
-it('allows a chosen room layout to be changed or cleared back to any supported layout', () => {
-  render(<VenueAvailabilitySearch accessToken="token" eventId={12} initialDate="2026-10-12" initialSlots={['AM']} expectedAttendance={120} preferredRoomLayout="theatre" request={vi.fn()} />);
+it('[TC-SPL-74-06] keeps a cleared layout empty across a parent render', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ venues: [] }) });
+  const props = {
+    accessToken: 'token', eventId: 12, initialDate: '2026-10-12', initialSlots: ['AM'],
+    expectedAttendance: 120, preferredRoomLayout: 'theatre', requiredFacilities: ['Projector'],
+    accessibilityNeeds: ['Step-free access'], locationPreference: 'Marina Centre', request,
+  };
+  const page = render(<VenueAvailabilitySearch {...props} />);
 
   fireEvent.change(screen.getByLabelText('Room layout'), { target: { value: 'Classroom' } });
   expect((screen.getByLabelText('Room layout') as HTMLSelectElement).value).toBe('Classroom');
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   expect((screen.getByLabelText('Room layout') as HTMLSelectElement).value).toBe('');
+
+  // Parent renders can supply fresh array references without changing the event snapshot.
+  page.rerender(<VenueAvailabilitySearch {...props} initialSlots={[...props.initialSlots]}
+    requiredFacilities={[...props.requiredFacilities]} accessibilityNeeds={[...props.accessibilityNeeds]} />);
+  expect((screen.getByLabelText('Room layout') as HTMLSelectElement).value).toBe('');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+  expect(await screen.findByText('No venues are available for this search.')).toBeTruthy();
+  expect(request).toHaveBeenCalledWith('/api/event-requests/12/available-venues?date=2026-10-12&slot=AM&expected_attendance=120&preferred_room_layout=&required_facility=Projector&accessibility_need=Step-free+access&location_preference=Marina+Centre');
 });
 
 it('[TC-SPL-75-04] identifies unmet saved-event requirements in an expanded venue assessment', async () => {

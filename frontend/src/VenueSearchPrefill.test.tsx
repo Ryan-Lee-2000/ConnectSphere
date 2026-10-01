@@ -113,10 +113,13 @@ it('[TC-SPL-74-06] clears optional filters for a search without clearing the eve
   const record = structuredClone(event);
   const { props, request } = fixture(record);
   render(<AssignedEvents {...props} view="venue-search" />);
+  await screen.findByRole('option', { name: 'City Campus' });
   fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+  expect(screen.getByLabelText('Room layout')).toHaveProperty('value', '');
   fireEvent.click(screen.getByRole('button', { name: 'Remove Projector' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remove Step-free access' }));
   fireEvent.change(screen.getByLabelText('Preferred venue location'), { target: { value: '' } });
+  expect(screen.getByLabelText('Room layout')).toHaveProperty('value', '');
   fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
   expect(await screen.findByText('No venues are available for this search.')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/12/available-venues?date=2026-10-12&slot=AM&slot=PM&expected_attendance=120&preferred_room_layout=&required_facility=&accessibility_need=&location_preference=');
