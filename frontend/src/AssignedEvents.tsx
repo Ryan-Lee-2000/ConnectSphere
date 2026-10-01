@@ -175,6 +175,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
 
+  // Refresh recorded requirements on navigation, including entry into search without a remount.
   useEffect(() => {
     let active = true;
     setEvents(null);
@@ -209,7 +210,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       }
     })();
     return () => { active = false; };
-  }, [api, eventId]);
+  }, [api, eventId, view]);
 
   function follow(click: MouseEvent<HTMLAnchorElement>, path: string) {
     click.preventDefault();

@@ -20,6 +20,7 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [accessToken, request]);
   const selectableSlots = (slots: string[]) => slots.filter((slot): slot is SlotKey => SLOTS.some(candidate => candidate.key === slot));
+  // Search controls are local copies; editing filters never writes back to the event.
   const [searchDate, setSearchDate] = useState(initialDate || '');
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>(selectableSlots(initialSlots || []));
   const [attendance, setAttendance] = useState(initialAttendance(expectedAttendance));
