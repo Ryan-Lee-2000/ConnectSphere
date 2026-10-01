@@ -47,8 +47,8 @@ def engine():
         admin.dispose()
 
 
-# TC-SPL-66-02
-def test_tc_spl_66_02_response_columns_and_completeness_constraint(engine):
+# TC-SPL-66-13: AC 2 supporting schema evidence.
+def test_tc_spl_66_13_response_columns_and_completeness_constraint(engine):
     """The response, trusted respondent and time must be present together or all absent."""
 
     with engine.connect() as connection:
@@ -79,8 +79,8 @@ def test_tc_spl_66_02_response_columns_and_completeness_constraint(engine):
     assert "respondent_account_id IS NOT NULL" in constraint
 
 
-# TC-SPL-66-02
-def test_tc_spl_66_02_partial_response_evidence_is_rejected_by_postgres(engine):
+# TC-SPL-66-14: AC 2 supporting constraint evidence.
+def test_tc_spl_66_14_partial_response_evidence_is_rejected_by_postgres(engine):
     """PostgreSQL rejects partial evidence even if an application write bypasses Flask."""
 
     # Reuse seeded accounts and an event created by the baseline migration's seed-independent

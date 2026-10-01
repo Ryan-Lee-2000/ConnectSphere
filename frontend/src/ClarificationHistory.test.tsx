@@ -18,6 +18,9 @@ describe('ClarificationHistory', () => {
 
     expect(screen.getByText('Please confirm the attendance.')).toBeTruthy();
     expect(screen.getByText('Attendance remains 120 people.')).toBeTruthy();
-    expect(screen.getByText(/Response from Olivia Organiser/)).toBeTruthy();
+    // AC2 requires a visible saved date and time as well as the respondent.
+    const responseMetadata = screen.getByText(/Response from Olivia Organiser/);
+    expect(responseMetadata.textContent).toMatch(/29 Sep(?:t)? 2026/);
+    expect(responseMetadata.textContent).toMatch(/11:30\s*am/i);
   });
 });
