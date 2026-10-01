@@ -165,6 +165,8 @@ grant denial. The story boundary and evidence map are in `docs/development/SPL-4
 - `docs/onboarding/`: teammate setup checklist
 - `docs/development/`: contribution and review workflow
 - `docs/development/testing.md`: test-case IDs, code lookup, focused runs and CI evidence
+- [SPL-69 story/test mapping](docs/tasks/SPL-69.md): withdrawal acceptance cases and linked QA/DevOps reports
+- [Documentation index](docs/README.md): story mappings and project reference documents
 - `docs/infrastructure/`: repository, hosting, budget, verification and infrastructure tasks
 - `AGENTS.md`: binding shared instructions for all coding agents
 - `CLAUDE.md`: forwards Claude to the shared instructions

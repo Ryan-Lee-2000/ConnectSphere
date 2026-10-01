@@ -40,6 +40,27 @@ that it is not reviewed or planned further.
 - The coordinator detail uses an inline confirmation with an optional note, matching the existing
   operational interaction pattern.
 
+## Two tests per acceptance criterion
+
+This follow-up is based on main `da9a995` (merged SPL-66 PR #54). It changes tests and documentation
+only; no application logic, API or migration changes. Source: current Jira SPL-69, Week 4 core #4,
+and Q103, checked on 1 October 2026.
+
+| AC | First named case | Second named case |
+| --- | --- | --- |
+| 1 — Assigned coordinator / allowed status | TC-SPL-69-01: each permitted state | TC-SPL-69-17: reassignment changes who may withdraw |
+| 2 — Optional note | TC-SPL-69-02: absent or empty note | TC-SPL-69-19: supplied multiline note is retained |
+| 3 — Withdrawn / actor / time | TC-SPL-69-01: successful withdrawal evidence | TC-SPL-69-18: persisted evidence agrees across authorised reads and audit |
+| 4 — Retrievable / no further review or planning | TC-SPL-69-08: authorised retrieval and client isolation | TC-SPL-69-09: subsequent workflow actions are refused |
+| 5 — Distinct from rejection / cancellation | TC-SPL-69-15: real rejection and withdrawal keep separate fields and audits | TC-SPL-69-16: a cancelled event remains Cancelled and cannot be withdrawn |
+| 6 — Invalid / unauthorised leaves unchanged | TC-SPL-69-03: other roles refused | TC-SPL-69-04: unassigned coordinator refused |
+
+All primary cases are executable backend tests in `backend/tests/test_withdraw_event_request.py`.
+Parameter variations are not counted as separate named cases. TC-SPL-69-01 checks both AC1 and AC3;
+it is intentionally mapped to both rather than duplicated. Cases 05–07 add invalid-state, payload,
+identity/time-injection and note-boundary coverage. Cancellation is a seeded existing outcome in
+case 16; this test does not claim to implement or verify a cancellation API.
+
 ## Consolidated test cases
 
 | ID | AC | Scenario | Expected result | Level |
@@ -58,10 +79,15 @@ that it is not reviewed or planned further.
 | TC-SPL-69-12 | 2,3,4 | Confirm through the coordinator interface | API is called once and retained actor, time and note are shown | UI |
 | TC-SPL-69-13 | 6 | Cancel locally or receive server refusal | No action is sent on cancel; refused form and note remain actionable | UI |
 | TC-SPL-69-14 | 1,2,3,4 | Submit, assign and withdraw through the browser | Withdrawn status and retained evidence are visible; review actions are gone | Browser |
+| TC-SPL-69-15 | 5 | Withdraw one request and reject another through the real APIs | Distinct status labels, evidence fields and audit actions; no rejection evidence on withdrawal or vice versa | API/database |
+| TC-SPL-69-16 | 5 | Compare a withdrawn request with an existing cancelled event; try withdrawing the cancelled event | Labels remain Withdrawn and Cancelled; cancelled event and audit remain unchanged | API/database |
+| TC-SPL-69-17 | 1 | Reassign from Alice to Bob; attempt withdrawal as both | Old assignee gets 404 unchanged; current assignee succeeds and is recorded | API/database |
+| TC-SPL-69-18 | 3 | Withdraw and read through organiser/coordinator endpoints and database | Actor and timestamp agree with persisted status/audit; timestamp is server-generated within the request interval | API/database |
+| TC-SPL-69-19 | 2 | Supply a whitespace-padded multiline note | Outer whitespace is trimmed, internal newline retained, saved note retrievable | API/database |
 
 ## Automated test traceability
 
-- TC-SPL-69-01 to TC-SPL-69-10: `backend/tests/test_withdraw_event_request.py`
+- TC-SPL-69-01 to TC-SPL-69-10 and TC-SPL-69-15 to TC-SPL-69-19: `backend/tests/test_withdraw_event_request.py`
 - TC-SPL-69-11 to TC-SPL-69-13: `frontend/src/AssignedEvents.test.tsx`
 - TC-SPL-69-14: `e2e/event-request-withdrawal.spec.ts`
 - Migration head and clean upgrade: `backend/tests/test_migration_tooling.py` and `npm run integration`
@@ -79,8 +105,28 @@ uv run pytest backend/tests/test_withdraw_event_request.py -q
 pnpm --dir frontend exec vitest run src/AssignedEvents.test.tsx
 ```
 
-Run `npm run verify`, the disposable-PostgreSQL `npm run integration` gate and the applicable
-browser regression suite before review.
+Run `npm run verify` before review. Run the disposable-PostgreSQL `npm run integration` gate when
+changing database behavior, and applicable browser checks when changing the interface. This
+follow-up changes test assertions and documentation only; separate PostgreSQL and browser checks
+have not been rerun. Prior implementation evidence must not be relabelled as a new run.
+
+## Verification — 1 October 2026
+
+- Focused backend: 33 passed across 15 named tests, including parameter variants.
+- Full gate: `npm run verify` passed — 1,116 backend tests passed / 54 skipped; 280 frontend tests passed; Ruff lint/format, TypeScript and production build passed.
+- Latest main CI: [run 36865016632](https://github.com/Ryan-Lee-2000/ConnectSphere/actions/runs/36865016632) failed in SPL-74 case TC-SPL-74-06; deployment skipped. This is separate from the passing local SPL-69 follow-up.
+- Budget: UNKNOWN; live account usage unverified.
+- Manual QA / browser E2E / separate PostgreSQL integration: not newly executed for this follow-up.
+- Original implementation: [PR #50](https://github.com/Ryan-Lee-2000/ConnectSphere/pull/50), merged.
+- Follow-up: local branch `codex/SPL-69-test-ac-coverage`; publication prepared for review; see the branch PR for current CI/review status.
+
+## Report and repository links
+
+- [QA-SPL-69](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/11272210/QA-SPL-69)
+- [DEVOPS-SPL-69](https://clivelim01-1787647390567.atlassian.net/wiki/spaces/QS/pages/11206732/DEVOPS-SPL-69)
+
+The reports link to each other and distinguish original delivery evidence from this local test-only follow-up.
+See the [repository map](../../README.md#repository-map) and [documentation index](../README.md).
 
 ## Out of scope
 
