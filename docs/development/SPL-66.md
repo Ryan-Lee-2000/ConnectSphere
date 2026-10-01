@@ -71,6 +71,17 @@ checks or the browser journey as extra cases. All primary cases below are in
 | TC-SPL-66-04 | 1, 5 | Blank, whitespace-only, non-string, missing-response and status-injection bodies return 400 without response or transition evidence. |
 | TC-SPL-66-05 | 1, 5 | A repeated response returns 409 and does not replace the original answer. |
 
+### SPL-67 alignment regression
+
+| Case | Coverage | Expected result |
+| --- | --- | --- |
+| TC-SPL-66-15 | AC2/3; real response-to-approval integration | Approval returns 409 while clarification is outstanding. A real response leaves approval evidence null, clears the outstanding question and preserves assignment. Subsequent approval returns 200 and records the coordinator as approver, while retaining response evidence and both audits. |
+| TC-SPL-66-16 | AC2/3; transaction failure | Forced SQL failures in the response update or transition-audit insert roll back response, status and audit together. Approval remains refused; assignment and approval fields remain unchanged. |
+
+The SPL-67 `test_qa_spl67_019` regression now calls the actual SPL-66 response endpoint instead of
+setting Under Review directly. The existing SPL-65/67 exact transition-key checks already include
+`respond_clarification` and require no change. No application or migration change is needed.
+
 ### Supporting frontend, PostgreSQL and browser checks
 
 | Case | File | Expected result |
@@ -100,7 +111,7 @@ ID/comment corrections only; their executable assertions are unchanged.
 From the repository root:
 
 ```sh
-uv run --frozen pytest -q backend/tests/test_respond_clarification.py
+uv run --frozen pytest -q backend/tests/test_respond_clarification.py backend/tests/test_qa_spl67.py
 npm exec --yes --package=pnpm@10.15.1 -- pnpm --dir frontend test ClarificationHistory.test.tsx EventRequestDrafts.test.tsx
 npm run verify
 npm run budget
@@ -117,9 +128,10 @@ npm exec --yes --package=pnpm@10.15.1 -- pnpm exec playwright test e2e/clarifica
 
 ### Testing follow-up — 1 October 2026
 
-- Focused backend: 26 passed across 12 named acceptance cases (parameter variants expand execution count).
+- Focused backend: 147 passed across the SPL-66 response and SPL-67 approval files.
+  SPL-66 contributes 29 executions across 14 named cases (12 acceptance cases plus 2 integration/failure cases).
 - Focused frontend: 7 passed across ClarificationHistory and EventRequestDrafts.
-- `npm run verify`: PASS — 1,106 backend tests passed / 54 skipped; 280 frontend tests passed;
+- `npm run verify`: PASS — 1,109 backend tests passed / 54 skipped; 280 frontend tests passed;
   Ruff lint/format, TypeScript and production build passed.
 - `git diff --check`: passed.
 - Verification used matching source under `/tmp/connectsphere-spl66-ac-check` because reads in the
@@ -129,7 +141,8 @@ npm exec --yes --package=pnpm@10.15.1 -- pnpm exec playwright test e2e/clarifica
   and product code are unchanged; only PostgreSQL test IDs/comments changed.
 - New manual QA: not performed; earlier reports remain historical.
 
-This follow-up is prepared for review on `codex/SPL-66-test-ac-coverage`. CI, reviewer approval
+This follow-up is open as [PR #54](https://github.com/Ryan-Lee-2000/ConnectSphere/pull/54)
+on `codex/SPL-66-test-ac-coverage`. CI, reviewer approval
 and deployment for this follow-up are pending. Manual and browser results from earlier implementation work must
 not be relabelled as newly executed evidence.
 

@@ -17,7 +17,9 @@ from app.models import (
     Organisation,
     Role,
 )
+from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 MANAGER = "00000000-0000-0000-0000-000000000091"
@@ -457,4 +459,100 @@ def test_tc_spl_66_12_injected_request_fields_are_refused_without_any_changes(
         None,
         None,
         [],
+    )
+
+
+# TC-SPL-66-15: AC 2/3 and SPL-67 alignment — only the real response unlocks approval.
+def test_tc_spl_66_15_response_allows_assigned_coordinator_to_approve(app, client):
+    event_id, clarification_id = clarification_event(app)
+    original_assignment = request_snapshot(app, event_id)[2]
+    approval_url = f"/api/event-requests/{event_id}/approve"
+    refused = client.post(approval_url, headers=headers("coordinator"))
+    assert refused.status_code == 409
+    assert refused.json == {"error": "Only an event under review can be approved."}
+
+    assert respond(client, event_id, clarification_id).status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event.status == "under_review"
+        assert event.approved_by_account_id is None
+        assert event.approved_at is None
+        assert (
+            session.scalars(
+                select(ClarificationRequest).where(
+                    ClarificationRequest.event_request_id == event_id,
+                    ClarificationRequest.response.is_(None),
+                )
+            ).all()
+            == []
+        )
+
+    approved = client.post(approval_url, headers=headers("coordinator"))
+    assert approved.status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event.status == "planning"
+        assert event.approved_by_account_id == COORDINATOR
+        assert event.approved_at is not None
+        answer = session.get(ClarificationRequest, clarification_id)
+        assert answer.response == "Attendance remains 120 people."
+        assert answer.respondent_account_id == ORGANISER
+        assert answer.responded_at is not None
+        audits = session.scalars(
+            select(EventStatusHistory)
+            .where(EventStatusHistory.event_request_id == event_id)
+            .order_by(EventStatusHistory.id)
+        ).all()
+        assert [(row.action, row.actor_account_id) for row in audits] == [
+            ("respond_clarification", ORGANISER),
+            ("approve", COORDINATOR),
+        ]
+    assert request_snapshot(app, event_id)[2] == original_assignment
+
+
+# TC-SPL-66-16: AC 2/3 — failed evidence or audit writes roll back the status update too.
+@pytest.mark.parametrize(
+    "failed_statement", ["update clarification_requests", "insert into event_status_history"]
+)
+def test_tc_spl_66_16_database_failure_rolls_back_response_and_transition(
+    app, client, failed_statement
+):
+    event_id, clarification_id = clarification_event(app)
+    before = request_snapshot(app, event_id)
+    engine = app.extensions["engine"]
+    intercepted = []
+
+    def fail_write(connection, cursor, statement, parameters, context, executemany):
+        # Fail actual SQL after the transition starts, rather than mocking away the transaction.
+        if statement.lower().lstrip().startswith(failed_statement):
+            intercepted.append(statement)
+            raise OperationalError(statement, parameters, RuntimeError("Forced test write failure"))
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", fail_write)
+    try:
+        with pytest.raises(OperationalError, match="Forced test write failure"):
+            respond(client, event_id, clarification_id)
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", fail_write)
+
+    assert len(intercepted) == 1
+    assert request_snapshot(app, event_id) == before
+    assert stored(app, event_id, clarification_id)[:5] == (
+        "returned_for_clarification",
+        None,
+        None,
+        None,
+        [],
+    )
+    with Session(engine) as session:
+        event = session.get(EventRequest, event_id)
+        assert event.status_changed_at is None
+        assert event.approved_by_account_id is None
+        assert event.approved_at is None
+    # The failed answer must not unlock approval.
+    assert (
+        client.post(
+            f"/api/event-requests/{event_id}/approve", headers=headers("coordinator")
+        ).status_code
+        == 409
     )

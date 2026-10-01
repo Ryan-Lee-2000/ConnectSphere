@@ -446,15 +446,29 @@ def test_qa_spl67_018_the_organiser_still_sees_it_returned_after_a_refused_appro
 def test_qa_spl67_019_approval_succeeds_once_the_event_is_back_under_review(world, client):
     """QA-SPL-67-019 [Functional] AC2,3: refused while outstanding, allowed once resolved.
 
-    SPL-66 will move the event back to Under Review; the test stands in for it directly.
+    Resolve the outstanding question through SPL-66 before attempting approval again.
     """
 
     event_id = review_ready_event(client)
-    clarify(client, event_id)
+    question = clarify(client, event_id)
+    assert question.status_code == 200
+    clarification_id = question.json["clarifications"][0]["id"]
     assert approve(client, event_id).status_code == 409
-    set_status(world, event_id, UNDER_REVIEW)
+    # TC-SPL-66-15: exercise the real organiser response, not a direct status mutation.
+    response = client.post(
+        f"/api/event-requests/{event_id}/clarifications/{clarification_id}/respond",
+        headers=h("owner"),
+        json={"response": "Theatre layout confirmed."},
+    )
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == UNDER_REVIEW
+    assert snapshot(world, event_id)[0]["approved_by_account_id"] is None
+    assert snapshot(world, event_id)[0]["approved_at"] is None
     assert approve(client, event_id).status_code == 200
-    assert snapshot(world, event_id)[0]["status"] == "planning"
+    saved = snapshot(world, event_id)[0]
+    assert saved["status"] == "planning"
+    assert saved["approved_by_account_id"] == ALICE
+    assert saved["approved_at"] is not None
 
 
 # SPL-67 AC-2,6 Test-020
