@@ -37,13 +37,8 @@ export function VenueAvailabilitySearch({ accessToken, eventId, initialDate, ini
   const [requestedBooking, setRequestedBooking] = useState<VenueBooking | null>(null);
   const [bookingVersion, setBookingVersion] = useState(0);
 
-  useEffect(() => {
-    setSearchDate(initialDate || ''); setSelectedSlots(selectableSlots(initialSlots || []));
-    setAttendance(initialAttendance(expectedAttendance)); setLayout(normaliseLayoutChoice(preferredRoomLayout));
-    setFacilities(normaliseRequirementValues(requiredFacilities)); setAccessibilityNeeds(normaliseRequirementValues(initialAccessibilityNeeds)); setLocation(locationPreference || '');
-    setVenues(null); setSearched(false); setError(null); setSelectedVenueId(null); setRequestedBooking(null);
-  }, [eventId, initialDate, initialSlots, expectedAttendance, preferredRoomLayout, requiredFacilities, initialAccessibilityNeeds, locationPreference]);
-
+  // These controls start from the event snapshot; reopening search remounts this component with fresh data.
+  // Keeping later parent renders from resetting local edits prevents a cleared filter from reappearing.
   useEffect(() => {
     let active = true;
     const optionsRequest = api(`/api/event-requests/${eventId}/venue-filter-options`);
