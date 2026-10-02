@@ -46,7 +46,7 @@ Additional cases establish the professor's minimum of two executable tests per a
 | Case | AC | Scenario and expected result |
 | --- | --- | --- |
 | TC-SPL-74-05 | 1 | Night-only event with custom layout, facilities, accessibility and location absent from catalogue suggestions. Recorded selections remain available and selected. |
-| TC-SPL-74-06 | 2 | Clear all optional filters and search. Explicit blank query values override saved defaults without clearing the event or its brief. |
+| TC-SPL-74-06 | 2 | Clear all optional filters, rerender with equivalent event values, and search. The local blank remains selected and is sent explicitly without clearing the event or its brief. Covered by the screen journey and a component regression for fresh array references. |
 | TC-SPL-74-07 | 3 | Only some optional requirements are recorded. Search succeeds and retains the recorded facility filter while leaving other optionals empty. |
 | TC-SPL-74-08 | 4 | Unmount and reopen search after saved optional requirements are removed. A fresh read clears old preferences and prior search results. |
 
@@ -72,16 +72,14 @@ Required regression gate: `npm run verify`.
 
 Verification date: 2026-10-01.
 
-Focused component checks: 8 passed (two per AC). `npm run verify`: PASS — Ruff lint and formatting,
-1,094 Python tests passed / 54 skipped, 280 frontend tests passed, TypeScript check and production
-build passed. Executed against a source copy under `/tmp/connectsphere-spl74-check` to avoid
-synced-checkout stalls, with the same tracked source plus this change. The initial restricted
-run failed the existing fixture-server test because local sockets/process signals were denied;
-the permitted rerun passed. A test-fixture response typing error was corrected before the final pass.
-Existing React act warnings in unrelated tests remain non-failing.
+Focused component checks: 8 screen-prefill cases and 7 venue-search component cases passed (TC-SPL-74-06 is covered in both files). The focused case passed 10 consecutive runs after adding an explicit wait for filter options to load.
+
+Reset-race follow-up on `codex/SPL-74-clear-filter-fix`: the prop-synchronization effect was removed because it could reapply the event snapshot over local exploratory filters after a parent render. Search state initializes from the event snapshot on mount; leaving and reopening the search mounts it again with the latest assigned-event read. A component regression rerenders with equivalent event values and fresh array references after clearing, then confirms the layout remains blank in the search query.
+
+Latest `npm run verify` on 2026-10-01: PASS — Ruff lint and formatting; 1,109 Python tests passed / 54 skipped; 280 frontend tests passed; TypeScript check and production build passed. The build reports the existing large-chunk advisory; it does not fail the build. Executed in the SCHOOL checkout using the repository's temporary Node 24 runtime. Existing React `act(...)` warnings in unrelated tests remain non-failing. The initially restricted run failed the fixture-server test because local sockets/process signals were denied; the permitted rerun passed. A test-fixture response typing error was corrected before the earlier final pass.
 
 `npm run budget`: UNKNOWN (dated snapshot, live account usage unverified).
 Browser E2E: not run. Manual walkthrough: passed, reported by Daniel on 2026-10-01.
 PostgreSQL-specific gate: not required by this frontend-only change; no migration or DB rules changed.
 Daniel reported the documented manual walkthrough as “all clear”; this is assignee-reported evidence, not an agent-observed browser run.
-PR review, CI and hosted deployment: pending.
+The previously failing main run reported an `available-venues` request with `preferred_room_layout=Theatre`. This regression is addressed by the local change above; a new CI run is required to verify it in GitHub Actions. PR review and hosted deployment: pending.
