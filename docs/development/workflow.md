@@ -57,5 +57,17 @@ expected result and executable assertions. Report any unrun PostgreSQL or browse
 Migrations require two named maintainers once CODEOWNERS is activated. Never rewrite a merged
 migration. Use additive schema changes when the old application may still be live.
 
+Migrations form one chain, so PRs that each add one must take turns:
+
+- Set `down_revision` to the newest migration on main. Before merging, update from main; if
+  another migration merged first, point yours at it instead. `npm run verify` and
+  `npm run integration` both fail while the chain has two heads.
+- Never write the newest migration's name into a test. Check that there is exactly one head and
+  that your own migration's `down_revision` is right, so adding a migration never means editing
+  another story's tests.
+- A migration that adds a table also adds it to `PRODUCT_TABLES` in
+  `backend/tests/test_postgres.py`. That edit is deliberate: the integration test uses the list to
+  prove every product table has row-level security.
+
 The human assignee owns the outcome of agent-assisted changes. They must be able to explain the
 behaviour and review the diff. PR merged, story Done and demo deployed are distinct states.
