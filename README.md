@@ -48,15 +48,26 @@ npm start
 No separate Python, pnpm, Corepack, Make, or global Supabase installation is required.
 uv supplies Python 3.13 when needed; npm fetches pnpm 10.15.1 into its cache.
 Setup checks prerequisites, installs locked dependencies, starts local Supabase, writes ignored
-local environment files, applies Alembic migrations and creates local Auth fixtures for Event
-Organiser/Attendee, Venue Staff, and Event Coordinator roles. First startup
+local environment files, applies Alembic migrations and creates local Auth fixtures for every
+role. First startup
 needs internet access and time to download Python, packages and container images.
 Rerunning setup is supported and preserves existing local data.
 
-Open http://127.0.0.1:5173 and sign in with a local fixture. The browser checks use
-`venue.staff@example.test` / `LocalDemo123!` and `event.coordinator@example.test` /
-`LocalDemo123!` to verify real Auth, server-side role lookup and catalogue permissions. Fixtures
-are local-only and contain no production data.
+Open http://127.0.0.1:5173 and sign in with a local fixture. Every fixture's password is
+`LocalDemo123!`:
+
+| Email | Roles |
+| --- | --- |
+| `developer@example.test` | Event Organiser and Attendee |
+| `attendee@example.test` | Attendee only |
+| `venue.staff@example.test` | Venue Staff |
+| `event.coordinator@example.test` | Event Coordinator |
+| `operations.manager@example.test` | Event Operations Manager |
+| `technical.support@example.test` | Technical Support Staff |
+
+The browser checks use `venue.staff@example.test` and `event.coordinator@example.test` to verify
+real Auth, server-side role lookup and catalogue permissions. Fixtures are local-only and contain
+no production data.
 
 Use Ctrl+C to stop Flask and React. Run `npm run stop` to stop this project's local Supabase
 containers when finished; this preserves their data. Other Docker projects are left alone.

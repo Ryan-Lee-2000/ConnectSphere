@@ -18,6 +18,9 @@ if urlparse(api).hostname not in ("localhost", "127.0.0.1"):
     raise SystemExit("Seed is local-only")
 secret = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 headers = {"apikey": secret, "Authorization": f"Bearer {secret}"}
+# One local demo account per role (password LocalDemo123!, listed in the README). Roles are
+# written to account_roles here, on the server side, because the app never trusts a role sent by
+# the browser. Re-running the seed updates these rows instead of duplicating them.
 fixtures = {
     "developer@example.test": {
         "display_name": "Devon Lee",
@@ -39,10 +42,19 @@ fixtures = {
         "organisation": None,
         "roles": ("event_operations_manager",),
     },
+    # Sprint 3 equipment stories (SPL-92, 94, 96, 100) can only be used by Technical Support, so
+    # they cannot be demonstrated without this account. Added by SPL-94 (#63).
     "technical.support@example.test": {
         "display_name": "Taylor Goh",
         "organisation": None,
         "roles": ("technical_support_staff",),
+    },
+    # Attendee only, on purpose: developer@example.test is also an organiser, so testing
+    # registration (SPL-114 to 118) with it could hide a leak of organiser-only information.
+    "attendee@example.test": {
+        "display_name": "Avery Koh",
+        "organisation": None,
+        "roles": ("attendee",),
     },
 }
 with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
@@ -184,6 +196,6 @@ finally:
     engine.dispose()
 
 print(
-    "Local Auth fixtures ready for organiser, venue staff, event coordinator and "
+    "Local Auth fixtures ready for organiser, attendee, venue staff, event coordinator, "
     "operations manager and technical support roles."
 )
