@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
+import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { VenueBookingPanel } from './VenueBookingWithdrawal';
 
@@ -405,6 +406,9 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           made once the event is in Planning (SPL-77), so earlier stages have nothing to show. The
           panel follows the event as loaded, so approving on this page performs no booking read. */}
       {bookingStageOnLoad && <VenueBookingPanel api={api} eventId={event.id} emptyMessage />}
+      {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
+          is not offered at any other stage. The server refuses other stages regardless. */}
+      {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
       <div className="organisation-events__table-wrap">
         <table className="organisation-events__table organisation-events__detail-table">
           <caption className="visually-hidden">Submitted request details for {event.name}</caption>
