@@ -72,6 +72,8 @@ If Windows asks `Terminate batch job (Y/N)?`, enter `Y`.
 | `npm run verify` | Ruff lint/format, Python tests, TypeScript, frontend tests and production frontend build |
 | `npm run browser:install` | Install Playwright Chromium once |
 | `npm run check:e2e` | Infrastructure browser/API/database/Auth smoke test, with `npm start` running in another terminal |
+| `npm run e2e:record -- e2e/<story>.spec.ts` | Record selected local browser tests with video, trace and screenshots; see [recording guidance](docs/development/testing.md#record-ui-evidence-windows-and-macos) |
+| `npm run e2e:report` | Open the latest UI evidence report |
 | `npm run budget` | Report the CI budget snapshot; UNKNOWN means unverified |
 | `npm run stop` | Stop local Supabase without deleting data |
 

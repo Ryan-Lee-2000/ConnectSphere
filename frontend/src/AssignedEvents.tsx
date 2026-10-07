@@ -134,7 +134,7 @@ function listValue(values: string[] | undefined) {
   return values?.length ? values.join(', ') : 'No preference recorded';
 }
 
-function EventBrief({ event }: { event: AssignedEvent }) {
+function EventBrief({ event }: { event: AssignedEventDetail }) {
   const slots = event.mapped_slots.length
     ? event.mapped_slots.map(slot => slotLabel(slot).split(' · ')[0]).join(', ')
     : 'No slots recorded';
@@ -142,6 +142,7 @@ function EventBrief({ event }: { event: AssignedEvent }) {
     <header className="event-brief__header"><div><p className="eyebrow">Assigned event</p><h2 id="event-brief-title">Requirements to consider</h2></div><span className="event-brief__status">{event.status_label}</span></header>
     <dl className="event-brief__overview">
       <div><dt>Event date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
+      <div><dt>Advertised time (SGT)</dt><dd>{event.start_time && event.end_time ? `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}` : 'Not recorded'}</dd></div>
       <div><dt>Required slots</dt><dd>{slots}</dd></div>
       <div><dt>Expected attendance</dt><dd>{event.expected_attendance ?? 'Not recorded'}</dd></div>
     </dl>
@@ -378,7 +379,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <p className="venue-search-page__event-name">Explore venue options for <strong>{event.name}</strong>. The filters start with this request’s details, but do not change it.</p>
         <div className="venue-search-page__layout">
           <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
-            initialDate={event.proposed_date} initialSlots={event.mapped_slots}
+            initialDate={event.proposed_date} initialSlots={event.mapped_slots} initialStartTime={event.start_time} initialEndTime={event.end_time}
             expectedAttendance={event.expected_attendance ?? null} preferredRoomLayout={event.preferred_room_layout ?? null}
             requiredFacilities={event.required_facilities ?? []} accessibilityNeeds={event.accessibility_needs ?? []}
             locationPreference={event.location_preference ?? null} request={api} />

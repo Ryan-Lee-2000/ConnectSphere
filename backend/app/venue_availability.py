@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Iterable
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, current_app, g, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -27,7 +27,10 @@ def register_venue_availability_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session:
             _planning_event(session, event_request_id)
             venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
-            return jsonify(filter_options=catalogue_filter_options(venues))
+            return jsonify(
+                filter_options=catalogue_filter_options(venues),
+                capabilities={"exact_venue_timing": app.config["EXACT_VENUE_TIMING_ENABLED"]},
+            )
 
     @app.get("/api/event-requests/<int:event_request_id>/available-venues")
     @require_roles(Role.EVENT_COORDINATOR)
@@ -40,6 +43,14 @@ def register_venue_availability_routes(app: Flask) -> None:
         slots; it never creates a booking or reserves a candidate.
         """
 
+        if (
+            app.config["EXACT_VENUE_TIMING_ENABLED"]
+            or "start_time" in request.args
+            or "end_time" in request.args
+        ):
+            from app.exact_venue_availability import find_exact_venues
+
+            return find_exact_venues(app, event_request_id)
         (
             day,
             event_slots,
@@ -340,6 +351,10 @@ def assess_venue_suitability(
     reuse before it creates an occupancy claim.
     """
 
+    if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
+        from app.exact_venue_availability import exact_suitability
+
+        return exact_suitability(session, venue, event)
     event_slots = (
         slots_for_range(event.start_time, event.end_time)
         if event.start_time and event.end_time
