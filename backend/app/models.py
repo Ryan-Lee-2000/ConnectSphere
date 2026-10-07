@@ -28,6 +28,24 @@ class Base(DeclarativeBase):
     pass
 
 
+# CS-E19-S1 (SPL-114) database rules for attendee registration settings. The migration imports
+# these same strings, so the model and the real database enforce identical rules. They are a
+# second line of defence behind the route's own checks in app/registration_settings.py:
+# - complete: the three settings are either all empty (registration off) or all set, never half.
+# - period: registration opens strictly before it closes.
+# - capacity: at least one place.
+REGISTRATION_SETTINGS_COMPLETE = (
+    "(registration_opens_at is null and registration_closes_at is null"
+    " and registration_capacity is null)"
+    " or (registration_opens_at is not null and registration_closes_at is not null"
+    " and registration_capacity is not null)"
+)
+REGISTRATION_PERIOD_ORDER = (
+    "registration_opens_at is null or registration_opens_at < registration_closes_at"
+)
+REGISTRATION_CAPACITY_POSITIVE = "registration_capacity is null or registration_capacity >= 1"
+
+
 class Role(StrEnum):
     EVENT_ORGANISER = "event_organiser"
     EVENT_OPERATIONS_MANAGER = "event_operations_manager"
@@ -200,6 +218,13 @@ class EventRequest(Base):
             "and expected_attendance is not null)",
             name="ck_event_requests_submitted_fields",
         ),
+        CheckConstraint(
+            REGISTRATION_SETTINGS_COMPLETE, name="ck_event_requests_registration_complete"
+        ),
+        CheckConstraint(REGISTRATION_PERIOD_ORDER, name="ck_event_requests_registration_period"),
+        CheckConstraint(
+            REGISTRATION_CAPACITY_POSITIVE, name="ck_event_requests_registration_capacity"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -252,6 +277,12 @@ class EventRequest(Base):
     )
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawal_note: Mapped[str | None] = mapped_column(Text)
+    # CS-E19-S1 (SPL-114). Attendee registration settings, set by the assigned coordinator. All
+    # three stay null until registration is enabled, which is how "off by default" (AC5) is stored.
+    # They live on the event so SPL-115/116 can read them without another table.
+    registration_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_capacity: Mapped[int | None] = mapped_column(Integer)
     organiser: Mapped[Account] = relationship(
         back_populates="event_requests", foreign_keys=[organiser_account_id]
     )
@@ -552,6 +583,29 @@ class EventStatusHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RegistrationSettingsChange(Base):
+    """One enabling or change of an event's registration settings (CS-E19-S1); never edited."""
+
+    __tablename__ = "registration_settings_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # All three previous values are null for the first enabling.
+    previous_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    previous_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    previous_capacity: Mapped[int | None] = mapped_column(Integer)
+    opens_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
 
 
 class ClarificationRequest(Base):
