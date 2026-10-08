@@ -100,7 +100,11 @@ def _event_booking(
     query = select(VenueBooking).where(
         VenueBooking.id == booking_id, VenueBooking.event_request_id == event_request_id
     )
-    booking = session.scalar(query.with_for_update() if lock else query)
+    from app.exact_venue_bookings import lock_booking
+
+    booking = lock_booking(session, booking_id, g.user_id) if lock else session.scalar(query)
+    if booking is not None and booking.event_request_id != event_request_id:
+        abort(404, NOT_FOUND)
     if booking is None:
         abort(404, NOT_FOUND)
     return booking

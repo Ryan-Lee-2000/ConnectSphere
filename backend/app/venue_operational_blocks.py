@@ -89,6 +89,9 @@ def register_venue_operational_block_routes(app: Flask) -> None:
     @require_roles(Role.VENUE_STAFF)
     def remove_operational_block(venue_id: int, block_id: int):
         with Session(app.extensions["engine"]) as session:
+            from app.exact_venue_bookings import lock_venue
+
+            lock_venue(session, venue_id)
             block = session.scalar(
                 select(VenueOperationalBlock).where(
                     VenueOperationalBlock.id == block_id,
@@ -115,6 +118,9 @@ def record_operational_block(
 ) -> tuple[VenueOperationalBlock, int]:
     """Create a block and atomically mark overlapping active bookings."""
 
+    from app.exact_venue_bookings import lock_venue
+
+    lock_venue(session, venue_id)
     marked_at = created_at or datetime.now(timezone.utc)
     lock_venue_slots(
         session,
@@ -178,6 +184,32 @@ def _mark_overlapping_bookings_for_review(
         .distinct()
         .order_by(VenueBooking.id)
     ).all()
+    from app.exact_venue_bookings import interval_from_json
+    from app.venue_timing import legacy_slot_interval
+
+    exact = session.scalars(
+        select(VenueBooking).where(
+            VenueBooking.venue_id == block.venue_id,
+            VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
+            VenueBooking.exact_timing.is_not(None),
+        )
+    ).all()
+    known = {booking.id for booking in bookings}
+    for booking in exact:
+        if not booking.exact_timing or booking.id in known:
+            continue
+        interval = interval_from_json(booking.exact_timing["occupied"])
+        first = max(block.start_date, interval.start.date())
+        last = min(block.end_date, interval.end.date())
+        days = {first, last} if first <= last else set()
+        if (last - first).days > 1:
+            days.add(first + timedelta(days=1))
+        if any(
+            interval.overlaps(legacy_slot_interval(day, slot))
+            for day in days
+            for slot in block.slots
+        ):
+            bookings.append(booking)
     for booking in bookings:
         booking.requires_review = True
         booking.review_trigger_block_id = block.id

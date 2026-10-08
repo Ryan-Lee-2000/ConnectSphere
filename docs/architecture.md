@@ -220,3 +220,13 @@ remain protected by their historical boundaries; old gaps do not become new open
 No booking snapshot is inferred from mutable event details. The current exact mode is a search-only
 integration surface pending booking, timed-block, reassessment and notification consumers. See the
 [contract and verification](development/SPL-129.md) before enabling shared rollout.
+
+
+## Exact-time booking writes (SPL-137)
+
+Exact requests store immutable timing and requirement snapshots on the existing RLS-protected
+booking aggregate. Requested/Approved status activates the exact occupied interval; terminal states
+release it while retaining evidence. Legacy claims stay intact, and each representation respects the
+other. Request, approval, release, venue/profile edits and block writes share the ordered transaction
+boundary documented in [SPL-137](development/SPL-137.md). The gate stays off pending combined release
+integration. Cancellation's shared helper is delivered here; arrangement UI remains a SPL-131 handoff.

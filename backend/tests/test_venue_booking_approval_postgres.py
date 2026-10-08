@@ -146,7 +146,7 @@ def _seed_booking(engine, ids, organisation_id, venue_id, day):
 
 
 def _race(app, calls):
-    """Run the calls together, holding each until it is about to take the booking row lock."""
+    """Run the calls together, holding each until it is about to take the first aggregate lock."""
 
     app_engine = app.extensions["engine"]
     barrier = threading.Barrier(len(calls), timeout=10)
@@ -154,7 +154,7 @@ def _race(app, calls):
     guard = threading.Lock()
 
     def align(_connection, _cursor, statement, _parameters, _context, _executemany):
-        if "FOR UPDATE" not in statement:
+        if "FOR UPDATE" not in statement and "FOR NO KEY UPDATE" not in statement:
             return
         with guard:
             if threading.get_ident() in released:

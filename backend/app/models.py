@@ -303,6 +303,11 @@ class VenueBooking(Base):
     review_marked_by_account_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
+    # SPL-137 immutable request evidence; status controls whether this interval is active.
+    exact_timing: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB(), "postgresql"))
+    reviewed_requirements: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
     # SPL-77. The request as submitted, kept on the booking so it survives released occupancy.
     # Nullable because SPL-83/SPL-89 fixtures create bookings without a request.
     layout: Mapped[str | None] = mapped_column(Text)

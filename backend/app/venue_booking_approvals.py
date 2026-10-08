@@ -146,7 +146,9 @@ def _booking(session: Session, booking_id: int, *, lock: bool = False) -> VenueB
     if booking_id > MAX_EVENT_REQUEST_ID:
         abort(404, NOT_FOUND)
     query = select(VenueBooking).where(VenueBooking.id == booking_id)
-    booking = session.scalar(query.with_for_update() if lock else query)
+    from app.exact_venue_bookings import lock_booking
+
+    booking = lock_booking(session, booking_id) if lock else session.scalar(query)
     if booking is None:
         abort(404, NOT_FOUND)
     return booking
@@ -172,6 +174,8 @@ def _recheck_recorded_slots(session: Session, booking: VenueBooking) -> None:
     rechecked by ``transition_booking_status`` over the booking's claimed rows.
     """
 
+    if booking.exact_timing:
+        return
     recorded = _recorded_slots(booking)
     lock_venue_slots(session, booking.venue_id, recorded)
     for day, slot in recorded:

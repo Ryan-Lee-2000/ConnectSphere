@@ -86,7 +86,7 @@ def register_venue_routes(app: Flask) -> None:
     def create_venue_layout(venue_id: int):
         attributes = _layout_attributes(_request_json())
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id)
+            _find_venue(session, venue_id, lock=True)
             _ensure_layout_is_unique(session, venue_id, attributes["layout"])
             layout = VenueLayout(venue_id=venue_id, **attributes)
             session.add(layout)
@@ -99,7 +99,7 @@ def register_venue_routes(app: Flask) -> None:
     def update_venue_layout(venue_id: int, layout_id: int):
         attributes = _layout_attributes(_request_json())
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id)
+            _find_venue(session, venue_id, lock=True)
             layout = _find_layout(session, venue_id, layout_id)
             if layout.layout != attributes["layout"]:
                 _ensure_layout_is_unique(session, venue_id, attributes["layout"])
@@ -113,7 +113,7 @@ def register_venue_routes(app: Flask) -> None:
     @require_roles(Role.VENUE_STAFF)
     def delete_venue_layout(venue_id: int, layout_id: int):
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id)
+            _find_venue(session, venue_id, lock=True)
             layout = _find_layout(session, venue_id, layout_id)
             session.delete(layout)
             session.commit()
@@ -255,7 +255,7 @@ def _find_venue(session: Session, venue_id: int, *, lock=False) -> Venue:
         select(Venue)
         .where(Venue.id == venue_id)
         .options(selectinload(Venue.layouts))
-        .with_for_update()
+        .with_for_update(key_share=True)
         if lock
         else select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
     )
