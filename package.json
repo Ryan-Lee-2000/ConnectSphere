@@ -21,7 +21,9 @@
     "build": "pnpm --dir frontend build",
     "test": "pnpm --dir frontend test",
     "typecheck": "pnpm --dir frontend typecheck",
-    "e2e": "node scripts/run-e2e.mjs"
+    "e2e": "node scripts/run-e2e.mjs",
+    "e2e:record": "node scripts/run-e2e.mjs --config playwright.evidence.config.ts",
+    "e2e:report": "playwright show-report artifacts/e2e-evidence/report"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

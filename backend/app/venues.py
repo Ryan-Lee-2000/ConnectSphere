@@ -2,13 +2,14 @@
 
 from typing import Any
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, current_app, g, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.models import Role, Venue, VenueLayout
 from app.slots import OPERATING_SLOTS
+from app.venue_timing import validate_intervals, validate_minutes
 
 
 def register_venue_routes(app: Flask) -> None:
@@ -41,7 +42,9 @@ def register_venue_routes(app: Flask) -> None:
             venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
             return jsonify(
                 venues=[_serialize_venue_summary(venue) for venue in venues],
-                capabilities={"can_manage": Role.VENUE_STAFF.value in g.account_roles},
+                capabilities={
+                    "can_manage": Role.VENUE_STAFF.value in g.account_roles,
+                },
             )
 
     @app.get("/api/venues/<int:venue_id>")
@@ -51,7 +54,9 @@ def register_venue_routes(app: Flask) -> None:
             venue = _find_venue(session, venue_id)
             return jsonify(
                 venue=_serialize_venue(venue),
-                capabilities={"can_manage": Role.VENUE_STAFF.value in g.account_roles},
+                capabilities={
+                    "can_manage": Role.VENUE_STAFF.value in g.account_roles,
+                },
             )
 
     @app.patch("/api/venues/<int:venue_id>")
@@ -61,7 +66,9 @@ def register_venue_routes(app: Flask) -> None:
         attributes = _venue_attributes(data, partial=True)
         layouts = _layout_list(data["layouts"]) if "layouts" in data else None
         with Session(app.extensions["engine"]) as session:
-            venue = _find_venue(session, venue_id)
+            venue = _find_venue(session, venue_id, lock=True)
+            if "setup_minutes" in attributes:
+                venue.timing_revision += 1
             for name, value in attributes.items():
                 setattr(venue, name, value)
             if layouts is not None:
@@ -131,14 +138,32 @@ def _venue_attributes(data: dict[str, Any], *, partial: bool) -> dict[str, Any]:
         "setup_buffer_slots",
         "turnaround_buffer_slots",
         "layouts",
+        "setup_minutes",
+        "turnaround_minutes",
+        "operating_intervals",
     }
     unexpected = set(data) - allowed
     if unexpected:
         abort(400, f"Unexpected venue field: {sorted(unexpected)[0]}.")
     if partial and not data:
         abort(400, "At least one venue field is required.")
-
     attributes: dict[str, Any] = {}
+    timing_fields = {"setup_minutes", "turnaround_minutes", "operating_intervals"}
+    if timing_fields.intersection(data):
+        if not current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
+            abort(409, "Exact venue timing is not enabled.")
+        if not timing_fields.issubset(data):
+            abort(400, "Save setup, turnaround and operating intervals together.")
+        try:
+            attributes.update(
+                setup_minutes=validate_minutes(data["setup_minutes"]),
+                turnaround_minutes=validate_minutes(data["turnaround_minutes"]),
+                operating_intervals=validate_intervals(data["operating_intervals"]),
+            )
+        except ValueError as exc:
+            abort(400, str(exc))
+        if not partial:
+            attributes["timing_revision"] = 1
     if not partial or "name" in data:
         attributes["name"] = _required_text(data.get("name"), "Venue name")
     if not partial or "location" in data:
@@ -225,9 +250,14 @@ def _single_adjacent_slot(value: Any, label: str) -> int:
     return value
 
 
-def _find_venue(session: Session, venue_id: int) -> Venue:
+def _find_venue(session: Session, venue_id: int, *, lock=False) -> Venue:
     venue = session.scalar(
-        select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
+        select(Venue)
+        .where(Venue.id == venue_id)
+        .options(selectinload(Venue.layouts))
+        .with_for_update()
+        if lock
+        else select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
     )
     if venue is None:
         abort(404, "Venue not found.")
@@ -269,8 +299,30 @@ def _serialize_venue(venue: Venue) -> dict[str, Any]:
         "setup_buffer_slots": venue.setup_buffer_slots,
         "turnaround_buffer_slots": venue.turnaround_buffer_slots,
         "layouts": [_serialize_layout(layout) for layout in venue.layouts],
+        **(timing_details(venue) if current_app.config["EXACT_VENUE_TIMING_ENABLED"] else {}),
     }
 
 
 def _serialize_layout(layout: VenueLayout) -> dict[str, Any]:
     return {"id": layout.id, "layout": layout.layout, "capacity": layout.capacity}
+
+
+def timing_details(venue):
+    ready = (
+        venue.setup_minutes is not None
+        and venue.turnaround_minutes is not None
+        and venue.operating_intervals is not None
+    )
+    return {
+        "setup_minutes": venue.setup_minutes,
+        "turnaround_minutes": venue.turnaround_minutes,
+        "operating_intervals": venue.operating_intervals,
+        "timing_revision": venue.timing_revision,
+        "timing_readiness": "ready" if ready else "configuration_required",
+        "timing_review_reasons": []
+        if ready
+        else [
+            "Confirm actual daily operating hours and minute buffers; "
+            "legacy slot settings are retained."
+        ],
+    }

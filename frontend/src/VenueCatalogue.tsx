@@ -17,6 +17,7 @@ import { AnimatePresence, m } from 'motion/react';
 import type { AccountRole } from './roles';
 import { SLOTS, slotLabel } from './slots';
 import { VenueOperationalBlocks } from './VenueOperationalBlocks';
+import { VenueTimingSettings } from './VenueTimingSettings';
 
 export type VenueLayout = { id: number; layout: string; capacity: number };
 type LayoutDraft = { id?: number; layout: string; customLayout: string; capacity: string };
@@ -30,6 +31,9 @@ export type Venue = {
   operating_slots: string[];
   setup_buffer_slots: number;
   turnaround_buffer_slots: number;
+  setup_minutes?: number | null;
+  turnaround_minutes?: number | null;
+  operating_intervals?: number[][] | null;
   layouts: VenueLayout[];
 };
 export type VenueSummary = Pick<Venue, 'id' | 'name' | 'location'>;
@@ -166,7 +170,7 @@ export function VenueCatalogue({
       {!editor && venues.length > 0 && <div className="venue-marketplace" aria-label="Venue catalogue results">
         {venues.map((venue, index) => <VenueCard key={venue.id} venue={venue} index={index} selected={selected?.id === venue.id} onSelect={() => toggleVenue(venue.id)} order={index * 2} />)}
         <AnimatePresence initial={false}>
-          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails venue={selected} canManage={canManage} api={api} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
+          {selected && <m.div className="venue-card-details" key={selected.id} style={{ order: detailOrder }} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2, ease: 'easeOut' }}><VenueDetails onTimingSaved={() => void selectVenue(selected.id)} venue={selected} canManage={canManage} api={api} onEdit={() => { setEditingVenue(selected); setEditor('edit'); }} /></m.div>}
         </AnimatePresence>
       </div>}
       {!editor && venues.length === 0 && <div className="catalogue-empty"><Building2 size={28} /><h3>No venues to browse yet</h3><p>{canManage ? 'Build the catalogue by creating the first venue profile.' : 'Venue profiles will appear here when Venue Staff add them.'}</p>{canManage && <button type="button" className="primary icon-button" onClick={() => setEditor('create')}><Plus size={18} />Create first venue</button>}</div>}
@@ -184,15 +188,16 @@ function VenueCard({ venue, index, selected, onSelect, order }: { venue: VenueSu
   </m.button>;
 }
 
-function VenueDetails({ venue, canManage, api, onEdit }: { venue: Venue; canManage: boolean; api?: ApiRequest; onEdit: () => void }) {
+function VenueDetails({ venue, canManage, api, onEdit, onTimingSaved }: { venue: Venue; canManage: boolean; api?: ApiRequest; onEdit: () => void; onTimingSaved: () => void }) {
   return <article className="venue-profile" aria-labelledby="venue-name">
     <div className="detail-heading venue-profile__heading"><div><p className="eyebrow">Venue profile</p><h3 id="venue-name">{venue.name}</h3><p className="location"><MapPin size={16} />{venue.location || 'Location not recorded'}</p></div>{canManage && <button type="button" className="icon-button" onClick={onEdit}><Pencil size={16} />Edit venue</button>}</div>
     {venue.description && <p className="venue-profile__description">{venue.description}</p>}
+    {canManage && api && venue.operating_intervals !== undefined && <VenueTimingSettings key={venue.id} venue={venue} api={api} onSaved={onTimingSaved} />}
     <div className="venue-profile__operating-grid">
-      <section className="detail-panel detail-panel--slots"><div className="detail-panel__heading"><Clock3 size={18} /><div><h4>Operating availability</h4><p>Slots in which this venue can host an event.</p></div></div>
+      <section className="detail-panel detail-panel--slots"><div className="detail-panel__heading"><Clock3 size={18} /><div><h4>{venue.operating_intervals !== undefined ? 'Previous slot availability' : 'Operating availability'}</h4><p>{venue.operating_intervals !== undefined ? 'Retained for existing slot-based records. Exact-time search uses the confirmed daily hours.' : 'Slots in which this venue can host an event.'}</p></div></div>
         {venue.operating_slots.length ? <ul className="operating-slot-list">{venue.operating_slots.map(slot => <li key={slot}><BadgeCheck size={16} /><span>{slotLabel(slot)}</span><small>Available</small></li>)}</ul> : <p className="detail-panel__empty">No operating slots recorded.</p>}
       </section>
-      <section className="detail-panel detail-panel--preparation"><div className="detail-panel__heading"><CalendarDays size={18} /><div><h4>Event preparation</h4><p>Applied automatically when availability is checked.</p></div></div>
+      <section className="detail-panel detail-panel--preparation"><div className="detail-panel__heading"><CalendarDays size={18} /><div><h4>{venue.operating_intervals !== undefined ? 'Previous slot preparation' : 'Event preparation'}</h4><p>{venue.operating_intervals !== undefined ? 'Historical slot settings; minute buffers are recorded separately above.' : 'Applied automatically when availability is checked.'}</p></div></div>
         <dl className="preparation-policy"><div className={venue.setup_buffer_slots ? 'is-required' : ''}><dt>Setup</dt><dd>{venue.setup_buffer_slots ? 'Required' : 'Not required'}</dd></div><div className={venue.turnaround_buffer_slots ? 'is-required' : ''}><dt>Turnaround</dt><dd>{venue.turnaround_buffer_slots ? 'Required' : 'Not required'}</dd></div></dl>
       </section>
     </div>

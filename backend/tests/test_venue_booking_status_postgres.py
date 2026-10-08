@@ -15,7 +15,6 @@ from app.event_requests import SINGAPORE
 from app.models import (
     Account,
     Organisation,
-    Venue,
     VenueBooking,
 )
 from sqlalchemy import create_engine, text
@@ -90,9 +89,15 @@ def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
                     "end": time(18),
                 },
             ).scalar_one()
-            venue = Venue(name="Backfill Hall", operating_slots=["PM"])
-            session.add(venue)
-            session.flush()
+            # Keep venue insertion tied to the historical schema too (SPL-129 adds fields).
+            venue_id = session.execute(
+                text(
+                    "INSERT INTO venues (name, facilities, accessibility_features, "
+                    "operating_slots, "
+                    "setup_buffer_slots, turnaround_buffer_slots) VALUES "
+                    "('Backfill Hall', '[]', '[]', '[\"PM\"]', 0, 0) RETURNING id"
+                )
+            ).scalar_one()
             session.execute(
                 text(
                     "INSERT INTO venue_bookings (event_request_id, venue_id, status, "
@@ -103,7 +108,7 @@ def test_tc_spl_79_06_existing_bookings_are_backfilled(fresh_url):
                 ),
                 {
                     "event": planning_event_id,
-                    "venue": venue.id,
+                    "venue": venue_id,
                     "who": coordinator,
                     "req": requested_at,
                     "wd": withdrawn_at,

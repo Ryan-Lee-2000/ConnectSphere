@@ -30,6 +30,9 @@ def create_app(test_config=None):
         SUPABASE_URL=os.getenv("SUPABASE_URL", ""),
         SUPABASE_PUBLISHABLE_KEY=os.getenv("SUPABASE_PUBLISHABLE_KEY", ""),
         MAX_CONTENT_LENGTH=16_384,
+        EXACT_VENUE_TIMING_ENABLED=(
+            os.getenv("EXACT_VENUE_TIMING_ENABLED", "false").lower() == "true"
+        ),
     )
     if test_config:
         app.config.update(test_config)

@@ -103,6 +103,12 @@ class Venue(Base):
     operating_slots: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     setup_buffer_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     turnaround_buffer_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    setup_minutes: Mapped[int | None] = mapped_column(Integer)
+    turnaround_minutes: Mapped[int | None] = mapped_column(Integer)
+    operating_intervals: Mapped[list[list[int]] | None] = mapped_column(JSON)
+    timing_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     layouts: Mapped[list["VenueLayout"]] = relationship(
         back_populates="venue", cascade="all, delete-orphan", order_by="VenueLayout.id"
     )

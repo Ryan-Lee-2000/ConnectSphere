@@ -99,3 +99,16 @@ it('[TC-SPL-73-05] applies editable facility, accessibility and location filters
   expect(await screen.findByText('No venues are available for this search.')).toBeTruthy();
   expect(request).toHaveBeenCalledWith('/api/event-requests/12/available-venues?date=2026-10-12&slot=AM&expected_attendance=120&preferred_room_layout=&required_facility=Projector&required_facility=PA+system&accessibility_need=&location_preference=Rooftop%2C+Marina+Centre');
 });
+
+
+it('[TC-SPL-129-02] searches quarter-hour Singapore times and displays both intervals', async () => {
+  const request = vi.fn(async (path: string) => ({ ok: true, json: async () => path.includes('venue-filter-options') ? { filter_options: {}, capabilities: { exact_venue_timing: true } } : path.includes('available-venues') ? { venues: [{ id: 2, name: 'Exact Hall', location: 'Singapore', matching_layouts: [{ layout: 'theatre', capacity: 100 }], timing: { event: { start: '2026-10-12T10:00:00+08:00', end: '2026-10-12T12:00:00+08:00' }, occupied: { start: '2026-10-12T09:30:00+08:00', end: '2026-10-12T12:45:00+08:00' }, setup_minutes: 30, turnaround_minutes: 45 } }] } : { bookings: [] } } as Response));
+  render(<VenueAvailabilitySearch accessToken="token" eventId={12} initialDate="2026-10-12" initialStartTime="10:00" initialEndTime="12:00" expectedAttendance={80} preferredRoomLayout={null} request={request} />);
+  expect((await screen.findByLabelText('Event start (SGT)') as HTMLInputElement).value).toBe('10:00');
+  fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+  expect(await screen.findByText('Exact Hall')).toBeTruthy();
+  expect(request).toHaveBeenCalledWith(expect.stringContaining('start_time=10%3A00&end_time=12%3A00'));
+  expect(screen.getByText(/Occupied:.*09:30.*12:45/)).toBeTruthy();
+  expect(screen.getByText('2026-10-12 · 10:00–12:00 SGT')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Request booking' })).toBeNull();
+});

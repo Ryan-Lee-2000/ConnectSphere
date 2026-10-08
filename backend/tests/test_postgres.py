@@ -54,11 +54,77 @@ def test_empty_baseline_migration_is_rerunnable():
                 conn.execute(text("select version_num from alembic_version")).scalar()
                 == "sprint0_base"
             )
+        # TC-SPL-129-08: upgrade populated legacy evidence, not only an empty schema.
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "s2_clarification_responses"],
+            check=True,
+            env={**os.environ, "DATABASE_URL": url},
+        )
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO venues (id, name, facilities, accessibility_features, "
+                    "operating_slots, "
+                    "setup_buffer_slots, turnaround_buffer_slots) "
+                    "VALUES (99129, 'Legacy timing fixture', '[]', '[]', '[\"AM\",\"PM\"]', 1, 0)"
+                )
+            )
+            conn.execute(text("INSERT INTO organisations (id,name) VALUES (99129,'Legacy client')"))
+            conn.execute(
+                text(
+                    "INSERT INTO accounts (id,display_name) "
+                    "VALUES ('00000000-0000-0000-0000-000000099129','Legacy owner')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO event_requests (id,organiser_account_id,organisation_id,"
+                    "name,status,required_facilities,accessibility_needs,registration_required) "
+                    "VALUES (99129,'00000000-0000-0000-0000-000000099129',"
+                    "99129,'Legacy event','draft','[]','[]',false)"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO venue_bookings (id,event_request_id,venue_id,status) "
+                    "VALUES (99129,99129,99129,'requested')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO venue_booking_occupancy "
+                    "(booking_id,venue_id,occupancy_date,slot,kind) "
+                    "VALUES (99129,99129,'2026-10-12','AM','setup')"
+                )
+            )
+            evidence_before = (
+                conn.execute(text("SELECT * FROM venue_booking_occupancy WHERE booking_id=99129"))
+                .mappings()
+                .one()
+            )
         for _ in range(2):
             subprocess.run(
                 [sys.executable, "-m", "alembic", "upgrade", "head"],
                 check=True,
                 env={**os.environ, "DATABASE_URL": url},
+            )
+        with engine.begin() as conn:
+            venue = conn.execute(text("SELECT * FROM venues WHERE id=99129")).mappings().one()
+            assert venue["operating_slots"] == ["AM", "PM"]
+            assert venue["setup_buffer_slots"] == 1
+            assert venue["setup_minutes"] is None and venue["turnaround_minutes"] is None
+            assert venue["operating_intervals"] is None and venue["timing_revision"] == 0
+            assert (
+                conn.execute(text("SELECT * FROM venue_booking_occupancy WHERE booking_id=99129"))
+                .mappings()
+                .one()
+                == evidence_before
+            )
+            # Remove only these test-owned rows, retaining the migrated schema for later checks.
+            for table in ("venue_bookings", "event_requests", "venues", "organisations"):
+                conn.execute(text(f"DELETE FROM {table} WHERE id=99129"))
+            conn.execute(
+                text("DELETE FROM accounts WHERE id='00000000-0000-0000-0000-000000099129'")
             )
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         assert len(heads) == 1, "Resolve competing migration heads before merging"

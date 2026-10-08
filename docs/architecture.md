@@ -209,3 +209,14 @@ Flask serves the built React files in the production Docker image. The enabled d
 workflow rebuilds the verified commit on Render; this is not promotion of an immutable CI image.
 Hosted Auth, the empty baseline and the main deployment path have been verified. No paid services,
 hosted migrations or deployments are part of ordinary local development.
+
+
+## Exact-time venue search (SPL-129)
+
+The additive minute-based venue settings and shared half-open SGT interval helper sit alongside
+legacy slots. `EXACT_VENUE_TIMING_ENABLED` defaults off. When enabled, protected configuration and
+read-only exact search use the same calculation as saved-event suitability. Old active slot claims
+remain protected by their historical boundaries; old gaps do not become new opening-hour closures.
+No booking snapshot is inferred from mutable event details. The current exact mode is a search-only
+integration surface pending booking, timed-block, reassessment and notification consumers. See the
+[contract and verification](development/SPL-129.md) before enabling shared rollout.
