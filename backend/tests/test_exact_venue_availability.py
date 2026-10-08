@@ -271,6 +271,15 @@ def test_tc_spl_129_12_reads_never_mutate_and_gate_preserves_old_workflow(client
         assert session.get(EventRequest, app.config["TEST_EVENT_ID"]).start_time == before
         assert session.query(VenueBooking).count() == 0
         assert session.query(VenueBookingOccupancy).count() == 0
+    # A caller that explicitly supplies time fields receives exact-time behaviour, but the
+    # established slot contract remains available while that newer capability is enabled.
+    old_when_exact_is_enabled = client.get(
+        f"/api/event-requests/{app.config['TEST_EVENT_ID']}/available-venues?date=2026-10-12&slot=AM",
+        headers=headers(),
+    )
+    assert old_when_exact_is_enabled.status_code == 200
+    assert len(old_when_exact_is_enabled.json["venues"]) == 1
+
     app.config["EXACT_VENUE_TIMING_ENABLED"] = False
     assert configure(client, venue_id).status_code == 409
     assert search(client, app).status_code == 409

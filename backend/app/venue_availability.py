@@ -43,11 +43,11 @@ def register_venue_availability_routes(app: Flask) -> None:
         slots; it never creates a booking or reserves a candidate.
         """
 
-        if (
-            app.config["EXACT_VENUE_TIMING_ENABLED"]
-            or "start_time" in request.args
-            or "end_time" in request.args
-        ):
+        # Exact-time search is selected explicitly by its request fields.  This retains the
+        # established slot-search contract for legacy requests and for environments where the
+        # newer capability is deliberately disabled.
+        use_exact_timing = "start_time" in request.args or "end_time" in request.args
+        if use_exact_timing:
             from app.exact_venue_availability import find_exact_venues
 
             return find_exact_venues(app, event_request_id)
