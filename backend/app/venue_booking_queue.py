@@ -119,6 +119,7 @@ def _queue_item(session: Session, booking: VenueBooking, event: EventRequest) ->
         "venue": {"id": venue.id, "name": venue.name},
         "date": _date(booking.booking_date),
         "event_slots": booking.event_slots or [],
+        "timing": booking.exact_timing,
         # SPL-87 derived these when SPL-77 claimed the occupancy, and they are read back rather
         # than re-derived: a venue's buffers may have changed since the request was made, and the
         # queue must show the slots actually held (the same rule SPL-81 approves against).

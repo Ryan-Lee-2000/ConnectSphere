@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.models import (
     ACTIVE_BOOKING_STATUSES,
     BOOKING_STATUSES,
-    Venue,
     VenueBooking,
     VenueBookingOccupancy,
 )
@@ -39,7 +38,9 @@ def claim_venue_occupancy(
 
     if booking.status not in ACTIVE_BOOKING_STATUSES:
         raise ValueError("Only Requested or Approved bookings occupy venue time.")
-    venue = session.get(Venue, booking.venue_id)
+    from app.exact_venue_bookings import lock_venue
+
+    venue = lock_venue(session, booking.venue_id)
     if venue is None:
         raise ValueError("Booking venue does not exist.")
     required = derive_venue_occupancy(
@@ -53,6 +54,7 @@ def claim_venue_occupancy(
         ((occupied.date, occupied.slot) for occupied in required),
     )
     for occupied in required:
+        _refuse_exact_overlap(session, booking, occupied.date, occupied.slot)
         if operational_block_for_slot(session, booking.venue_id, occupied.date, occupied.slot):
             raise VenueOccupancyConflict(occupied.date, occupied.slot, source="operational_block")
         existing = session.scalar(
@@ -105,11 +107,23 @@ def transition_booking_status(
 
     if resulting_status not in BOOKING_STATUSES:
         raise ValueError("Unknown venue-booking status.")
+    if booking.exact_timing and resulting_status == "approved":
+        from flask import abort
+
+        from app.exact_venue_bookings import exact_review_reasons
+
+        reasons = exact_review_reasons(session, booking)
+        if reasons:
+            abort(409, "; ".join(reasons))
+        booking.status = resulting_status
+        session.flush()
+        return
     if resulting_status == "approved":
         occupied_slots = occupancy_for_booking(session, booking.id)
         if not occupied_slots:
             raise ValueError("An Approved booking must occupy venue time.")
         for occupied in occupied_slots:
+            _refuse_exact_overlap(session, booking, occupied.day, occupied.slot)
             if operational_block_for_slot(session, booking.venue_id, occupied.day, occupied.slot):
                 raise VenueOccupancyConflict(
                     occupied.day, occupied.slot, source="operational_block"
@@ -120,3 +134,22 @@ def transition_booking_status(
         )
     booking.status = resulting_status
     session.flush()
+
+
+def _refuse_exact_overlap(session, booking, day, slot):
+    from app.exact_venue_bookings import interval_from_json
+    from app.venue_timing import legacy_slot_interval
+
+    requested = legacy_slot_interval(day, slot)
+    candidates = session.scalars(
+        select(VenueBooking).where(
+            VenueBooking.venue_id == booking.venue_id,
+            VenueBooking.id != booking.id,
+            VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
+        )
+    )
+    for candidate in candidates:
+        if candidate.exact_timing and requested.overlaps(
+            interval_from_json(candidate.exact_timing["occupied"])
+        ):
+            raise VenueOccupancyConflict(day, slot, source="booking")

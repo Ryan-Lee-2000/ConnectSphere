@@ -280,7 +280,25 @@ def _is_available(session: Session, venue: Venue, day: date, event_slots: Iterab
         setup_buffer_slots=venue.setup_buffer_slots,
         turnaround_buffer_slots=venue.turnaround_buffer_slots,
     )
+    from app.exact_venue_bookings import interval_from_json
+    from app.models import VenueBooking
+    from app.venue_timing import legacy_slot_interval
+
+    exact_bookings = session.scalars(
+        select(VenueBooking).where(
+            VenueBooking.venue_id == venue.id,
+            VenueBooking.status.in_(("requested", "approved")),
+        )
+    ).all()
     for occupied in required:
+        if any(
+            booking.exact_timing
+            and legacy_slot_interval(occupied.date, occupied.slot).overlaps(
+                interval_from_json(booking.exact_timing["occupied"])
+            )
+            for booking in exact_bookings
+        ):
+            return False
         if occupied.slot not in venue.operating_slots:
             return False
         if operational_block_for_slot(session, venue.id, occupied.date, occupied.slot):

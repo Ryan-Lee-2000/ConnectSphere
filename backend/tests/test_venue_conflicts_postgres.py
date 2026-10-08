@@ -150,14 +150,15 @@ def booking_block_race(engine):
 
 # SPL-83 AC-2,4 Test-06
 def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_bookings):
+    # SPL-137 acquires the common venue boundary before any legacy slot lock.
     barrier = threading.Barrier(2, timeout=10)
     first_lock_threads: set[int] = set()
     lock = threading.Lock()
 
-    def align_first_shared_slot_lock(
+    def align_first_shared_venue_lock(
         _connection, _cursor, statement, _parameters, _context, _executemany
     ):
-        if "pg_advisory_xact_lock" not in statement:
+        if "FOR NO KEY UPDATE" not in statement:
             return
         thread_id = threading.get_ident()
         with lock:
@@ -166,7 +167,7 @@ def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_b
             first_lock_threads.add(thread_id)
         barrier.wait()
 
-    event.listen(engine, "before_cursor_execute", align_first_shared_slot_lock)
+    event.listen(engine, "before_cursor_execute", align_first_shared_venue_lock)
 
     def claim(booking_id):
         with Session(engine) as session:
@@ -187,7 +188,7 @@ def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_b
         with ThreadPoolExecutor(max_workers=2) as executor:
             results = list(executor.map(claim, concurrent_bookings["booking_ids"]))
     finally:
-        event.remove(engine, "before_cursor_execute", align_first_shared_slot_lock)
+        event.remove(engine, "before_cursor_execute", align_first_shared_venue_lock)
 
     assert sorted(results) == ["conflict", "success"]
     with Session(engine) as session:
@@ -211,14 +212,15 @@ def test_tc_spl_83_06_at_most_one_concurrent_claim_succeeds(engine, concurrent_b
 def test_tc_spl_89_09_booking_and_block_writes_cannot_create_unmarked_overlap(
     engine, booking_block_race
 ):
+    # SPL-137 acquires the common venue boundary before any legacy slot lock.
     barrier = threading.Barrier(2, timeout=10)
     first_lock_threads: set[int] = set()
     guard = threading.Lock()
 
-    def align_first_shared_slot_lock(
+    def align_first_shared_venue_lock(
         _connection, _cursor, statement, _parameters, _context, _executemany
     ):
-        if "pg_advisory_xact_lock" not in statement:
+        if "FOR NO KEY UPDATE" not in statement:
             return
         thread_id = threading.get_ident()
         with guard:
@@ -227,7 +229,7 @@ def test_tc_spl_89_09_booking_and_block_writes_cannot_create_unmarked_overlap(
             first_lock_threads.add(thread_id)
         barrier.wait()
 
-    event.listen(engine, "before_cursor_execute", align_first_shared_slot_lock)
+    event.listen(engine, "before_cursor_execute", align_first_shared_venue_lock)
 
     def claim_booking():
         with Session(engine) as session:
@@ -268,7 +270,7 @@ def test_tc_spl_89_09_booking_and_block_writes_cannot_create_unmarked_overlap(
             claim_result = claim_future.result(timeout=15)
             assert block_future.result(timeout=15) == "created"
     finally:
-        event.remove(engine, "before_cursor_execute", align_first_shared_slot_lock)
+        event.remove(engine, "before_cursor_execute", align_first_shared_venue_lock)
 
     with Session(engine) as session:
         booking = session.get(VenueBooking, booking_block_race["booking_id"])

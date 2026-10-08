@@ -142,8 +142,8 @@ def test_tc_spl_78_19_concurrent_withdrawals_succeed_once(engine, pg_url):
     guard = threading.Lock()
 
     def align(_connection, _cursor, statement, _parameters, _context, _executemany):
-        # Hold both requests until each is about to take the booking row lock.
-        if "FOR UPDATE" not in statement:
+        # Hold both requests until each is about to take the first aggregate lock.
+        if "FOR UPDATE" not in statement and "FOR NO KEY UPDATE" not in statement:
             return
         with guard:
             if threading.get_ident() in released:

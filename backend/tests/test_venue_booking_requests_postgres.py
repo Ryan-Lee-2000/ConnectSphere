@@ -177,7 +177,7 @@ def test_tc_spl_77_13_concurrent_requests_for_one_event_create_one_booking(engin
 
     results = _race(
         app,
-        "FOR UPDATE",
+        "FOR NO KEY UPDATE",
         [
             ("alice", event_ids["alice"], venue_ids["Venue A"]),
             ("alice", event_ids["alice"], venue_ids["Venue B"]),
@@ -206,7 +206,7 @@ def test_tc_spl_77_18_concurrent_requests_for_one_slot_yield_one_booking(engine,
 
     results = _race(
         app,
-        "pg_advisory_xact_lock",
+        "FROM venues",  # SPL-137 shared boundary precedes legacy slot locks.
         [("alice", event_ids["alice"], hall), ("bob", event_ids["bob"], hall)],
     )
 
