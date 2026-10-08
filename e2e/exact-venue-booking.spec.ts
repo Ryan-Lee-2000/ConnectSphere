@@ -17,7 +17,17 @@ test('[TC-SPL-137-12] coordinator requests and staff approves identical exact ti
     await signIn(page, 'event.coordinator@example.test');
     await page.goto(`/workspace/assigned-events/${eventId}/venue-search`);
     await expect(page.getByLabel('Event start (SGT)')).toHaveValue('10:00');
+    await page.getByLabel('Event start (SGT)').fill('10:15');
     await page.getByRole('button', { name: 'Search venues', exact: true }).click();
+    await page.getByRole('button', { name: new RegExp(venueName!) }).click();
+    await expect(page.getByText(/Booking requires the saved event/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Request booking', exact: true })).toHaveCount(0);
+    await testInfo.attach('Exploratory time cannot be booked', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    await page.getByLabel('Event start (SGT)').fill('10:00');
+    const refreshed = page.waitForResponse(response => response.url().includes('available-venues?') && response.url().includes('start_time=10%3A00'));
+    await page.getByRole('button', { name: 'Search venues', exact: true }).click();
+    await refreshed;
+    await expect(page.getByText(/Booking requires the saved event/)).toHaveCount(0);
     await page.getByRole('button', { name: new RegExp(venueName!) }).click();
     const form = page.getByRole('form', { name: `Request ${venueName}` });
     await expect(form.getByText(/09:30.*12:45/)).toBeVisible();

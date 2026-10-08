@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { VenueBookingRequest } from './VenueBookingRequest';
 import type { ApiRequest } from './api';
 
@@ -26,3 +27,21 @@ it('[TC-SPL-137-05] exact requests offer only the saved required layout', async 
   const picker = await screen.findByLabelText('Booking layout') as HTMLSelectElement;
   expect(Array.from(picker.options).map(option => option.value)).toEqual(['boardroom']);
 });
+
+for (const matching of [false, true]) {
+  it(`[TC-SPL-137-02] booking action requires search to match saved event timing: ${matching}`, async () => {
+    const api = vi.fn(async (path: string) => ({ ok: true, json: async () => path.includes('venue-filter-options')
+      ? { capabilities: { exact_venue_timing: true } }
+      : path.includes('available-venues') ? { venues: [{ id: 1, name: 'Hall', matching_layouts: [{ layout: 'theatre', capacity: 200 }], timing, suitability: { suitable: true, checks: [{ key: 'timing', passed: true, label: 'Timing', detail: 'Available' }], timing: matching ? timing : { ...timing, event: { ...timing.event, start: '2026-10-14T11:00:00+08:00' } } } }] }
+      : { venue: { layouts: [{ layout: 'theatre', capacity: 200 }] } } })) as unknown as ApiRequest;
+    render(<VenueAvailabilitySearch accessToken="test" eventId={12} initialDate="2026-10-14" initialStartTime="10:00" initialEndTime="12:00" expectedAttendance={150} preferredRoomLayout={null} request={api} />);
+    await screen.findByLabelText('Event start (SGT)');
+    fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Hall/ }));
+    if (matching) expect(await screen.findByRole('button', { name: 'Request booking' })).toBeTruthy();
+    else {
+      expect(screen.queryByRole('button', { name: 'Request booking' })).toBeNull();
+      expect(screen.getByText(/Booking requires the saved event/)).toBeTruthy();
+    }
+  });
+}

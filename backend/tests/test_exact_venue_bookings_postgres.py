@@ -162,6 +162,11 @@ def ordered_race(app, first, second):
 @pytest.mark.parametrize("overlap", [True, False])
 def test_tc_07_requests_share_boundary_and_loser_leaves_no_history(scenario, overlap):
     app, venue, events, _ = scenario
+    if not overlap:
+        with Session(app.extensions["engine"]) as session:
+            event = session.get(EventRequest, events[1])
+            event.start_time, event.end_time = time(13, 15), time(14)
+            session.commit()
     later = {} if overlap else {"start_time": "13:15", "end_time": "14:00"}
     a, b = ordered_race(
         app, request_call(events[0], venue), request_call(events[1], venue, **later)

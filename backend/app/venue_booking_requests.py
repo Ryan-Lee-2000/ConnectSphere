@@ -286,7 +286,7 @@ def _exact_reasons(session, booking):
 
 def _request_exact(session, event, venue, layout_name):
     from app.exact_venue_availability import exact_availability
-    from app.exact_venue_bookings import requirements
+    from app.exact_venue_bookings import requirements, saved_event_interval
     from app.venue_timing import parse_event_interval
 
     data = request.get_json()
@@ -298,6 +298,16 @@ def _request_exact(session, event, venue, layout_name):
         interval = parse_event_interval(data["date"], data["start_time"], data["end_time"])
     except ValueError as exc:
         abort(400, str(exc))
+    try:
+        saved_interval = saved_event_interval(event)
+    except ValueError as exc:
+        abort(409, str(exc))
+    if interval != saved_interval:
+        abort(
+            409,
+            "Requested date and times must match the saved event. "
+            "Search again using its recorded schedule.",
+        )
     selected = _selected_layout(venue.layouts, layout_name, event)
     failed = [
         check["label"] for check in profile_suitability_checks(venue, event) if not check["passed"]

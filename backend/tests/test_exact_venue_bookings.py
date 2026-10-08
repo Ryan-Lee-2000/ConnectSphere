@@ -1,8 +1,10 @@
 """SPL-137 acceptance cases through protected booking APIs."""
 
+from datetime import time
+
 import pytest
 import test_venue_booking_requests as legacy
-from app.models import Venue
+from app.models import EventRequest, Venue
 from sqlalchemy.orm import Session
 
 base_app = legacy.app
@@ -20,7 +22,7 @@ def client(app):
 
 
 def scenario(app):
-    event = legacy.make_event(app)
+    event = legacy.make_event(app, start=time(10), end=time(12))
     venue = legacy.add_venue(app)
     with Session(app.extensions["engine"]) as session:
         row = session.get(Venue, venue)
@@ -70,9 +72,10 @@ def test_tc_01_exact_request_and_approval_preserve_reviewed_interval(app, client
 def test_tc_04_overlap_refused_touching_allowed_and_block_marks_exact(app, client):
     event, venue = scenario(app)
     first = request_booking(client, event, venue).json["booking"]
-    second_event = legacy.make_event(app, name="Second event")
+    second_event = legacy.make_event(app, name="Second event", start=time(12), end=time(13))
     conflict = request_booking(client, second_event, venue, start_time="12:00", end_time="13:00")
     assert conflict.status_code == 409
+    second_event = legacy.make_event(app, name="Touching event", start=time(13, 15), end=time(14))
     touching = request_booking(client, second_event, venue, start_time="13:15", end_time="14:00")
     assert touching.status_code == 201
     block = client.post(
@@ -131,7 +134,8 @@ def test_tc_02_authority(app, client, token, status):
 
 
 @pytest.mark.parametrize(
-    "change", ["event", "buffers", "hours", "layout", "facilities", "accessibility"]
+    "change",
+    ["event", "date", "start", "end", "buffers", "hours", "layout", "facilities", "accessibility"],
 )
 def test_tc_03_05_changed_requirements_refuse_approval_without_mutation(app, client, change):
     from app.models import EventRequest
@@ -142,6 +146,12 @@ def test_tc_03_05_changed_requirements_refuse_approval_without_mutation(app, cli
         row = session.get(Venue, venue)
         if change == "event":
             session.get(EventRequest, event).expected_attendance = 180
+        if change == "date":
+            session.get(EventRequest, event).proposed_date = legacy.EVENT_DATE.replace(day=15)
+        if change == "start":
+            session.get(EventRequest, event).start_time = time(10, 15)
+        if change == "end":
+            session.get(EventRequest, event).end_time = time(11, 45)
         if change == "buffers":
             row.setup_minutes = 60
         if change == "hours":
@@ -168,7 +178,7 @@ def test_tc_03_05_changed_requirements_refuse_approval_without_mutation(app, cli
 def test_tc_10_12_release_is_booking_specific_and_preserves_history(app, client, action):
     event, venue = scenario(app)
     booking = request_booking(client, event, venue).json["booking"]
-    other = legacy.make_event(app, name="Other")
+    other = legacy.make_event(app, name="Other", start=time(14), end=time(15))
     second = request_booking(client, other, venue, start_time="14:00", end_time="15:00").json[
         "booking"
     ]
@@ -184,7 +194,13 @@ def test_tc_10_12_release_is_booking_specific_and_preserves_history(app, client,
     assert len(body["history"]) == 2
     assert body["venue_booking_request"]["timing"] == booking["timing"]
     assert (
-        request_booking(client, event, venue, start_time="14:00", end_time="15:00").status_code
+        request_booking(
+            client,
+            legacy.make_event(app, name="Still blocked", start=time(14), end=time(15)),
+            venue,
+            start_time="14:00",
+            end_time="15:00",
+        ).status_code
         == 409
     )
     assert request_booking(client, event, venue).status_code == 201
@@ -257,7 +273,7 @@ def test_tc_11_cancel_helper_checks_assignment_and_repeated_release(app, client)
 @pytest.mark.parametrize("legacy_first", [True, False])
 def test_tc_06_mixed_exact_and_legacy_bookings_protect_each_other(app, client, legacy_first):
     event, venue = scenario(app)
-    other = legacy.make_event(app, name="Legacy or exact")
+    other = legacy.make_event(app, name="Legacy or exact", start=time(10), end=time(12))
     if legacy_first:
         app.config["EXACT_VENUE_TIMING_ENABLED"] = False
         result = client.post(
@@ -285,11 +301,13 @@ def test_tc_06_mixed_exact_and_legacy_bookings_protect_each_other(app, client, l
         assert search.json["venues"] == []
 
 
-@pytest.mark.parametrize("start,end", [("10:00", "10:15"), ("23:45", "24:00")])
+@pytest.mark.parametrize("start,end", [("10:00", "10:15"), ("00:00", "00:15")])
 def test_tc_01_zero_buffer_and_midnight_snapshots(app, client, start, end):
     event, venue = scenario(app)
     with Session(app.extensions["engine"]) as session:
         row = session.get(Venue, venue)
+        session.get(EventRequest, event).start_time = time.fromisoformat(start)
+        session.get(EventRequest, event).end_time = time.fromisoformat(end)
         row.setup_minutes = 0
         row.turnaround_minutes = 0
         session.commit()
@@ -297,8 +315,7 @@ def test_tc_01_zero_buffer_and_midnight_snapshots(app, client, start, end):
     assert response.status_code == 201, response.json
     timing = response.json["booking"]["timing"]
     assert timing["event"] == timing["occupied"]
-    if end == "24:00":
-        assert timing["event"]["end"] == "2026-10-15T00:00:00+08:00"
+    assert timing["event"]["start"] == f"2026-10-14T{start}:00+08:00"
 
 
 def test_tc_02_nonplanning_and_approval_cannot_amend_request(app, client):
@@ -352,3 +369,46 @@ def test_tc_05_selected_layout_must_match_saved_requirement(app, client):
         session.commit()
     assert request_booking(client, event, venue, layout="theatre").status_code == 409
     assert request_booking(client, event, venue, layout="boardroom").status_code == 201
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"date": "2026-10-15"}, {"start_time": "10:15"}, {"end_time": "11:45"}, {"end_time": "24:00"}],
+)
+def test_tc_02_request_must_match_saved_event_schedule(app, client, changes):
+    event, venue = scenario(app)
+    response = request_booking(client, event, venue, **changes)
+    assert response.status_code == 409, response.json
+    assert "saved event" in response.json["error"]
+    body = client.get(f"/api/event-requests/{event}/venue-booking-status", headers=headers()).json
+    assert body["venue_booking_request"] is None
+    assert body["history"] == []
+
+
+def test_tc_03_preexisting_mismatched_booking_cannot_be_approved(app, client):
+    from app.models import VenueBooking
+
+    event, venue = scenario(app)
+    booking = request_booking(client, event, venue).json["booking"]
+    # Reproduce a record accepted by the old implementation, with an unchanged parent snapshot.
+    with Session(app.extensions["engine"]) as session:
+        row = session.get(VenueBooking, booking["id"])
+        timing = dict(row.exact_timing)
+        timing["event"] = {"start": "2026-10-14T11:00:00+08:00", "end": "2026-10-14T12:00:00+08:00"}
+        timing["occupied"] = {
+            "start": "2026-10-14T10:30:00+08:00",
+            "end": "2026-10-14T12:45:00+08:00",
+        }
+        row.exact_timing = timing
+        session.commit()
+    response = client.post(
+        f"/api/venue-bookings/{booking['id']}/approve", json={}, headers=headers("venue-staff")
+    )
+    assert response.status_code == 409, response.json
+    body = client.get(f"/api/event-requests/{event}/venue-booking-status", headers=headers()).json
+    assert body["venue_booking_request"]["status"] == "requested"
+    assert any(
+        "saved event" in reason for reason in body["venue_booking_request"]["review_reasons"]
+    )
+    assert body["venue_booking_request"]["timing"] == timing
+    assert len(body["history"]) == 1

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models import EventCoordinatorAssignment, EventRequest, Venue, VenueBooking
-from app.venue_timing import Interval
+from app.venue_timing import Interval, parse_event_interval
 
 REQUIREMENT_FIELDS = (
     "expected_attendance",
@@ -85,6 +85,19 @@ def interval_from_json(value):
     return Interval(datetime.fromisoformat(value["start"]), datetime.fromisoformat(value["end"]))
 
 
+def saved_event_interval(event):
+    """SPL-137 retains SPL-77's saved-event schedule for a single booking."""
+    if not event.proposed_date or not event.start_time or not event.end_time:
+        raise ValueError("Record a valid saved event date and quarter-hour times.")
+    if any((value.second or value.microsecond) for value in (event.start_time, event.end_time)):
+        raise ValueError("Review the saved event's time precision before requesting a booking.")
+    return parse_event_interval(
+        event.proposed_date.isoformat(),
+        event.start_time.strftime("%H:%M"),
+        event.end_time.strftime("%H:%M"),
+    )
+
+
 def exact_review_reasons(session, booking):
     if not booking.exact_timing or booking.status not in ("requested", "approved"):
         return []
@@ -103,6 +116,11 @@ def exact_review_reasons(session, booking):
         check["detail"] for check in profile_suitability_checks(venue, event) if not check["passed"]
     )
     try:
+        if interval_from_json(booking.exact_timing["event"]) != saved_event_interval(event):
+            reasons.append(
+                "Booking date and times do not match the saved event. "
+                "Review and submit a new request."
+            )
         available, detail, timing = exact_availability(
             session,
             venue,
