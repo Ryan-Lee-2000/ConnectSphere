@@ -92,8 +92,11 @@ def _review(session: Session, booking: VenueBooking) -> dict[str, Any]:
         if booking.review_trigger_block_id
         else None
     )
+    from app.exact_venue_bookings import exact_review_reasons
+
+    reasons = exact_review_reasons(session, booking)
     return {
-        "requires_review": booking.requires_review,
+        "requires_review": booking.requires_review or bool(reasons),
         "marked_at": _timestamp(booking.review_marked_at),
         "trigger_block": (
             {

@@ -8,9 +8,9 @@ suitability checks, SPL-87 preparation derivation and SPL-83/SPL-89 atomic occup
 from datetime import date, datetime
 from typing import Any
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, current_app, g, jsonify, request
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
@@ -49,16 +49,14 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 abort(404, NOT_FOUND)
             # Row lock: concurrent requests for one event queue here, so the one-active-booking
             # check below always sees the other request's committed booking (AC4).
-            event = session.scalar(
-                select(EventRequest).where(EventRequest.id == event_request_id).with_for_update()
-            )
+            from app.exact_venue_bookings import lock_event, lock_venue
+
+            event = lock_event(session, event_request_id, g.user_id)
             if event is None:
                 abort(404, NOT_FOUND)
             if event.status != PLANNING:
                 abort(409, "A venue booking can be requested only while the event is in Planning.")
-            venue = session.scalar(
-                select(Venue).options(selectinload(Venue.layouts)).where(Venue.id == venue_id)
-            )
+            venue = lock_venue(session, venue_id)
             if venue is None:
                 abort(404, "Venue not found.")
             if session.scalar(
@@ -69,6 +67,8 @@ def register_venue_booking_request_routes(app: Flask) -> None:
             ):
                 abort(409, "This event already has an active venue-booking request.")
 
+            if app.config["EXACT_VENUE_TIMING_ENABLED"]:
+                return _request_exact(session, event, venue, layout_name)
             event_slots = _event_slots(event)
             selected_layout = _selected_layout(venue.layouts, layout_name, event)
             failed = _failed_checks(venue, event, event_slots, selected_layout)
@@ -154,6 +154,9 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         "venue": {"id": venue.id, "name": venue.name},
         "date": _date(booking.booking_date),
         "event_slots": booking.event_slots or [],
+        "timing": booking.exact_timing,
+        "reviewed_requirements": booking.reviewed_requirements,
+        "review_reasons": _exact_reasons(session, booking),
         "setup": _slot(booking.setup_date, booking.setup_slot),
         "turnaround": _slot(booking.turnaround_date, booking.turnaround_slot),
         "layout": booking.layout,
@@ -184,10 +187,15 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
 
 
 def _booking_request_body() -> tuple[int, str]:
-    """Exactly a venue and a layout; everything else is server-owned (AC3, AC6)."""
+    """Allow only reviewed inputs; identity, requirements and status remain server-owned."""
 
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or set(data) != {"venue_id", "layout"}:
+    allowed = {"venue_id", "layout"}
+    if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
+        allowed |= {"date", "start_time", "end_time", "venue_revision"}
+    if not isinstance(data, dict) or set(data) != allowed:
+        if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
+            abort(400, "Send venue, layout, date, start/end times and the reviewed venue revision.")
         abort(400, "Send only the venue and the selected layout.")
     venue_id, layout = data["venue_id"], data["layout"]
     if isinstance(venue_id, bool) or not isinstance(venue_id, int) or venue_id <= 0:
@@ -268,3 +276,74 @@ def _timestamp(value: datetime | None) -> str | None:
     # SQLite drops the offset; every stored time is Singapore time (Q36).
     aware = value if value.tzinfo else value.replace(tzinfo=SINGAPORE)
     return aware.astimezone(SINGAPORE).isoformat()
+
+
+def _exact_reasons(session, booking):
+    from app.exact_venue_bookings import exact_review_reasons
+
+    return exact_review_reasons(session, booking)
+
+
+def _request_exact(session, event, venue, layout_name):
+    from app.exact_venue_availability import exact_availability
+    from app.exact_venue_bookings import requirements, saved_event_interval
+    from app.venue_timing import parse_event_interval
+
+    data = request.get_json()
+    if type(data["venue_revision"]) is not int:
+        abort(400, "Send the reviewed venue revision.")
+    if data["venue_revision"] != venue.timing_revision:
+        abort(409, "Venue timing changed. Search again and review the updated interval.")
+    try:
+        interval = parse_event_interval(data["date"], data["start_time"], data["end_time"])
+    except ValueError as exc:
+        abort(400, str(exc))
+    try:
+        saved_interval = saved_event_interval(event)
+    except ValueError as exc:
+        abort(409, str(exc))
+    if interval != saved_interval:
+        abort(
+            409,
+            "Requested date and times must match the saved event. "
+            "Search again using its recorded schedule.",
+        )
+    selected = _selected_layout(venue.layouts, layout_name, event)
+    failed = [
+        check["label"] for check in profile_suitability_checks(venue, event) if not check["passed"]
+    ]
+    if selected is None or (
+        event.preferred_room_layout
+        and layout_name.casefold() != event.preferred_room_layout.strip().casefold()
+    ):
+        failed.append(LAYOUT_CHECK)
+    available, detail, timing = exact_availability(session, venue, interval)
+    if failed or not available:
+        abort(409, "; ".join(failed + ([] if available else [detail])))
+    timing["venue_revision"] = venue.timing_revision
+    booking = VenueBooking(
+        event_request_id=event.id,
+        venue_id=venue.id,
+        status=REQUESTED,
+        layout=selected.layout,
+        expected_attendance=event.expected_attendance,
+        booking_date=interval.start.date(),
+        event_slots=[],
+        exact_timing=timing,
+        reviewed_requirements=requirements(event),
+        requested_by_account_id=g.user_id,
+        requested_at=datetime.now(SINGAPORE),
+    )
+    session.add(booking)
+    session.flush()
+    record_booking_transition(
+        session,
+        booking.id,
+        action="request",
+        previous_status=None,
+        resulting_status=REQUESTED,
+        actor_account_id=g.user_id,
+        changed_at=booking.requested_at,
+    )
+    session.commit()
+    return jsonify(booking=serialize_venue_booking(session, booking)), 201

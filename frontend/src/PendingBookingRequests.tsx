@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, ClipboardList, Inbox } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
+import { bookingInterval, type BookingTiming } from './ExactBookingTiming';
 
 // SPL-80 (CS-E10-S2): Venue Staff's queue of venue-booking requests awaiting review. Read-only —
 // deciding on a request happens on SPL-81's review page, which each row opens.
@@ -8,6 +9,7 @@ import { defaultRequest, responseError, type ApiRequest } from './api';
 type Person = { id: string; name: string };
 type PreparationSlot = { date: string; slot: string } | null;
 type PendingRequest = {
+  timing?: BookingTiming | null;
   id: number;
   event: { id: number; name: string };
   venue: { id: number; name: string };
@@ -94,7 +96,7 @@ export function PendingBookingRequests({ accessToken, onOpen, request }: {
             <th scope="col">Event</th>
             <th scope="col">Venue</th>
             <th scope="col">Date</th>
-            <th scope="col">Slots</th>
+            <th scope="col">Time</th>
             <th scope="col">Layout</th>
             <th scope="col">Attendance</th>
             <th scope="col">Requested by</th>
@@ -118,10 +120,13 @@ export function PendingBookingRequests({ accessToken, onOpen, request }: {
             <td>{item.venue.name}</td>
             <td>{item.date ? dateName(item.date) : 'Not recorded'}</td>
             <td>
-              {item.event_slots.map(slotName).join(', ') || 'None'}
-              <span className="request-preparation">
-                Setup {preparation(item.setup)} · Turnaround {preparation(item.turnaround)}
-              </span>
+              {item.timing ? <>
+                {bookingInterval(item.timing.event)}
+                <span className="request-preparation">Occupied: {bookingInterval(item.timing.occupied)}</span>
+              </> : <>
+                {item.event_slots.map(slotName).join(', ') || 'None'}
+                <span className="request-preparation">Setup {preparation(item.setup)} · Turnaround {preparation(item.turnaround)}</span>
+              </>}
             </td>
             <td>{item.layout ? layoutName(item.layout) : 'Not recorded'}</td>
             <td>{item.expected_attendance ?? 'Not recorded'}</td>

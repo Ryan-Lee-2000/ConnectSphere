@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, Check, X } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
+import { ExactBookingTiming, BookingReviewReasons } from './ExactBookingTiming';
 
 // SPL-81 (CS-E10-S3): Venue Staff review one venue-booking request and approve it with an optional
 // note. SPL-80's pending list links here. SPL-82 (CS-E10-S4) adds Reject beside Approve, with a
@@ -124,9 +125,11 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     ['Event', event.name],
     ['Venue', booking.venue.name],
     ['Date', dateName(booking.date)],
-    ['Event slots', booking.event_slots.map(slotName).join(', ')],
-    ['Setup', preparation(booking.setup)],
-    ['Turnaround', preparation(booking.turnaround)],
+    ...(booking.timing ? [] : [
+      ['Event slots', booking.event_slots.map(slotName).join(', ')],
+      ['Setup', preparation(booking.setup)],
+      ['Turnaround', preparation(booking.turnaround)],
+    ] as [string, string][]),
     ['Layout', layoutName(booking.layout)],
     ['Expected attendance', String(booking.expected_attendance)],
     ['Requested by', booking.requested_by?.name ?? 'Not recorded'],
@@ -152,6 +155,19 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
   return <section className="venue-booking-review" aria-labelledby="venue-booking-review-title">
     <p className="eyebrow">Venue booking</p>
     <h1 id="venue-booking-review-title">Review venue-booking request</h1>
+    {booking.timing && <ExactBookingTiming timing={booking.timing} />}
+    <BookingReviewReasons reasons={booking.review_reasons} />
+    {booking.reviewed_requirements && <section aria-label="Requirements at request">
+      <h2>Requirements at request</h2>
+      <dl>
+        <div><dt>Required facilities</dt><dd>{booking.reviewed_requirements.required_facilities.join(', ') || 'None recorded'}</dd></div>
+        <div><dt>Accessibility needs</dt><dd>{booking.reviewed_requirements.accessibility_needs.join(', ') || 'None recorded'}</dd></div>
+        <div><dt>Preferred layout</dt><dd>{booking.reviewed_requirements.preferred_room_layout || 'No preference'}</dd></div>
+        <div><dt>Location preference</dt><dd>{booking.reviewed_requirements.location_preference || 'No preference'}</dd></div>
+        {booking.reviewed_requirements.facilities_notes && <div><dt>Facilities notes</dt><dd>{booking.reviewed_requirements.facilities_notes}</dd></div>}
+        {booking.reviewed_requirements.venue_notes && <div><dt>Venue notes</dt><dd>{booking.reviewed_requirements.venue_notes}</dd></div>}
+      </dl>
+    </section>}
     <ul className="venue-booking-review__details" aria-label="Request details">
       {details.map(([label, value]) => <li key={label}><span>{label}</span><strong>{value}</strong></li>)}
     </ul>
@@ -165,7 +181,7 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
         <span><strong>Marked for review.</strong>{' '}
           {block ? <>Venue Staff recorded "{block.reason}" for {dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slotName).join(', ')}).</> : null}
           {review.marked_at ? <> Marked {timeName(review.marked_at)}.</> : null}
-          {' '}Approval rechecks every slot before it goes ahead.
+          {' '}{booking.timing ? 'Approval rechecks the complete occupied interval and current requirements.' : 'Approval rechecks every slot before it goes ahead.'}
         </span>
       </p>
     )}
@@ -199,7 +215,7 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       )}
       {confirming && (
         <div className="venue-booking-panel__confirm" role="group" aria-label="Confirm approval">
-          <p>Approve this request? Its event, setup and turnaround slots stay reserved for {event.name}. Every slot is rechecked first.</p>
+          <p>{booking.timing ? `Approve this request? The advertised and full occupied times shown above stay reserved for ${event.name}. Current availability and requirements are rechecked first.` : `Approve this request? Its event, setup and turnaround slots stay reserved for ${event.name}. Every slot is rechecked first.`}</p>
           <button className="button button--primary" disabled={approving} onClick={() => void approve()} type="button">{approving ? 'Approving…' : 'Confirm approval'}</button>
           <button className="button" disabled={approving} onClick={() => setConfirming(false)} type="button">Keep reviewing</button>
         </div>

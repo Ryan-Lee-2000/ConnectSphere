@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Undo2 } from 'lucide-react';
 import { responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
+import { ExactBookingTiming, BookingReviewReasons } from './ExactBookingTiming';
 import { VenueBookingHistory } from './VenueBookingStatus';
 
 // SPL-78 (CS-E09-S4): the assigned coordinator sees the event's latest venue-booking request and can
@@ -58,7 +59,7 @@ export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn, e
       const body = await response.json() as { booking?: WithdrawableBooking };
       if (!body.booking) throw new Error('Invalid response');
       setBooking(body.booking);
-      setNotice(`Request withdrawn. ${body.booking.venue.name}'s slots are released for other events.`);
+      setNotice(`Request withdrawn. ${body.booking.venue.name}'s ${body.booking.timing ? 'occupied time is' : 'slots are'} released for other events.`);
       setHistoryVersion(version => version + 1);
       onWithdrawn?.();
     } catch { setError('Could not withdraw this request. Try again.'); }
@@ -83,12 +84,14 @@ export function VenueBookingPanel({ api, eventId, refreshKey = 0, onWithdrawn, e
         <span>Withdrawn by {booking.withdrawn_by.name} on {timeName(booking.withdrawn_at)}</span>
       )}
     </div>
+    {booking.timing && <ExactBookingTiming timing={booking.timing} />}
+    <BookingReviewReasons reasons={booking.review_reasons} />
     {booking.status === 'requested' && !confirming && (
       <button className="button" onClick={() => { setConfirming(true); setNotice(null); }} type="button"><Undo2 size={16} />Withdraw request</button>
     )}
     {booking.status === 'requested' && confirming && (
       <div className="venue-booking-panel__confirm" role="group" aria-label="Confirm withdrawal">
-        <p>Withdraw this request? Its event, setup and turnaround slots will be released, and it cannot be reinstated. You can submit a new request afterwards.</p>
+        <p>{booking.timing ? 'Withdraw this request? Its full occupied interval will be released, and it cannot be reinstated. You can submit a new request afterwards.' : 'Withdraw this request? Its event, setup and turnaround slots will be released, and it cannot be reinstated. You can submit a new request afterwards.'}</p>
         <button className="button button--primary" disabled={withdrawing} onClick={() => void withdraw()} type="button">{withdrawing ? 'Withdrawing…' : 'Confirm withdrawal'}</button>
         <button className="button" disabled={withdrawing} onClick={() => setConfirming(false)} type="button">Keep request</button>
       </div>

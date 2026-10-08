@@ -23,10 +23,11 @@ def timing_for(venue, event):
         "occupied": occupied.serialize(),
         "setup_minutes": venue.setup_minutes,
         "turnaround_minutes": venue.turnaround_minutes,
+        "venue_revision": venue.timing_revision,
     }
 
 
-def exact_availability(session, venue, event):
+def exact_availability(session, venue, event, *, exclude_booking_id=None):
     if (
         venue.setup_minutes is None
         or venue.turnaround_minutes is None
@@ -47,7 +48,18 @@ def exact_availability(session, venue, event):
             .options(selectinload(VenueBooking.occupancy))
         ).all()
         for booking in bookings:
-            if not booking.occupancy:
+            if booking.id == exclude_booking_id:
+                continue
+            if booking.exact_timing:
+                from app.exact_venue_bookings import interval_from_json
+
+                if occupied.overlaps(interval_from_json(booking.exact_timing["occupied"])):
+                    return (
+                        False,
+                        "An active booking protects part of the occupied interval.",
+                        timing,
+                    )
+            if not booking.occupancy and not booking.exact_timing:
                 return False, "An active legacy booking needs timing review.", timing
             for claim in booking.occupancy:
                 if occupied.overlaps(legacy_slot_interval(claim.day, claim.slot)):
