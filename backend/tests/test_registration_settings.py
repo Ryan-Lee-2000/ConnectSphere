@@ -32,6 +32,7 @@ from app.models import (
     AccountRole,
     Base,
     EventCoordinatorAssignment,
+    EventRegistration,
     EventRequest,
     Organisation,
     RegistrationSettingsChange,
@@ -436,6 +437,46 @@ def test_tc_spl_114_09_a_later_close_after_the_close_has_passed_reopens(
 
     assert response.status_code == 200
     assert response.json["registration"]["state"] == "open"
+
+
+# TC-SPL-114-10 (runs from SPL-116 onward, which creates registrations)
+# SPL-114 AC-4 Test-10
+def test_tc_spl_114_10_capacity_never_goes_below_those_registered(app, client, event_id):
+    save(client, event_id, VALID)
+    # Three accounts Registered (only one Registered row per account is allowed), one Withdrawn.
+    with Session(app.extensions["engine"]) as session:
+        for index, (account_id, status) in enumerate(
+            (
+                (ATTENDEE, "registered"),
+                (ORGANISER, "registered"),
+                (VENUE_STAFF, "registered"),
+                (MANAGER, "withdrawn"),
+            )
+        ):
+            session.add(
+                EventRegistration(
+                    event_request_id=event_id,
+                    attendee_account_id=account_id,
+                    status=status,
+                    name=f"Attendee {index}",
+                    email=f"attendee{index}@example.test",
+                    contact_number="+65 9000 0000",
+                    registered_at=NOW,
+                )
+            )
+        session.commit()
+
+    below = save(client, event_id, {**VALID, "capacity": 2})
+    equal = save(client, event_id, {**VALID, "capacity": 3})
+
+    assert below.status_code == 400
+    assert below.json["field"] == "capacity"
+    assert below.json["error"] == (
+        "Registration capacity cannot be lower than the 3 attendees already registered."
+    )
+    # Withdrawn registrations free their place, so 3 (not 4) is the floor.
+    assert equal.status_code == 200
+    assert equal.json["registration"]["capacity"] == 3
 
 
 # AC5 — off by default; closed until enabled and the open time is reached
