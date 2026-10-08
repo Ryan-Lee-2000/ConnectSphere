@@ -3,8 +3,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import { SLOTS, type SlotKey } from './slots';
 import type { Venue, VenueSummary } from './VenueCatalogue';
+import type { EquipmentType } from './EquipmentCatalogue';
 
-type EquipmentLineDraft = { id?: number; equipmentType: string; quantity: string; notes: string };
+type EquipmentLineDraft = { id?: number; equipmentType: string; quantity: string; notes: string; selectionMode?: 'catalogue' | 'custom' };
 type EquipmentLine = { id: number; equipment_type: string; quantity: number; notes: string | null };
 type EventRequest = {
   id: number;
@@ -94,6 +95,7 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
   const [locationPreference, setLocationPreference] = useState('');
   const [venueNotes, setVenueNotes] = useState('');
   const [venues, setVenues] = useState<VenueSummary[]>([]);
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([]);
   const [venueId, setVenueId] = useState<number | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [registrationRequired, setRegistrationRequired] = useState(false);
@@ -154,6 +156,19 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
       if (!active || !response.ok) return;
       const body = await response.json() as { venues: VenueSummary[] };
       setVenues(body.venues);
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!api) return;
+    let active = true;
+    void (async () => {
+      const response = await api('/api/equipment-types');
+      if (!active || !response.ok) return;
+      const body = await response.json() as { equipment_types: EquipmentType[] };
+      setEquipmentTypes(Array.isArray(body.equipment_types) ? body.equipment_types : []);
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -510,7 +525,7 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
       </fieldset>
       <label>Venue notes<textarea value={venueNotes} onChange={event => setVenueNotes(event.target.value)} rows={2} /></label>
 
-      <EquipmentLineManager lines={equipmentLines} onChange={setEquipmentLines} />
+      <EquipmentLineManager equipmentTypes={equipmentTypes} lines={equipmentLines} onChange={setEquipmentLines} />
 
       <fieldset>
         <legend>Registration</legend>
@@ -526,21 +541,33 @@ export function EventRequestForm({ accessToken, request, draftId, onSubmitted, o
   </section>;
 }
 
-function EquipmentLineManager({ lines, onChange }: { lines: EquipmentLineDraft[]; onChange: (lines: EquipmentLineDraft[]) => void }) {
+function EquipmentLineManager({ equipmentTypes, lines, onChange }: { equipmentTypes: EquipmentType[]; lines: EquipmentLineDraft[]; onChange: (lines: EquipmentLineDraft[]) => void }) {
   const updateLine = (index: number, field: 'equipmentType' | 'quantity' | 'notes', value: string) =>
     onChange(lines.map((line, current) => current === index ? { ...line, [field]: value } : line));
+  const chooseEquipment = (index: number, value: string) => onChange(lines.map((line, current) => {
+    if (current !== index) return line;
+    return { ...line, equipmentType: value, selectionMode: 'catalogue' };
+  }));
+  const requestCustomEquipment = (index: number) => onChange(lines.map((line, current) => current === index ? { ...line, equipmentType: '', selectionMode: 'custom' } : line));
   const addLine = () => onChange([...lines, { equipmentType: '', quantity: '', notes: '' }]);
   const removeLine = (index: number) => onChange(lines.filter((_, current) => current !== index));
   return <section className="layouts">
     <div className="detail-heading"><div><h4>Equipment requirements (optional)</h4><p className="hint">Add zero or more items Technical Support Staff should prepare.</p></div></div>
     {lines.length === 0 ? <p>None recorded.</p> : <div className="layout-editor-list">
-      {lines.map((line, index) => <div className="layout-editor-row equipment-editor-row" key={line.id ?? `new-${index}`}>
-        <span className="layout-row-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-        <label><span>Equipment type</span><input aria-label={`Equipment type ${index + 1}`} value={line.equipmentType} onChange={event => updateLine(index, 'equipmentType', event.target.value)} required /></label>
-        <label><span>Quantity</span><input aria-label={`Equipment quantity ${index + 1}`} type="number" min="1" step="1" value={line.quantity} onChange={event => updateLine(index, 'quantity', event.target.value)} required /></label>
-        <label><span>Technical notes</span><input aria-label={`Equipment notes ${index + 1}`} value={line.notes} onChange={event => updateLine(index, 'notes', event.target.value)} /></label>
-        <button type="button" className="layout-remove" aria-label={`Remove equipment line ${index + 1}`} title="Remove equipment line" onClick={() => removeLine(index)}><Trash2 size={17} /></button>
-      </div>)}
+      {lines.map((line, index) => {
+        const isCatalogueType = equipmentTypes.some(item => item.name === line.equipmentType);
+        const isCustomRequest = line.selectionMode === 'custom' || Boolean(line.equipmentType) && !isCatalogueType;
+        return <div className="layout-editor-row equipment-editor-row" key={line.id ?? `new-${index}`}>
+          <div className="equipment-editor-row__header"><span className="layout-row-index" aria-hidden="true">Equipment {String(index + 1).padStart(2, '0')}</span><button type="button" className="layout-remove" aria-label={`Remove equipment line ${index + 1}`} title="Remove equipment line" onClick={() => removeLine(index)}><Trash2 size={17} /></button></div>
+          <div className="equipment-editor-row__fields">
+            <label><span>Choose from catalogue</span><select aria-label={`Equipment type ${index + 1}`} value={isCustomRequest ? '' : line.equipmentType} onChange={event => chooseEquipment(index, event.target.value)} required={!isCustomRequest}><option value="" disabled>Select equipment</option>{equipmentTypes.map(item => <option key={item.id} value={item.name}>{item.name}{item.location ? ` — ${item.location}` : ''}</option>)}</select></label>
+            <label><span>Quantity</span><input aria-label={`Equipment quantity ${index + 1}`} type="number" min="1" step="1" value={line.quantity} onChange={event => updateLine(index, 'quantity', event.target.value)} required /></label>
+            <label><span>Technical notes <em>Optional</em></span><input aria-label={`Equipment notes ${index + 1}`} value={line.notes} onChange={event => updateLine(index, 'notes', event.target.value)} /></label>
+          </div>
+          {isCustomRequest
+            ? <div className="equipment-editor-row__custom"><div><strong>Request equipment not in the catalogue</strong><p>This will be reviewed by Technical Support before it can be arranged.</p></div><label><span>Requested equipment</span><input aria-label={`Requested equipment ${index + 1}`} placeholder="Describe the equipment needed" value={line.equipmentType} onChange={event => updateLine(index, 'equipmentType', event.target.value)} required /></label><button className="equipment-editor-row__catalogue-link" type="button" onClick={() => chooseEquipment(index, '')}>Use catalogue instead</button></div>
+            : <button className="equipment-editor-row__request-link" type="button" onClick={() => requestCustomEquipment(index)}>Can’t find the equipment you need?</button>}
+      </div>})}
     </div>}
     <div className="layout-form"><button type="button" className="icon-button" onClick={addLine}><Plus size={16} />Add equipment</button></div>
   </section>;

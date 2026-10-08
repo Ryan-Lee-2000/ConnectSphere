@@ -39,6 +39,11 @@ fixtures = {
         "organisation": None,
         "roles": ("event_operations_manager",),
     },
+    "technical.support@example.test": {
+        "display_name": "Taylor Goh",
+        "organisation": None,
+        "roles": ("technical_support_staff",),
+    },
 }
 with httpx.Client(base_url=api, headers=headers, timeout=15) as client:
     page = 1
@@ -180,5 +185,5 @@ finally:
 
 print(
     "Local Auth fixtures ready for organiser, venue staff, event coordinator and "
-    "operations manager roles."
+    "operations manager and technical support roles."
 )

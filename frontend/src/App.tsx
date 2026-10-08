@@ -19,6 +19,7 @@ import { AssignedEvents } from './AssignedEvents';
 import { PendingBookingRequests } from './PendingBookingRequests';
 import { VenueBookingReview } from './VenueBookingReview';
 import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
+import { EquipmentCatalogue } from './EquipmentCatalogue';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -69,6 +70,7 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
     return role === 'venue_staff' || role === 'event_coordinator'
       || role === 'event_operations_manager';
   }
+  if (requestedPath === '/workspace/equipment-catalogue') return role === 'technical_support_staff';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -379,6 +381,7 @@ function Workspace({
   const venueRole = activeRole === 'venue_staff' || activeRole === 'event_coordinator';
   const organiserRole = activeRole === 'event_organiser';
   const managerRole = activeRole === 'event_operations_manager';
+  const technicalSupportRole = activeRole === 'technical_support_staff';
   const organisationEventMatch = safePath.match(/^\/workspace\/organisation-events\/(\d+)$/);
   const organisationEventId = organisationEventMatch
     ? Number(organisationEventMatch[1])
@@ -397,6 +400,8 @@ function Workspace({
       ? 'Booking requests workspace'
     : safePath === '/workspace/assignments'
       ? 'Coordinator assignment workspace'
+      : safePath === '/workspace/equipment-catalogue'
+        ? 'Equipment catalogue workspace'
     : venueSearchEventId !== undefined
       ? 'Venue availability search workspace'
     : venueBookingId !== undefined
@@ -473,6 +478,11 @@ function Workspace({
           href="/workspace/venue-calendar"
           onClick={event => { event.preventDefault(); navigate('/workspace/venue-calendar'); }}
         >Venue calendar</a>}
+        {technicalSupportRole && <a
+          aria-current={safePath === '/workspace/equipment-catalogue' ? 'page' : undefined}
+          href="/workspace/equipment-catalogue"
+          onClick={event => { event.preventDefault(); navigate('/workspace/equipment-catalogue'); }}
+        >Equipment catalogue</a>}
         {organiserRole && <a
           aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
           href="/workspace/event-requests"
@@ -575,6 +585,8 @@ function Workspace({
             accessToken={session.access_token}
             key={`${activeRole}:assignments`}
           />
+        ) : safePath === '/workspace/equipment-catalogue' ? (
+          <EquipmentCatalogue accessToken={session.access_token} key={`${activeRole}:equipment-catalogue`} />
         ) : (
           <>
             <p className="eyebrow">{ROLE_LABELS[activeRole]}</p>

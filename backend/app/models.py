@@ -419,6 +419,23 @@ class EquipmentRequirement(Base):
     event_request: Mapped[EventRequest] = relationship(back_populates="equipment_requirements")
 
 
+class EquipmentType(Base):
+    """A pooled equipment type managed by Technical Support Staff."""
+
+    __tablename__ = "equipment_types"
+    __table_args__ = (
+        CheckConstraint("total_stock >= 0", name="ck_equipment_types_non_negative_stock"),
+        UniqueConstraint("normalised_name", name="uq_equipment_types_normalised_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    normalised_name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(Text)
+    total_stock: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class EventCoordinatorAssignment(Base):
     """The single Event Coordinator currently responsible for an event request."""
 

@@ -196,6 +196,41 @@ it('adds and removes equipment lines', async () => {
   expect(screen.getByText('None recorded.')).toBeTruthy();
 });
 
+// SPL-94 AC-2 Test-005 — catalogue items are presented through an explicit selector.
+it('lets an organiser select an equipment catalogue item', async () => {
+  const request = vi.fn(async (path: string) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/equipment-types') return response({ equipment_types: [{
+      id: 4, name: 'Wireless Presentation Kit', description: null, location: 'AV Store', total_stock: 8,
+    }] });
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/equipment-types'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add equipment' }));
+  const selector = screen.getByLabelText('Equipment type 1');
+  expect(screen.getByRole('option', { name: 'Wireless Presentation Kit — AV Store' })).toBeTruthy();
+  fireEvent.change(selector, { target: { value: 'Wireless Presentation Kit' } });
+  expect(selector).toHaveProperty('value', 'Wireless Presentation Kit');
+});
+
+// SPL-94 AC-2 Test-006 — free-text equipment remains an explicit request, not fake inventory.
+it('makes an out-of-catalogue equipment request explicit', async () => {
+  const request = vi.fn(async (path: string) => {
+    if (path === '/api/venues') return response({ venues: [] });
+    if (path === '/api/equipment-types') return response({ equipment_types: [] });
+    return response({}, 404);
+  });
+  render(<EventRequestForm accessToken="token" request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/equipment-types'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add equipment' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Can’t find the equipment you need?' }));
+  const requested = screen.getByLabelText('Requested equipment 1');
+  fireEvent.change(requested, { target: { value: 'Custom stage riser' } });
+  expect(requested).toHaveProperty('value', 'Custom stage riser');
+  expect(screen.getByText(/will be reviewed by Technical Support/i)).toBeTruthy();
+});
+
 // SPL-51 AC-5 Test-011
 // SPL-128 AC-6 Test-06
 it('submits the mandatory fields and shows the mapped slots on success', async () => {
