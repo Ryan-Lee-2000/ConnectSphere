@@ -97,7 +97,7 @@ export function EquipmentCatalogue({ accessToken, request }: { accessToken: stri
       <div className="detail-heading"><div><h3>{editingId === null ? 'Add equipment type' : 'Edit equipment type'}</h3><p className="hint">Names are unique regardless of letter case.</p></div></div>
       <div className="equipment-catalogue__form-grid">
         <label>Equipment type name<input required value={draft.name} onChange={event => update('name', event.target.value)} /></label>
-        <label>Total units in stock<input min="0" required step="1" type="number" value={draft.totalStock} onChange={event => update('totalStock', event.target.value)} /></label>
+        <label>Total units in stock<input min="0" required step="1" type="number" value={draft.totalStock} onChange={event => update('totalStock', event.target.value)} onInvalid={() => setError('Total stock must be a whole number of zero or more.')} /></label>
         <label className="equipment-catalogue__form-wide">Description<textarea value={draft.description} onChange={event => update('description', event.target.value)} rows={2} /></label>
         <label className="equipment-catalogue__form-wide">Storage location<input value={draft.location} onChange={event => update('location', event.target.value)} /></label>
       </div>

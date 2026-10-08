@@ -52,7 +52,10 @@ describe('EquipmentCatalogue', () => {
 
     await screen.findByText('No equipment types yet');
     fireEvent.change(screen.getByLabelText('Equipment type name'), { target: { value: 'Projector' } });
-    fireEvent.change(screen.getByLabelText('Total units in stock'), { target: { value: '-1' } });
+    const stock = screen.getByLabelText('Total units in stock');
+    fireEvent.change(stock, { target: { value: '-1' } });
+    fireEvent.invalid(stock);
+    expect(await screen.findByText('Total stock must be a whole number of zero or more.')).toBeTruthy();
     fireEvent.submit(screen.getByRole('button', { name: 'Add equipment type' }).closest('form')!);
 
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
