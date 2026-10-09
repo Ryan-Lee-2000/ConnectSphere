@@ -9,13 +9,15 @@ import { defaultRequest, responseError, type ApiRequest } from './api';
 
 type Reason = { key: string; label: string; detail: string };
 type SlotEntry = { slot: string; status: string; reasons: Reason[] };
-type DayEntry = { date: string; slots: SlotEntry[] };
-type Calendar = { venue: { id: number; name: string }; start_date: string; end_date: string; days: DayEntry[] };
+type TimedEntry = { start: string; end: string; status: string; reasons: Reason[] };
+type DayEntry = { date: string; slots: SlotEntry[]; intervals?: TimedEntry[] };
+type Calendar = { mode?: 'exact'; venue: { id: number; name: string }; start_date: string; end_date: string; days: DayEntry[] };
 export type CalendarVenue = { id: number; name: string };
 
 // AC2 and AC5: every state a slot can hold, each with its own visible label. "Not operated" is
 // deliberately its own entry so it can never read as Available.
 const STATUS_NAMES: Record<string, string> = {
+  review_required: 'Timing review required',
   available: 'Available',
   requested: 'Requested',
   booked: 'Booked',
@@ -31,6 +33,7 @@ const dateName = (day: string) => new Intl.DateTimeFormat('en-SG', {
 }).format(new Date(`${day}T00:00:00Z`));
 
 function addDays(day: string, count: number) {
+  if (!day) return '';
   const shifted = new Date(`${day}T00:00:00Z`);
   shifted.setUTCDate(shifted.getUTCDate() + count);
   return shifted.toISOString().slice(0, 10);
@@ -43,18 +46,19 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
   const [venueId, setVenueId] = useState(() => venues[0]?.id ?? 0);
-  const [start, setStart] = useState(() => new Date().toISOString().slice(0, 10));
+  const [start, setStart] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
   // The server refuses more than 31 days, so the default range stays well inside it.
   const [days, setDays] = useState(7);
   const [calendar, setCalendar] = useState<Calendar | null>(null);
+  const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const end = addDays(start, days - 1);
 
   useEffect(() => {
-    if (!venueId) return;
+    if (!venueId || !start) { setCalendar(null); setError(null); return; }
     let active = true;
-    setError(null);
+    setError(null); setCalendar(null);
     void api(`/api/venues/${venueId}/occupancy?start_date=${start}&end_date=${end}`)
       .then(async response => {
         if (!response.ok) {
@@ -67,7 +71,7 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
       })
       .catch(() => { if (active) setError('Could not load this venue calendar.'); });
     return () => { active = false; };
-  }, [api, venueId, start, end]);
+  }, [api, venueId, start, end, refresh]);
 
   return <section className="occupancy-calendar" aria-labelledby="occupancy-calendar-heading">
     <header className="catalogue-header">
@@ -75,7 +79,7 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
         <p className="eyebrow"><CalendarRange size={14} /> Venue occupancy</p>
         <h1 id="occupancy-calendar-heading">Venue calendar</h1>
         <p className="catalogue-subtitle">
-          Every operating slot for the chosen venue and dates. Reading this page changes nothing.
+          Occupancy for the chosen venue and dates. All times are Singapore time (SGT).
         </p>
       </div>
     </header>
@@ -96,10 +100,21 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
       </label>
     </div>
 
+    <button type="button" onClick={() => setRefresh(value => value + 1)}>Refresh calendar</button>
     {error && <p className="error" role="alert">{error}</p>}
-    {!calendar && !error && <p role="status">Loading the calendar…</p>}
+    {!start && <p role="status">Choose a start date to view occupancy.</p>}
+    {!calendar && !error && start && venueId !== 0 && <p role="status">Loading the calendar…</p>}
 
-    {calendar && <div className="occupancy-calendar__grid" role="grid" aria-label="Venue occupancy">
+    {calendar?.mode === 'exact' && <div className="occupancy-calendar__exact" aria-label="Exact venue occupancy">
+      {calendar.days.map(day => <section key={day.date} aria-label={dateName(day.date)}>
+        <h2>{dateName(day.date)}</h2>
+        <ul>{day.intervals?.map(entry => <li className={`occupancy-cell occupancy-cell--${entry.status}`} key={entry.start}>
+          <strong>{clockTime(entry.start)} – {entry.end.slice(0, 10) !== day.date ? '24:00' : clockTime(entry.end)} · {STATUS_NAMES[entry.status] || entry.status}</strong>
+          {entry.reasons.map(reason => <span className="occupancy-cell__reason" key={reason.key}>{reason.label}</span>)}
+        </li>)}</ul>
+      </section>)}
+    </div>}
+    {calendar && calendar.mode !== 'exact' && <div className="occupancy-calendar__grid" role="grid" aria-label="Venue occupancy">
       <div className="occupancy-calendar__row occupancy-calendar__row--head" role="row">
         <span role="columnheader">Date</span>
         {SLOTS.map(slot => <span key={slot} role="columnheader">{SLOT_NAMES[slot]}</span>)}
@@ -127,4 +142,8 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
       </div>)}
     </div>}
   </section>;
+}
+
+function clockTime(value: string) {
+  return new Intl.DateTimeFormat('en-SG', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Singapore' }).format(new Date(value));
 }

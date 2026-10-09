@@ -1,7 +1,5 @@
 """SPL-129 database adapter for read-only exact venue timing."""
 
-from datetime import timedelta
-
 from flask import abort, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -76,21 +74,10 @@ def exact_availability(session, venue, event, *, exclude_booking_id=None):
                 VenueOperationalBlock.end_date >= occupied.start.date(),
             )
         ).all()
-        for block in blocks:
-            first = max(block.start_date, occupied.start.date())
-            last = min(block.end_date, occupied.end.date())
-            # At most two edge days plus an interior day: block slots repeat daily.
-            days = {first, last}
-            if (last - first).days > 1:
-                days.add(first + timedelta(days=1))
-            for day in days:
-                for slot in block.slots:
-                    if occupied.overlaps(legacy_slot_interval(day, slot)):
-                        return (
-                            False,
-                            "An operational block covers part of the occupied interval.",
-                            timing,
-                        )
+        from app.venue_operational_blocks import block_overlaps
+
+        if any(block_overlaps(block, occupied) for block in blocks):
+            return False, "An operational block covers part of the occupied interval.", timing
         return True, "Available for the full advertised and preparation interval.", timing
     except ValueError:
         return False, "Venue timing evidence requires review.", None

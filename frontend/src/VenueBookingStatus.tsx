@@ -1,3 +1,4 @@
+import { bookingInterval } from './ExactBookingTiming';
 import { useEffect, useState } from 'react';
 import { CircleAlert } from 'lucide-react';
 import type { ApiRequest } from './api';
@@ -7,7 +8,7 @@ import type { ApiRequest } from './api';
 
 type Actor = { id: string; name: string };
 type HistoryEntry = { action: string; status: string; status_label: string; actor: Actor; changed_at: string; note: string | null };
-type TriggerBlock = { id: number; start_date: string; end_date: string; slots: string[]; reason: string };
+type TriggerBlock = { id: number; start_date: string; end_date: string; slots: string[]; reason: string; timing?: { start: string; end: string } };
 type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
 type EarlierRequest = { id: number; venue: { id: number; name: string }; date: string | null; status: string; status_label: string };
 export type VenueBookingStatusBody = {
@@ -44,7 +45,7 @@ export function VenueBookingHistory({ api, eventId, refreshKey = 0 }: { api: Api
       <p className="venue-booking-history__review" role="note">
         <CircleAlert size={16} aria-hidden="true" />
         <span><strong>Marked for review.</strong>{' '}
-          {block ? <>Venue Staff recorded "{block.reason}" for {dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slot => SLOT_NAMES[slot] || slot).join(', ')}).</> : null}
+          {block ? <>Venue Staff recorded "{block.reason}" for {block.timing ? bookingInterval(block.timing) : <>{dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slot => SLOT_NAMES[slot] || slot).join(', ')})</>}.</> : null}
           {body.review.marked_at ? <> Marked {timeName(body.review.marked_at)}.</> : null}
         </span>
       </p>
