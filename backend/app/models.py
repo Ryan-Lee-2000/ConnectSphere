@@ -10,12 +10,14 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     Time,
     UniqueConstraint,
     Uuid,
+    text,
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,6 +28,24 @@ from app.event_statuses import INITIAL_STATUS, status_check_constraint
 
 class Base(DeclarativeBase):
     pass
+
+
+# CS-E19-S1 (SPL-114) database rules for attendee registration settings. The migration imports
+# these same strings, so the model and the real database enforce identical rules. They are a
+# second line of defence behind the route's own checks in app/registration_settings.py:
+# - complete: the three settings are either all empty (registration off) or all set, never half.
+# - period: registration opens strictly before it closes.
+# - capacity: at least one place.
+REGISTRATION_SETTINGS_COMPLETE = (
+    "(registration_opens_at is null and registration_closes_at is null"
+    " and registration_capacity is null)"
+    " or (registration_opens_at is not null and registration_closes_at is not null"
+    " and registration_capacity is not null)"
+)
+REGISTRATION_PERIOD_ORDER = (
+    "registration_opens_at is null or registration_opens_at < registration_closes_at"
+)
+REGISTRATION_CAPACITY_POSITIVE = "registration_capacity is null or registration_capacity >= 1"
 
 
 class Role(StrEnum):
@@ -200,6 +220,13 @@ class EventRequest(Base):
             "and expected_attendance is not null)",
             name="ck_event_requests_submitted_fields",
         ),
+        CheckConstraint(
+            REGISTRATION_SETTINGS_COMPLETE, name="ck_event_requests_registration_complete"
+        ),
+        CheckConstraint(REGISTRATION_PERIOD_ORDER, name="ck_event_requests_registration_period"),
+        CheckConstraint(
+            REGISTRATION_CAPACITY_POSITIVE, name="ck_event_requests_registration_capacity"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -252,6 +279,12 @@ class EventRequest(Base):
     )
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawal_note: Mapped[str | None] = mapped_column(Text)
+    # CS-E19-S1 (SPL-114). Attendee registration settings, set by the assigned coordinator. All
+    # three stay null until registration is enabled, which is how "off by default" (AC5) is stored.
+    # They live on the event so SPL-115/116 can read them without another table.
+    registration_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_capacity: Mapped[int | None] = mapped_column(Integer)
     organiser: Mapped[Account] = relationship(
         back_populates="event_requests", foreign_keys=[organiser_account_id]
     )
@@ -552,6 +585,73 @@ class EventStatusHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RegistrationSettingsChange(Base):
+    """One enabling or change of an event's registration settings (CS-E19-S1); never edited."""
+
+    __tablename__ = "registration_settings_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # All three previous values are null for the first enabling.
+    previous_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    previous_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    previous_capacity: Mapped[int | None] = mapped_column(Integer)
+    opens_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
+
+
+# CS-E19-S3 (SPL-116). A registration is Registered until the attendee withdraws (SPL-118).
+REGISTRATION_STATUSES = ("registered", "withdrawn")
+# The database's own guarantee for SPL-116 AC5: at most one Registered row per attendee per event.
+# It is a *partial* unique index (only rows WHERE status = 'registered'), so a Withdrawn row stays
+# as history and the attendee can register again. Shared with the migration.
+ONE_ACTIVE_REGISTRATION = "status = 'registered'"
+
+
+class EventRegistration(Base):
+    """One attendee's registration for one event (CS-E19-S3). Rows are kept after withdrawal."""
+
+    __tablename__ = "event_registrations"
+    __table_args__ = (
+        CheckConstraint(
+            "status in (" + ", ".join(repr(status) for status in REGISTRATION_STATUSES) + ")",
+            name="ck_event_registrations_known_status",
+        ),
+        Index(
+            "uq_event_registrations_one_active",
+            "event_request_id",
+            "attendee_account_id",
+            unique=True,
+            postgresql_where=text(ONE_ACTIVE_REGISTRATION),
+            sqlite_where=text(ONE_ACTIVE_REGISTRATION),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Always the signed-in account; the browser never chooses whose registration this is.
+    attendee_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="registered")
+    # The details the attendee submitted (the team's proposed set, Q22).
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    contact_number: Mapped[str] = mapped_column(Text, nullable=False)
+    special_requirements: Mapped[str | None] = mapped_column(Text)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ClarificationRequest(Base):

@@ -254,6 +254,8 @@ def main():
             "backend/tests/test_venue_booking_queue_postgres.py",
             "backend/tests/test_venue_booking_rejection_postgres.py",
             "backend/tests/test_venue_occupancy_calendar_postgres.py",
+            "backend/tests/test_registration_settings_postgres.py",
+            "backend/tests/test_event_registrations_postgres.py",
             "-q",
         )
     elif cmd == "dev":
