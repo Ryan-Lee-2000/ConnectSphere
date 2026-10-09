@@ -616,6 +616,11 @@ REGISTRATION_STATUSES = ("registered", "withdrawn")
 # It is a *partial* unique index (only rows WHERE status = 'registered'), so a Withdrawn row stays
 # as history and the attendee can register again. Shared with the migration.
 ONE_ACTIVE_REGISTRATION = "status = 'registered'"
+# SPL-118: a Registered registration never carries a withdrawal time. The opposite direction (every
+# Withdrawn row has a time) is guaranteed by the withdraw route, not here, because Withdrawn rows
+# written before SPL-118 existed (fixtures and test data) have no time to record. Shared with the
+# migration so the model and the database cannot drift apart.
+REGISTERED_HAS_NO_WITHDRAWAL = "status = 'withdrawn' OR withdrawn_at IS NULL"
 
 
 class EventRegistration(Base):
@@ -626,6 +631,9 @@ class EventRegistration(Base):
         CheckConstraint(
             "status in (" + ", ".join(repr(status) for status in REGISTRATION_STATUSES) + ")",
             name="ck_event_registrations_known_status",
+        ),
+        CheckConstraint(
+            REGISTERED_HAS_NO_WITHDRAWAL, name="ck_event_registrations_withdrawal_time"
         ),
         Index(
             "uq_event_registrations_one_active",
@@ -652,6 +660,8 @@ class EventRegistration(Base):
     contact_number: Mapped[str] = mapped_column(Text, nullable=False)
     special_requirements: Mapped[str | None] = mapped_column(Text)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # SPL-118 AC2: when the attendee withdrew. Empty while the registration is Registered.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ClarificationRequest(Base):
