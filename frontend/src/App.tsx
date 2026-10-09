@@ -15,6 +15,7 @@ import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
 import { EventRequestDrafts } from './EventRequestDrafts';
 import { OrganisationEvents } from './OrganisationEvents';
+import { MyRegistrations } from './MyRegistrations';
 import { AssignedEvents } from './AssignedEvents';
 import { PendingBookingRequests } from './PendingBookingRequests';
 import { VenueBookingReview } from './VenueBookingReview';
@@ -54,6 +55,8 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // coordinator, who reads requests through their own story rather than this view.
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
+  // SPL-117. An attendee's own registrations (AC5); the server enforces ownership and role too.
+  if (requestedPath === '/workspace/my-registrations') return role === 'attendee';
   if (/^\/workspace\/assigned-events\/\d+\/venue-search$/.test(requestedPath)) {
     return role === 'event_coordinator';
   }
@@ -408,6 +411,8 @@ function Workspace({
       ? 'Venue occupancy calendar workspace'
     : safePath === '/workspace/booking-requests'
       ? 'Booking requests workspace'
+    : safePath === '/workspace/my-registrations'
+      ? 'My registrations workspace'
     : safePath === '/workspace/assignments'
       ? 'Coordinator assignment workspace'
       : safePath === '/workspace/equipment-catalogue'
@@ -518,6 +523,12 @@ function Workspace({
           href="/workspace/organisation-events"
           onClick={event => { event.preventDefault(); navigate('/workspace/organisation-events'); }}
         >Organisation events</a>}
+        {/* SPL-117: an attendee's own registrations, where SPL-118's withdraw control lives. */}
+        {activeRole === 'attendee' && <a
+          aria-current={safePath === '/workspace/my-registrations' ? 'page' : undefined}
+          href="/workspace/my-registrations"
+          onClick={event => { event.preventDefault(); navigate('/workspace/my-registrations'); }}
+        >My registrations</a>}
       </nav>
       {pendingRole && (
         <section className="role-switch-warning" aria-labelledby="role-switch-warning-title" role="alert">
@@ -559,6 +570,8 @@ function Workspace({
             key={`${activeRole}:organisation-events:${organisationEventId ?? 'list'}`}
             onNavigate={navigate}
           />
+        ) : safePath === '/workspace/my-registrations' ? (
+          <MyRegistrations accessToken={session.access_token} key={`${activeRole}:my-registrations`} />
         ) : venueBookingId !== undefined ? (
           <VenueBookingReview
             accessToken={session.access_token}

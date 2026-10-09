@@ -839,3 +839,11 @@ button { touch-action: manipulation; }
 .occupancy-calendar__exact h2 { font-size: 1.125rem; }
 .occupancy-calendar__exact ul { list-style: none; padding: 0; margin: 8px 0 0; }
 .occupancy-calendar__exact li { padding: 12px 16px; min-width: 0; overflow-wrap: anywhere; }
+/* SPL-117: an attendee's own registrations. Each entry wraps so its details and SPL-118's
+   withdraw control open full-width underneath it. */
+.my-registrations__item { flex-wrap: wrap; align-items: flex-start; }
+.my-registrations__details { display: grid; gap: var(--space-1); }
+.my-registrations__details h2 { margin: 0; font-size: 1.15rem; }
+.my-registrations__details p, .my-registrations__empty { margin: 0; color: var(--color-muted-slate); }
+.my-registrations__panel { flex-basis: 100%; display: grid; gap: var(--space-1); }
+.my-registrations__panel p { margin: 0; }
