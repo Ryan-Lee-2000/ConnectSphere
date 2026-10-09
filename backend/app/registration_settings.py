@@ -15,7 +15,8 @@ How a save is checked (``PUT /api/event-requests/<id>/registration``), in order
 4. Shape: exactly ``opens_at``, ``closes_at`` and ``capacity``, each well formed -> otherwise 400
    naming the field (AC2, AC3).
 5. Rules: opens before it closes, closes before the event starts (AC2); capacity no larger than
-   the booked layout (AC3) -> otherwise 400 naming the field. No Approved booking at all -> 409.
+   the booked layout (AC3) and no smaller than the attendees already Registered (AC4) -> otherwise
+   400 naming the field. No Approved booking at all -> 409.
 6. Save: write the new settings and one history row in the same transaction (AC6).
 
 Any refusal happens before anything is written, so "nothing is saved" holds for every refusal.
@@ -37,6 +38,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import SINGAPORE
 from app.models import (
+    EventRegistration,
     EventRequest,
     RegistrationSettingsChange,
     Role,
@@ -121,9 +123,17 @@ def register_registration_settings_routes(app: Flask) -> None:
                     "the booked layout's capacity.",
                 )
 
-            # AC4 also says capacity may never go below the attendees already Registered. That
-            # needs registrations, which arrive with SPL-116; until then no event has any, so
-            # every capacity of 1 or more meets it. SPL-116 adds the check (QA-SPL-114 TC-10).
+            # Step 5 (AC4). Capacity may never drop below the attendees already Registered (SPL-116
+            # creates registrations). Withdrawn registrations do not count: they freed their place.
+            # Holding the event row lock here also stops a registration slipping in between this
+            # count and the save, because SPL-116 takes the same lock before it registers anyone.
+            registered = registered_count(session, event.id)
+            if capacity < registered:
+                _refuse(
+                    "capacity",
+                    f"Registration capacity cannot be lower than the {registered} attendees "
+                    "already registered.",
+                )
 
             # Step 6 (AC6). Record the previous values before overwriting them. The history row and
             # the new settings commit together, so there is never a change without its record.
@@ -152,6 +162,22 @@ def event_start(event: EventRequest) -> datetime:
     """When the event starts: its date plus its start time, in Singapore time (AC2's deadline)."""
 
     return datetime.combine(event.proposed_date, event.start_time, tzinfo=SINGAPORE)
+
+
+def registered_count(session: Session, event_request_id: int) -> int:
+    """How many places are taken: the event's registrations that are still Registered.
+
+    Shared by SPL-114 (the capacity floor) and SPL-116 (places remaining, and "is it full?").
+    """
+
+    return session.scalar(
+        select(func.count())
+        .select_from(EventRegistration)
+        .where(
+            EventRegistration.event_request_id == event_request_id,
+            EventRegistration.status == "registered",
+        )
+    )
 
 
 def max_capacity(session: Session, event_request_id: int) -> int | None:

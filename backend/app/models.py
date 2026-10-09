@@ -10,12 +10,14 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     Time,
     UniqueConstraint,
     Uuid,
+    text,
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -606,6 +608,50 @@ class RegistrationSettingsChange(Base):
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
+
+
+# CS-E19-S3 (SPL-116). A registration is Registered until the attendee withdraws (SPL-118).
+REGISTRATION_STATUSES = ("registered", "withdrawn")
+# The database's own guarantee for SPL-116 AC5: at most one Registered row per attendee per event.
+# It is a *partial* unique index (only rows WHERE status = 'registered'), so a Withdrawn row stays
+# as history and the attendee can register again. Shared with the migration.
+ONE_ACTIVE_REGISTRATION = "status = 'registered'"
+
+
+class EventRegistration(Base):
+    """One attendee's registration for one event (CS-E19-S3). Rows are kept after withdrawal."""
+
+    __tablename__ = "event_registrations"
+    __table_args__ = (
+        CheckConstraint(
+            "status in (" + ", ".join(repr(status) for status in REGISTRATION_STATUSES) + ")",
+            name="ck_event_registrations_known_status",
+        ),
+        Index(
+            "uq_event_registrations_one_active",
+            "event_request_id",
+            "attendee_account_id",
+            unique=True,
+            postgresql_where=text(ONE_ACTIVE_REGISTRATION),
+            sqlite_where=text(ONE_ACTIVE_REGISTRATION),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Always the signed-in account; the browser never chooses whose registration this is.
+    attendee_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="registered")
+    # The details the attendee submitted (the team's proposed set, Q22).
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    contact_number: Mapped[str] = mapped_column(Text, nullable=False)
+    special_requirements: Mapped[str | None] = mapped_column(Text)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ClarificationRequest(Base):

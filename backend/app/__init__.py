@@ -10,6 +10,7 @@ from .authorization import associate_account_roles, authenticated_only
 from .coordinator_assignment import register_coordinator_assignment_routes
 from .equipment_catalogue import register_equipment_catalogue_routes
 from .equipment_requirements import register_equipment_requirement_routes
+from .event_registrations import register_event_registration_routes
 from .event_requests import register_event_request_routes
 from .event_review import register_event_review_routes
 from .registration_settings import register_registration_settings_routes
@@ -122,6 +123,7 @@ def create_app(test_config=None):
     register_coordinator_assignment_routes(app)
     register_event_review_routes(app)
     register_registration_settings_routes(app)
+    register_event_registration_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")
