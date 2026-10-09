@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "s3_equipment_catalogue"
-down_revision = "s3_venue_exact_timing"
+down_revision = "s3_exact_booking_snapshots"
 branch_labels = None
 depends_on = None
 
