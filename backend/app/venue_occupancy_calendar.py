@@ -59,6 +59,10 @@ def register_venue_occupancy_calendar_routes(app: Flask) -> None:
         start, end = _requested_range()
         with Session(app.extensions["engine"]) as session:
             venue = _find_venue(session, venue_id)
+            if app.config["EXACT_VENUE_TIMING_ENABLED"]:
+                from app.exact_venue_calendar import exact_calendar
+
+                return jsonify(exact_calendar(session, venue, start, end))
             supported = set(venue.operating_slots or [])
             days = [
                 {

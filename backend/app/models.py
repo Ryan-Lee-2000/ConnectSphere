@@ -137,7 +137,16 @@ class VenueOperationalBlock(Base):
     """A Venue Staff record that removes dated operating slots from availability."""
 
     __tablename__ = "venue_operational_blocks"
-    __table_args__ = (CheckConstraint("end_date >= start_date", name="ck_venue_blocks_date_order"),)
+    __table_args__ = (
+        CheckConstraint("end_date >= start_date", name="ck_venue_blocks_date_order"),
+        CheckConstraint(
+            "(exact_start is null and exact_end is null) or "
+            "(exact_start is not null and exact_end is not null and exact_end > exact_start)",
+            name="ck_venue_blocks_exact_order",
+        ),
+    )
+    exact_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    exact_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     venue_id: Mapped[int] = mapped_column(

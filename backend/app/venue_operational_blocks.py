@@ -5,7 +5,7 @@ from typing import Any
 
 from flask import Flask, abort, g, jsonify, request
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.models import (
@@ -13,7 +13,6 @@ from app.models import (
     Role,
     Venue,
     VenueBooking,
-    VenueBookingOccupancy,
     VenueOperationalBlock,
 )
 from app.slots import OPERATING_SLOTS
@@ -42,14 +41,23 @@ def operational_block_for_slot(
         )
         .order_by(VenueOperationalBlock.id)
     )
-    return next((block for block in candidates if slot in block.slots), None)
+    from app.venue_timing import legacy_slot_interval
+
+    interval = legacy_slot_interval(day, slot)
+    return next((block for block in candidates if block_overlaps(block, interval)), None)
 
 
 def register_venue_operational_block_routes(app: Flask) -> None:
     @app.post("/api/venues/<int:venue_id>/operational-blocks")
     @require_roles(Role.VENUE_STAFF)
     def create_operational_block(venue_id: int):
-        attributes = _block_attributes(_request_json())
+        data = _request_json()
+        if any(key in data for key in ("date", "start_time", "end_time")):
+            if not app.config["EXACT_VENUE_TIMING_ENABLED"]:
+                abort(409, "Exact venue timing is not enabled.")
+            attributes = _exact_block_attributes(data)
+        else:
+            attributes = _block_attributes(data)
         with Session(app.extensions["engine"]) as session:
             venue = _find_venue(session, venue_id)
             if unsupported := set(attributes["slots"]) - set(venue.operating_slots):
@@ -83,7 +91,10 @@ def register_venue_operational_block_routes(app: Flask) -> None:
                 )
                 .order_by(VenueOperationalBlock.start_date, VenueOperationalBlock.id)
             ).all()
-            return jsonify(operational_blocks=[_serialize_block(block) for block in blocks])
+            payload = {"operational_blocks": [_serialize_block(block) for block in blocks]}
+            if app.config["EXACT_VENUE_TIMING_ENABLED"]:
+                payload["capabilities"] = {"exact_venue_timing": True}
+            return jsonify(payload)
 
     @app.delete("/api/venues/<int:venue_id>/operational-blocks/<int:block_id>")
     @require_roles(Role.VENUE_STAFF)
@@ -152,6 +163,8 @@ def _inclusive_dates(start_date: date, end_date: date):
     day = start_date
     while day <= end_date:
         yield day
+        if day == end_date:
+            break
         day += timedelta(days=1)
 
 
@@ -171,44 +184,24 @@ def _mark_overlapping_bookings_for_review(
 ) -> int:
     """Persist a review marker without changing the affected booking itself."""
 
-    bookings = session.scalars(
-        select(VenueBooking)
-        .join(VenueBookingOccupancy)
-        .where(
-            VenueBooking.venue_id == block.venue_id,
-            VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
-            VenueBookingOccupancy.day >= block.start_date,
-            VenueBookingOccupancy.day <= block.end_date,
-            VenueBookingOccupancy.slot.in_(block.slots),
-        )
-        .distinct()
-        .order_by(VenueBooking.id)
-    ).all()
     from app.exact_venue_bookings import interval_from_json
     from app.venue_timing import legacy_slot_interval
 
-    exact = session.scalars(
-        select(VenueBooking).where(
+    candidates = session.scalars(
+        select(VenueBooking)
+        .where(
             VenueBooking.venue_id == block.venue_id,
             VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
-            VenueBooking.exact_timing.is_not(None),
         )
+        .options(selectinload(VenueBooking.occupancy))
+        .order_by(VenueBooking.id)
     ).all()
-    known = {booking.id for booking in bookings}
-    for booking in exact:
-        if not booking.exact_timing or booking.id in known:
-            continue
-        interval = interval_from_json(booking.exact_timing["occupied"])
-        first = max(block.start_date, interval.start.date())
-        last = min(block.end_date, interval.end.date())
-        days = {first, last} if first <= last else set()
-        if (last - first).days > 1:
-            days.add(first + timedelta(days=1))
-        if any(
-            interval.overlaps(legacy_slot_interval(day, slot))
-            for day in days
-            for slot in block.slots
-        ):
+    bookings = []
+    for booking in candidates:
+        intervals = [legacy_slot_interval(claim.day, claim.slot) for claim in booking.occupancy]
+        if booking.exact_timing:
+            intervals.append(interval_from_json(booking.exact_timing["occupied"]))
+        if any(block_overlaps(block, interval) for interval in intervals):
             bookings.append(booking)
     for booking in bookings:
         booking.requires_review = True
@@ -268,6 +261,7 @@ def _serialize_block(block: VenueOperationalBlock) -> dict[str, Any]:
         "start_date": block.start_date.isoformat(),
         "end_date": block.end_date.isoformat(),
         "slots": block.slots,
+        **({"timing": exact_block_interval(block).serialize()} if block.exact_start else {}),
         "reason": block.reason,
         "created_by_account_id": block.created_by_account_id,
         "created_at": _iso_datetime(block.created_at),
@@ -282,3 +276,65 @@ def _iso_datetime(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.isoformat()
+
+
+def exact_block_interval(block):
+    """SQLite drops offsets; persisted timestamps are UTC, serialized in SGT."""
+    from app.venue_timing import Interval
+
+    def aware(value):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    return Interval(aware(block.exact_start), aware(block.exact_end))
+
+
+def block_intervals(block, start, end):
+    """Read bounded historical slots or the recorded exact interval, never guess gaps."""
+    from app.venue_timing import legacy_slot_interval
+
+    if block.exact_start is not None:
+        yield exact_block_interval(block)
+        return
+    for day in _inclusive_dates(max(start, block.start_date), min(end, block.end_date)):
+        for slot in block.slots:
+            yield legacy_slot_interval(day, slot)
+
+
+def block_overlaps(block, interval):
+    """Constant-time overlap even for large repeated legacy date ranges."""
+    from app.venue_timing import SGT, legacy_slot_interval
+
+    if block.exact_start is not None:
+        return interval.overlaps(exact_block_interval(block))
+    first = max(block.start_date, interval.start.astimezone(SGT).date())
+    last = min(block.end_date, interval.end.astimezone(SGT).date())
+    if first > last:
+        return False
+    days = {first, last}
+    if (last - first).days > 1:
+        days.add(first + timedelta(days=1))
+    return any(
+        interval.overlaps(legacy_slot_interval(day, slot)) for day in days for slot in block.slots
+    )
+
+
+def _exact_block_attributes(data):
+    from app.venue_timing import parse_event_interval
+
+    if set(data) != {"date", "start_time", "end_time", "reason"}:
+        abort(400, "Provide date, start_time, end_time and reason only.")
+    reason = data["reason"]
+    if not isinstance(reason, str) or not reason.strip():
+        abort(400, "Reason is required.")
+    try:
+        interval = parse_event_interval(data["date"], data["start_time"], data["end_time"])
+    except ValueError as exc:
+        abort(400, str(exc))
+    return {
+        "start_date": interval.start.date(),
+        "end_date": interval.end.date(),
+        "slots": [],
+        "exact_start": interval.start.astimezone(timezone.utc),
+        "exact_end": interval.end.astimezone(timezone.utc),
+        "reason": reason.strip(),
+    }

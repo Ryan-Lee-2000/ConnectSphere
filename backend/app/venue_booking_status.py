@@ -93,6 +93,7 @@ def _review(session: Session, booking: VenueBooking) -> dict[str, Any]:
         else None
     )
     from app.exact_venue_bookings import exact_review_reasons
+    from app.venue_operational_blocks import exact_block_interval
 
     reasons = exact_review_reasons(session, booking)
     return {
@@ -104,6 +105,9 @@ def _review(session: Session, booking: VenueBooking) -> dict[str, Any]:
                 "start_date": block.start_date.isoformat(),
                 "end_date": block.end_date.isoformat(),
                 "slots": block.slots,
+                **(
+                    {"timing": exact_block_interval(block).serialize()} if block.exact_start else {}
+                ),
                 "reason": block.reason,
             }
             if block

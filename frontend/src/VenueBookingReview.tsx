@@ -1,3 +1,4 @@
+import { bookingInterval } from './ExactBookingTiming';
 import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, Check, X } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
@@ -16,7 +17,7 @@ type ReviewedBooking = VenueBooking & {
   rejected_by: Person | null; rejected_at: string | null; rejection_reason: string | null;
   rejection_alternative_suggestion: string | null;
 };
-type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string };
+type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string; timing?: { start: string; end: string } };
 type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
 // SPL-80 (CS-E10-S2 AC3) widens this with what Venue Staff need in order to decide. The server
 // sends an allowlist, so there is deliberately no registration or organiser field to render (AC4).
@@ -179,7 +180,7 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       <p className="venue-booking-history__review" role="note">
         <CircleAlert size={16} aria-hidden="true" />
         <span><strong>Marked for review.</strong>{' '}
-          {block ? <>Venue Staff recorded "{block.reason}" for {dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slotName).join(', ')}).</> : null}
+          {block ? <>Venue Staff recorded "{block.reason}" for {block.timing ? bookingInterval(block.timing) : <>{dateName(block.start_date)}{block.end_date !== block.start_date ? ` to ${dateName(block.end_date)}` : ''} ({block.slots.map(slotName).join(', ')})</>}.</> : null}
           {review.marked_at ? <> Marked {timeName(review.marked_at)}.</> : null}
           {' '}{booking.timing ? 'Approval rechecks the complete occupied interval and current requirements.' : 'Approval rechecks every slot before it goes ahead.'}
         </span>
