@@ -1,7 +1,7 @@
 """Store attendee registration settings and their change history (SPL-114).
 
 Revision ID: s3_registration_settings
-Revises: s3_exact_booking_snapshots (SPL-137, the newest migration on main when this was rebased)
+Revises: s3_equipment_requirements (SPL-90, the newest migration on main when this was rebased)
 
 Two changes, both additive so the previous application version keeps working while this deploys:
 
@@ -25,7 +25,7 @@ from app.models import (
 )
 
 revision = "s3_registration_settings"
-down_revision = "s3_exact_booking_snapshots"
+down_revision = "s3_equipment_requirements"
 branch_labels = None
 depends_on = None
 
