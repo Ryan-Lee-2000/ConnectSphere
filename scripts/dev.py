@@ -237,6 +237,8 @@ def main():
             "--frozen",
             "pytest",
             "backend/tests/test_postgres.py",
+            # SPL-90: verifies its data backfill and PostgreSQL-only state constraints.
+            "backend/tests/test_equipment_requirements_postgres.py",
             "backend/tests/test_exact_venue_bookings_postgres.py",
             "backend/tests/test_timed_venue_closures_postgres.py",
             "backend/tests/test_coordinator_concurrency_postgres.py",
