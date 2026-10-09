@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 
 from .authorization import associate_account_roles, authenticated_only
 from .coordinator_assignment import register_coordinator_assignment_routes
+from .equipment_catalogue import register_equipment_catalogue_routes
 from .event_requests import register_event_request_routes
 from .event_review import register_event_review_routes
 from .venue_availability import register_venue_availability_routes
@@ -114,6 +115,7 @@ def create_app(test_config=None):
     register_venue_booking_queue_routes(app)
     register_venue_occupancy_calendar_routes(app)
     register_event_request_routes(app)
+    register_equipment_catalogue_routes(app)
     register_coordinator_assignment_routes(app)
     register_event_review_routes(app)
 

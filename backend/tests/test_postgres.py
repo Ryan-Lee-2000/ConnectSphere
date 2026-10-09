@@ -18,6 +18,7 @@ PRODUCT_TABLES = {
     "venue_layouts",
     "event_requests",
     "equipment_requirements",
+    "equipment_types",
     "event_coordinator_assignments",
     "event_coordinator_history",
     "event_status_history",

@@ -35,8 +35,8 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 20rem; background: var(--color-atlas-paper); }
-body { margin: 0; min-width: 20rem; min-height: 100vh; color: var(--color-ink-navy); background: var(--color-atlas-paper); }
+html { min-width: 20rem; overflow-x: clip; background: var(--color-atlas-paper); }
+body { min-width: 20rem; min-height: 100vh; margin: 0; overflow-x: clip; color: var(--color-ink-navy); background: var(--color-atlas-paper); }
 button, input, select { font: inherit; }
 button { touch-action: manipulation; }
 
@@ -273,6 +273,23 @@ button { touch-action: manipulation; }
 .venue-form fieldset { min-width: 0; margin: 0; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
 .venue-form legend { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); color: var(--color-ink-navy); font-weight: 700; }
 .venue-form legend svg { flex: 0 0 auto; }
+
+/* Equipment catalogue: compact operational cards with clear inventory signals. */
+.equipment-catalogue__form { margin-bottom: var(--space-8); padding: clamp(var(--space-5), 3vw, var(--space-6)); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
+.equipment-catalogue__form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.equipment-catalogue__form-grid label { display: grid; gap: var(--space-2); font-weight: 700; }
+.equipment-catalogue__form-wide { grid-column: 1 / -1; }
+.equipment-catalogue__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17.5rem, 1fr)); gap: var(--space-4); }
+.equipment-card { display: grid; min-height: 15.5rem; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); box-shadow: 0 1px 0 color-mix(in oklch, var(--color-ink-navy) 4%, transparent); transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
+.equipment-card:hover { border-color: color-mix(in oklch, var(--color-mineral-teal) 52%, var(--color-blueprint-line)); box-shadow: 0 .75rem 1.5rem color-mix(in oklch, var(--color-ink-navy) 9%, transparent); transform: translateY(-2px); }
+.equipment-card__topline, .equipment-card__heading, .equipment-card__location { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.equipment-card__icon { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: var(--radius-md); color: var(--color-mineral-teal); background: color-mix(in oklch, var(--color-mist-surface) 82%, var(--color-mineral-teal)); }
+.equipment-card__stock { padding: .35rem .55rem; border: 1px solid var(--color-blueprint-line); border-radius: 999px; color: var(--color-muted-slate); font-size: .8rem; white-space: nowrap; }
+.equipment-card__stock strong { color: var(--color-ink-navy); }
+.equipment-card__heading h3 { margin: var(--space-1) 0 0; font-size: 1.125rem; line-height: 1.25; }
+.equipment-card__description { min-height: 2.9rem; margin: 0; color: var(--color-muted-slate); font-size: .9rem; line-height: 1.55; }
+.equipment-card__location { justify-content: flex-start; margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--color-blueprint-line); color: var(--color-muted-slate); font-size: .875rem; }
+.equipment-card__location svg { color: var(--color-mineral-teal); }
 .operational-blocks { display: grid; gap: var(--space-4); margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--color-blueprint-line); }
 .operational-blocks__heading { display: flex; justify-content: space-between; gap: var(--space-4); }
 .operational-blocks__heading h4, .operational-block-list h5 { margin: 0; }
@@ -299,13 +316,29 @@ button { touch-action: manipulation; }
 .layout-editor-row { display: grid; grid-template-columns: 2rem minmax(0, 1.2fr) minmax(0, .8fr) auto; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
 .layout-row-index { align-self: center; color: var(--color-muted-slate); font-size: .875rem; font-weight: 700; }
 .layout-remove { display: inline-grid; width: 2.75rem; min-height: 2.75rem; place-items: center; padding: 0; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-raised-surface); color: var(--color-refusal-red); }
+
+/* Kept after the generic layout-row rule so the equipment editor remains one
+   cohesive card rather than inheriting the venue-layout grid. */
+.equipment-editor-row { display: block; overflow: hidden; margin-bottom: var(--space-4); padding: 0; background: var(--color-raised-surface); }
+.equipment-editor-row__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-blueprint-line); background: var(--color-mist-surface); }
+.equipment-editor-row__header .layout-row-index { color: var(--color-ink-navy); font-size: .75rem; letter-spacing: .07em; text-transform: uppercase; }
+.equipment-editor-row__header .layout-remove { width: 2.25rem; min-height: 2.25rem; }
+.equipment-editor-row__fields { display: grid; grid-template-columns: minmax(13rem, 1.25fr) minmax(7rem, .45fr) minmax(12rem, 1fr); gap: var(--space-3); padding: var(--space-4); }
+.equipment-editor-row select { width: 100%; min-height: 2.75rem; padding: 0 var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); color: var(--color-ink-navy); background: var(--color-raised-surface); }
+.equipment-editor-row label span { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.equipment-editor-row label em { color: var(--color-muted-slate); font-size: .75rem; font-style: normal; font-weight: 500; }
+.equipment-editor-row__request-link, .equipment-editor-row__catalogue-link { margin: 0 var(--space-4) var(--space-4); padding: 0; border: 0; color: var(--color-mineral-teal); background: transparent; font: inherit; font-size: .875rem; font-weight: 700; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
+.equipment-editor-row__custom { display: grid; grid-template-columns: 1fr; gap: var(--space-3); margin: 0 var(--space-4) var(--space-4); padding: var(--space-4); border: 1px solid color-mix(in oklch, var(--color-mineral-teal) 30%, var(--color-blueprint-line)); border-radius: var(--radius-md); background: color-mix(in oklch, var(--color-mist-surface) 82%, var(--color-mineral-teal)); }
+.equipment-editor-row__custom strong { display: block; font-size: .9rem; }
+.equipment-editor-row__custom p { margin: var(--space-1) 0 0; color: var(--color-muted-slate); font-size: .8rem; line-height: 1.4; }
+.equipment-editor-row__catalogue-link { margin: 0; justify-self: start; }
 .error, .notice { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
 .error { color: var(--color-refusal-red); background: var(--color-refusal-surface); }
 .notice { background: var(--color-mist-surface); }
 
 /* Sprint 1 coordinator assignment */
-.assignment-queue { margin-top: var(--space-12); }
-.assignment-table { overflow-x: auto; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.assignment-queue { min-width: 0; margin-top: var(--space-12); }
+.assignment-table { width: 100%; max-width: 100%; min-width: 0; contain: layout paint; overflow-x: auto; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
 .assignment-table table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
 .assignment-table th, .assignment-table td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-blueprint-line); text-align: left; vertical-align: middle; }
 .assignment-table thead th { color: var(--color-muted-slate); font-size: .8125rem; font-weight: 650; background: var(--color-mist-surface); }
@@ -363,6 +396,8 @@ button { touch-action: manipulation; }
   .catalogue-header > .icon-button { width: 100%; justify-content: center; }
   .venue-card-art { flex-basis: 30%; min-height: 10rem; }
   .venue-card-details, .venue-workspace > .venue-form { grid-column: auto; }
+  .equipment-catalogue__form-grid, .equipment-editor-row__fields, .equipment-editor-row__custom { grid-template-columns: 1fr; }
+  .equipment-editor-row__catalogue-link { margin-bottom: 0; }
   .request-form__row { grid-template-columns: 1fr; }
   .request-form__actions { align-items: stretch; flex-direction: column; }
 }
