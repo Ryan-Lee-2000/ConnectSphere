@@ -489,12 +489,21 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         </div>
       </form>}
       {event.clarifications && <ClarificationHistory clarifications={event.clarifications} heading="Clarification history" />}
-      {event.status === 'planning' && <div className="organisation-events__actions organisation-events__actions--planning">
-        <div><span className="organisation-events__planning-label">Next step</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>
-        <button type="button" className="button button--primary"
-          onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/venue-search`)}>
-          Find venues
-        </button>
+      {event.status === 'planning' && <div className="organisation-events__planning-actions">
+        <div className="organisation-events__actions organisation-events__actions--planning">
+          <div><span className="organisation-events__planning-label">Venue planning</span><strong>Find a venue</strong><span>Search availability without changing this event or creating a booking.</span></div>
+          <button type="button" className="button button--primary"
+            onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/venue-search`)}>
+            Find venues
+          </button>
+        </div>
+        <div className="organisation-events__actions organisation-events__actions--planning">
+          <div><span className="organisation-events__planning-label">Equipment planning</span><strong>Plan equipment</strong><span>Map event needs to catalogue types before Technical Support reviews them.</span></div>
+          <button type="button" className="button button--secondary"
+            onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>
+            Plan equipment
+          </button>
+        </div>
       </div>}
     </article>}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">

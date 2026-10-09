@@ -20,6 +20,7 @@ import { PendingBookingRequests } from './PendingBookingRequests';
 import { VenueBookingReview } from './VenueBookingReview';
 import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 import { EquipmentCatalogue } from './EquipmentCatalogue';
+import { EquipmentRequirements } from './EquipmentRequirements';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -53,6 +54,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace/my-requests') return role === 'event_organiser';
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
   if (/^\/workspace\/assigned-events\/\d+\/venue-search$/.test(requestedPath)) {
+    return role === 'event_coordinator';
+  }
+  if (/^\/workspace\/assigned-events\/\d+\/equipment-requirements$/.test(requestedPath)) {
     return role === 'event_coordinator';
   }
   if (/^\/workspace\/assigned-events(?:\/\d+)?$/.test(requestedPath)) {
@@ -390,6 +394,8 @@ function Workspace({
   const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
   const venueSearchMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/venue-search$/);
   const venueSearchEventId = venueSearchMatch ? Number(venueSearchMatch[1]) : undefined;
+  const equipmentRequirementsMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/equipment-requirements$/);
+  const equipmentRequirementsEventId = equipmentRequirementsMatch ? Number(equipmentRequirementsMatch[1]) : undefined;
   const venueBookingMatch = safePath.match(/^\/workspace\/venue-bookings\/(\d+)$/);
   const venueBookingId = venueBookingMatch ? Number(venueBookingMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
@@ -404,6 +410,8 @@ function Workspace({
         ? 'Equipment catalogue workspace'
     : venueSearchEventId !== undefined
       ? 'Venue availability search workspace'
+    : equipmentRequirementsEventId !== undefined
+      ? 'Equipment requirements workspace'
     : venueBookingId !== undefined
       ? 'Venue booking review workspace'
       : safePath.startsWith('/workspace/assigned-events')
@@ -560,6 +568,13 @@ function Workspace({
             key={`${activeRole}:venue-search:${venueSearchEventId}`}
             onNavigate={navigate}
             view="venue-search"
+          />
+        ) : equipmentRequirementsEventId !== undefined ? (
+          <EquipmentRequirements
+            accessToken={session.access_token}
+            eventId={equipmentRequirementsEventId}
+            key={`${activeRole}:equipment-requirements:${equipmentRequirementsEventId}`}
+            onNavigate={navigate}
           />
         ) : safePath.startsWith('/workspace/assigned-events') ? (
           <AssignedEvents

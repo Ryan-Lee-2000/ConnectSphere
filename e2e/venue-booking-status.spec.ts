@@ -77,6 +77,9 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await expect(searchPanel).toContainText('Status: Withdrawn');
   // The history refreshes in place after the withdrawal.
   await expect(searchPanel.getByRole('list', { name: 'History' })).toContainText('Withdrawn');
+  // Search results are a read-only snapshot, so explicitly refresh them after releasing the venue.
+  await page.getByRole('button', { name: 'Search venues', exact: true }).click();
+  await expect(suitable.filter({ hasText: firstVenue }).first()).toBeVisible();
   await suitable.filter({ hasText: firstVenue }).first().click();
   await page.getByRole('button', { name: 'Request booking' }).click();
   await expect(searchPanel).toContainText('Status: Requested');

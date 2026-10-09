@@ -416,11 +416,20 @@ class VenueBookingOccupancy(Base):
 
 
 class EquipmentRequirement(Base):
-    """One free-text equipment line requested for an event."""
+    """One retained organiser line or mapped coordinator equipment requirement."""
 
     __tablename__ = "equipment_requirements"
     __table_args__ = (
         CheckConstraint("quantity > 0", name="ck_equipment_requirements_positive_quantity"),
+        CheckConstraint(
+            "status in ('unmapped', 'requested', 'partially_reserved', 'reserved', "
+            "'review_required', 'unavailable', 'removed')",
+            name="ck_equipment_requirements_known_status",
+        ),
+        CheckConstraint(
+            "essentiality in ('undecided', 'essential', 'non_essential')",
+            name="ck_equipment_requirements_known_essentiality",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -430,7 +439,40 @@ class EquipmentRequirement(Base):
     equipment_type: Mapped[str] = mapped_column(Text, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    # The original organiser wording stays in ``equipment_type`` even after the line is mapped.
+    # Catalogue identity, reservation state and dates are separate so later equipment stories do
+    # not have to infer an inventory item from mutable free text.
+    equipment_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("equipment_types.id", ondelete="RESTRICT"), index=True
+    )
+    required_start_date: Mapped[date | None] = mapped_column(Date)
+    required_end_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="unmapped", server_default="unmapped"
+    )
+    essentiality: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="undecided", server_default="undecided"
+    )
+    consulted_technical_support_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    essentiality_decision_note: Mapped[str | None] = mapped_column(Text)
+    essentiality_decided_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    essentiality_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    removed_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship(back_populates="equipment_requirements")
+    catalogue_type: Mapped["EquipmentType | None"] = relationship(foreign_keys=[equipment_type_id])
+    consulted_technical_support: Mapped["Account | None"] = relationship(
+        foreign_keys=[consulted_technical_support_account_id]
+    )
+    essentiality_decider: Mapped["Account | None"] = relationship(
+        foreign_keys=[essentiality_decided_by_account_id]
+    )
 
 
 class EquipmentType(Base):
