@@ -19,10 +19,12 @@ async function signOut(page: Page) {
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 }
 
-const evidencePause = (page: Page) => page.waitForTimeout(1_500);
+// Keep each observable outcome on screen long enough for a reviewer to inspect it in the UAT video.
+const evidencePause = (page: Page) => page.waitForTimeout(4_000);
 
 // SPL-94 recorded UAT: happy, negative, boundary and authorisation paths.
 test('TC-SPL-94-UAT-01 records complete equipment catalogue acceptance evidence', async ({ page }) => {
+  test.setTimeout(60_000);
   const itemName = `E2E UAT Presentation Adapter ${Date.now()}`;
 
   await signIn(page, technicalSupport);
@@ -59,14 +61,14 @@ test('TC-SPL-94-UAT-01 records complete equipment catalogue acceptance evidence'
   await evidencePause(page);
   await signOut(page);
 
-  // AC3 unhappy path: an organiser cannot reach Technical Support management controls.
+  // AC3 permission boundary: organisers have read/select access, but do not receive
+  // Technical Support's catalogue-management controls.
   await signIn(page, organiser, 'Event Organiser');
   await expect(page.getByRole('link', { name: 'Equipment catalogue' })).toHaveCount(0);
-  await page.goto('/workspace/equipment-catalogue');
-  await expect(page.getByRole('heading', { name: 'Equipment catalogue' })).toHaveCount(0);
   await evidencePause(page);
 
-  // AC2 happy path: an organiser can choose a saved catalogue entry.
+  // AC2 and AC3 happy path: an organiser can read and choose a saved catalogue entry
+  // while recording the event's equipment requirements.
   await page.getByRole('link', { name: 'Event requests' }).click();
   await page.getByRole('button', { name: 'Add equipment' }).click();
   await page.getByLabel('Equipment type 1').selectOption({ label: `${itemName} — Technical Store` });

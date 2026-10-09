@@ -101,6 +101,13 @@ def test_tc_spl_94_003_invalid_stock_is_refused(client, stock):
     assert response.json["error"] == "Total stock must be a whole number of zero or more."
 
 
+# SPL-94 AC-1 / TC-SPL-94-003b: zero is the inclusive lower stock boundary.
+def test_tc_spl_94_003b_zero_stock_is_accepted(client):
+    response = client.post("/api/equipment-types", json=payload(total_stock=0), headers=headers())
+    assert response.status_code == 201
+    assert response.json["equipment_type"]["total_stock"] == 0
+
+
 # SPL-94 AC-2 / TC-SPL-94-004: organiser and coordinator receive the same saved catalogue choices.
 @pytest.mark.parametrize("identity", ["organiser", "coordinator"])
 def test_tc_spl_94_004_catalogue_is_selectable_by_organiser_and_coordinator(client, identity):
@@ -134,6 +141,14 @@ def test_tc_spl_94_005_non_technical_roles_cannot_create_or_edit_equipment_types
         ).status_code
         == 403
     )
+
+
+# SPL-94 AC-3 / TC-SPL-94-005b: catalogue reads are not public.
+@pytest.mark.parametrize("request_headers, status", [({}, 401), (headers("outsider"), 403)])
+def test_tc_spl_94_005b_catalogue_reads_require_an_authorised_workflow_role(
+    client, request_headers, status
+):
+    assert client.get("/api/equipment-types", headers=request_headers).status_code == status
 
 
 # SPL-94 AC-4 / TC-SPL-94-006: no reservation/unavailability commitment exists yet, so a valid
