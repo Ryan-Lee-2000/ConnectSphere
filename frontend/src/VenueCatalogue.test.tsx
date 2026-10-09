@@ -153,7 +153,10 @@ it('TC-SPL-89-06 lets venue staff record operational unavailability for a select
   fireEvent.click(screen.getByLabelText('AM · 7am–12pm unavailable'));
   fireEvent.click(screen.getByLabelText('PM · 1pm–6pm unavailable'));
   fireEvent.change(screen.getByLabelText('Reason for unavailability'), { target: { value: 'Annual fire-safety inspection' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Record unavailability' }));
+  // Wait for the asynchronous closure list to finish loading before submitting the form.
+  const record = screen.getByRole('button', { name: 'Record unavailability' });
+  await waitFor(() => expect(record).toHaveProperty('disabled', false));
+  fireEvent.click(record);
 
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/venues/1/operational-blocks', expect.objectContaining({ method: 'POST' })));
   const createCall = request.mock.calls.find(([path, init]) => path === '/api/venues/1/operational-blocks' && init?.method === 'POST');

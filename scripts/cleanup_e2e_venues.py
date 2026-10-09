@@ -17,7 +17,7 @@ database_url = os.environ["DATABASE_URL"]
 if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
     raise SystemExit("E2E cleanup is local-only and refuses a non-local database.")
 
-from app.models import EquipmentType, Venue  # noqa: E402
+from app.models import EquipmentRequirement, EquipmentType, Venue  # noqa: E402
 
 engine = create_engine(database_url)
 try:
@@ -46,5 +46,23 @@ try:
             print(f"Removed {len(test_equipment)} local E2E equipment type(s): {names}")
         else:
             print("No local E2E equipment types required cleanup.")
+
+        # SPL-90 recorded UAT adds then soft-removes a line to demonstrate retained history.
+        # Delete only its clearly marked local evidence records after the browser run.
+        evidence_requirements = session.scalars(
+            select(EquipmentRequirement).where(
+                EquipmentRequirement.notes.like("E2E UAT equipment requirement %")
+            )
+        ).all()
+        if evidence_requirements:
+            session.execute(
+                delete(EquipmentRequirement).where(
+                    EquipmentRequirement.id.in_([item.id for item in evidence_requirements])
+                )
+            )
+            session.commit()
+            print(f"Removed {len(evidence_requirements)} local E2E equipment requirement(s).")
+        else:
+            print("No local E2E equipment requirements required cleanup.")
 finally:
     engine.dispose()
