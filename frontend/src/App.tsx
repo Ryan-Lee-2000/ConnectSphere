@@ -21,6 +21,7 @@ import { VenueBookingReview } from './VenueBookingReview';
 import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 import { EquipmentCatalogue } from './EquipmentCatalogue';
 import { EquipmentRequirements } from './EquipmentRequirements';
+import { OpenEvents } from './OpenEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
   "We couldn't sign you in with those credentials. Check your details and try again.";
@@ -75,6 +76,8 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
       || role === 'event_operations_manager';
   }
   if (requestedPath === '/workspace/equipment-catalogue') return role === 'technical_support_staff';
+  // SPL-115. Events open for registration, for attendees only (AC5); the server enforces it too.
+  if (requestedPath === '/workspace/open-events') return role === 'attendee';
   return requestedPath === '/workspace/venues'
     && (role === 'venue_staff' || role === 'event_coordinator');
 }
@@ -386,6 +389,7 @@ function Workspace({
   const organiserRole = activeRole === 'event_organiser';
   const managerRole = activeRole === 'event_operations_manager';
   const technicalSupportRole = activeRole === 'technical_support_staff';
+  const attendeeRole = activeRole === 'attendee';
   const organisationEventMatch = safePath.match(/^\/workspace\/organisation-events\/(\d+)$/);
   const organisationEventId = organisationEventMatch
     ? Number(organisationEventMatch[1])
@@ -408,6 +412,8 @@ function Workspace({
       ? 'Coordinator assignment workspace'
       : safePath === '/workspace/equipment-catalogue'
         ? 'Equipment catalogue workspace'
+    : safePath === '/workspace/open-events'
+      ? 'Open events workspace'
     : venueSearchEventId !== undefined
       ? 'Venue availability search workspace'
     : equipmentRequirementsEventId !== undefined
@@ -491,6 +497,12 @@ function Workspace({
           href="/workspace/equipment-catalogue"
           onClick={event => { event.preventDefault(); navigate('/workspace/equipment-catalogue'); }}
         >Equipment catalogue</a>}
+        {/* SPL-115: an attendee's way into registration. */}
+        {attendeeRole && <a
+          aria-current={safePath === '/workspace/open-events' ? 'page' : undefined}
+          href="/workspace/open-events"
+          onClick={event => { event.preventDefault(); navigate('/workspace/open-events'); }}
+        >Events open for registration</a>}
         {organiserRole && <a
           aria-current={safePath === '/workspace/event-requests' ? 'page' : undefined}
           href="/workspace/event-requests"
@@ -602,6 +614,8 @@ function Workspace({
           />
         ) : safePath === '/workspace/equipment-catalogue' ? (
           <EquipmentCatalogue accessToken={session.access_token} key={`${activeRole}:equipment-catalogue`} />
+        ) : safePath === '/workspace/open-events' ? (
+          <OpenEvents accessToken={session.access_token} key={`${activeRole}:open-events`} />
         ) : (
           <>
             <p className="eyebrow">{ROLE_LABELS[activeRole]}</p>
@@ -609,6 +623,7 @@ function Workspace({
             <p>{ROLE_DESCRIPTIONS[activeRole]}</p>
             {venueRole && <p className="workspace__next-step">Use the venue catalogue to {activeRole === 'venue_staff' ? 'maintain venue information' : 'review available spaces'}.</p>}
             {managerRole && <p className="workspace__next-step">Use coordinator assignment to give submitted events an Event Coordinator.</p>}
+            {attendeeRole && <p className="workspace__next-step">Use Events open for registration to find an event and register.</p>}
           </>
         )}
         {error && (
