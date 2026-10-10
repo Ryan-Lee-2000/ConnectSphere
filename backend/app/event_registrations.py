@@ -22,12 +22,26 @@ How a registration is checked (``POST /api/event-requests/<id>/registrations``),
 Steps 2-7 run while holding a lock on the event's row, so two attendees racing for the last place
 are handled one after the other: the second one sees the event is full (AC6). Every refusal
 happens before anything is written, so "nothing is saved" holds for every refusal.
+
+How a withdrawal is checked (SPL-118, ``POST /api/registrations/<id>/withdraw``), in order
+-------------------------------------------------------------------------------------------
+1. Role: Attendee only -> 403; no session -> 401. No request fields: the status and the time are
+   set by the server -> otherwise 400.
+2. Own registration: someone else's, or an unknown id, gets the same 404 (SPL-118 AC3).
+3. Still Registered -> otherwise 409 "already withdrawn" (AC3).
+4. Before the event starts (its date and start time, Singapore time) -> otherwise 409 (AC1, AC3).
+5. Mark it Withdrawn with the time (AC2). The row is kept as history, and because places remaining
+   only counts Registered rows, the place is free again at once (AC2).
+
+Steps 2-5 run while holding a lock on the registration's row, so two simultaneous withdrawals of
+the same registration are handled one after the other: the second one sees it is already
+withdrawn, and the place is freed exactly once.
 """
 
 import re
 from typing import Any
 
-from flask import Flask, abort, g, jsonify, make_response
+from flask import Flask, abort, g, jsonify, make_response, request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -40,6 +54,7 @@ from app.validation import request_json
 
 CONFIRMED = "confirmed"
 REGISTERED = "registered"
+WITHDRAWN = "withdrawn"
 # The four keys a registration accepts, with the human name used in error messages.
 DETAILS = {
     "name": "Name",
@@ -56,6 +71,11 @@ NOT_OPEN = "Registration is not open for this event."
 ONLY_DETAILS = "A registration accepts only name, email, contact_number and special_requirements."
 ALREADY_REGISTERED = "You are already registered for this event."
 FULL = "This event is full."
+# SPL-118 messages.
+REGISTRATION_NOT_FOUND = "Registration not found."
+ALREADY_WITHDRAWN = "This registration is already withdrawn."
+EVENT_STARTED = "This event has already started."
+NO_WITHDRAWAL_FIELDS = "Withdrawing accepts no fields; the status and time are set by the server."
 
 
 def register_event_registration_routes(app: Flask) -> None:
@@ -107,6 +127,41 @@ def register_event_registration_routes(app: Flask) -> None:
                 event=public_event(session, event),
             ), 201
 
+    @app.post("/api/registrations/<int:registration_id>/withdraw")
+    @require_roles(Role.ATTENDEE)
+    def withdraw_registration(registration_id: int):
+        """SPL-118: withdraw the signed-in attendee's own registration before the event starts."""
+
+        # Step 1. Validate the request before touching the database, so a refused request can
+        # never leave a half-written change behind.
+        _require_no_fields()
+        with Session(app.extensions["engine"]) as session:
+            # Step 2 (AC3). Only the caller's own registration. The row lock makes a second,
+            # simultaneous withdrawal wait here, then see Withdrawn at step 3 (TC-SPL-118-07).
+            registration = _own_registration(session, registration_id)
+
+            # Step 3 (AC3).
+            if registration.status != REGISTERED:
+                abort(409, ALREADY_WITHDRAWN)
+
+            # Step 4 (AC1, AC3). The cut-off is the event's start (a team proposal recorded on the
+            # story). It is not the registration close: an attendee can still withdraw after
+            # registration has closed, until the event begins.
+            event = session.get(EventRequest, registration.event_request_id)
+            now = settings._now()
+            if now >= settings.event_start(event):
+                abort(409, EVENT_STARTED)
+
+            # Step 5 (AC2). Kept as history rather than deleted. Places remaining counts only
+            # Registered rows, so this frees the place without any counter to update.
+            registration.status = WITHDRAWN
+            registration.withdrawn_at = now
+            session.commit()
+            return jsonify(
+                registration=serialize_registration(registration),
+                event=public_event(session, event),
+            )
+
 
 def public_event(session: Session, event: EventRequest) -> dict[str, Any]:
     """What an attendee may see about an event, and nothing internal.
@@ -138,6 +193,8 @@ def serialize_registration(registration: EventRegistration) -> dict[str, Any]:
         "contact_number": registration.contact_number,
         "special_requirements": registration.special_requirements,
         "registered_at": settings._timestamp(registration.registered_at),
+        # SPL-118 AC2: null until the attendee withdraws.
+        "withdrawn_at": settings._timestamp(registration.withdrawn_at),
     }
 
 
@@ -183,6 +240,38 @@ def _details() -> dict[str, str | None]:
     # Optional: omitted, empty or only spaces are all stored as "none".
     details["special_requirements"] = special.strip() or None if special else None
     return details
+
+
+def _own_registration(session: Session, registration_id: int) -> EventRegistration:
+    """The caller's own registration, locked; anyone else's gets the same 404 as an unknown id.
+
+    Filtering on the signed-in account (rather than loading the row and comparing afterwards)
+    means another attendee's registration is simply "not found", so ids cannot be probed (AC3).
+    """
+
+    # Ids above this cannot exist in an Integer column; answering 404 avoids a database error.
+    if registration_id > MAX_EVENT_REQUEST_ID:
+        abort(404, REGISTRATION_NOT_FOUND)
+    registration = session.scalar(
+        select(EventRegistration)
+        .where(
+            EventRegistration.id == registration_id,
+            EventRegistration.attendee_account_id == g.user_id,
+        )
+        .with_for_update()
+    )
+    if registration is None:
+        abort(404, REGISTRATION_NOT_FOUND)
+    return registration
+
+
+def _require_no_fields() -> None:
+    """Keep the outcome server-owned: no body, or an empty JSON object, and nothing else."""
+
+    if request.content_length in (None, 0):
+        return
+    if not request.is_json or request.get_json(silent=True) != {}:
+        abort(400, NO_WITHDRAWAL_FIELDS)
 
 
 def _has_active_registration(session: Session, event_request_id: int, account_id: str) -> bool:
