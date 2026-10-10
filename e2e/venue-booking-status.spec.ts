@@ -36,7 +36,9 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await page.getByLabel('Purpose').fill('Venue booking status end-to-end check');
   await page.getByLabel('Proposed date').fill(isolatedDate());
   await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
-  await page.getByLabel('Expected attendance').fill('120');
+  // Two venues fit 60 guests, allowing this journey to prove an earlier withdrawn request and
+  // a separate current request without relying on the catalogue card's collapse animation.
+  await page.getByLabel('Expected attendance').fill('60');
   await page.getByRole('button', { name: 'Submit event request' }).click();
   await expect(page).toHaveURL(/\/workspace\/my-requests$/);
   await signOut(page);
@@ -77,11 +79,18 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await expect(searchPanel).toContainText('Status: Withdrawn');
   // The history refreshes in place after the withdrawal.
   await expect(searchPanel.getByRole('list', { name: 'History' })).toContainText('Withdrawn');
-  // Search results are a read-only snapshot, so explicitly refresh them after releasing the venue.
+  // Return to the event before a replacement search. This is the normal coordinator flow and
+  // remounts the details panel after withdrawal instead of retaining an in-flight layout lookup.
+  await page.goto(eventUrl);
+  await page.getByRole('button', { name: 'Find venues', exact: true }).click();
   await page.getByRole('button', { name: 'Search venues', exact: true }).click();
-  await expect(suitable.filter({ hasText: firstVenue }).first()).toBeVisible();
-  await suitable.filter({ hasText: firstVenue }).first().click();
-  await page.getByRole('button', { name: 'Request booking' }).click();
+  const replacementVenue = page.locator('.venue-availability__card').filter({ hasText: 'Suitable for this event' }).nth(1);
+  const replacementName = (await replacementVenue.locator('strong').first().textContent())?.trim() ?? '';
+  await expect(replacementVenue).toBeVisible();
+  await replacementVenue.click();
+  const replacementDetail = page.locator('.venue-availability__detail').filter({ hasText: replacementName });
+  await expect(replacementDetail).toBeVisible();
+  await replacementDetail.getByRole('button', { name: 'Request booking' }).click();
   await expect(searchPanel).toContainText('Status: Requested');
 
   // TC-SPL-79-22: the event page, at phone width.

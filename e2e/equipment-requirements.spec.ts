@@ -7,6 +7,7 @@ if (existsSync('frontend/.env.local')) loadEnvFile('frontend/.env.local');
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinatorEmail =
   process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
+const planningFixtureName = 'Northstar Leadership Retreat';
 
 // Keep recorded runs readable: reviewers should have time to see each major UI state.
 const visiblePause = (page: import('@playwright/test').Page) => page.waitForTimeout(1_000);
@@ -19,12 +20,19 @@ async function signInAsCoordinator(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/workspace$/);
 }
 
+// Find the fixture through the coordinator workspace instead of relying on a database-generated ID.
+async function openPlanningEquipmentEditor(page: import('@playwright/test').Page) {
+  await page.getByRole('link', { name: 'My assigned events' }).click();
+  await page.getByRole('row').filter({ hasText: planningFixtureName }).getByRole('link', { name: planningFixtureName }).click();
+  await page.getByRole('button', { name: 'Plan equipment' }).click();
+}
+
 // SPL-90 AC-2/3 / TC-SPL-90-012: browser journey proves the coordinator-facing editor uses
 // the event date and reveals consultation evidence before any persistent requirement is saved.
 test('coordinator opens the equipment editor and sees essentiality consultation fields', async ({ page }) => {
   await signInAsCoordinator(page);
   await visiblePause(page);
-  await page.goto('/workspace/assigned-events/2/equipment-requirements');
+  await openPlanningEquipmentEditor(page);
 
   await expect(page.getByRole('heading', { name: 'Equipment requirements' })).toBeVisible();
   await visiblePause(page);
