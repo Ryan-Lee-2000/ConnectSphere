@@ -504,6 +504,12 @@ class EquipmentRequirement(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SPL-96 AC3/AC4: why this line was marked Review Required, and when. The status itself lives
+    # in ``status``; these two carry the explanation the coordinator and the review queue show.
+    # Both are cleared together when SPL-97's revalidation clears the status, so a stale reason
+    # can never outlive the flag.
+    review_reason: Mapped[str | None] = mapped_column(Text)
+    review_flagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship(back_populates="equipment_requirements")
     catalogue_type: Mapped["EquipmentType | None"] = relationship(foreign_keys=[equipment_type_id])
     consulted_technical_support: Mapped["Account | None"] = relationship(
@@ -517,12 +523,20 @@ class EquipmentRequirement(Base):
     )
 
 
+# SPL-96 AC1: the unavailable total can never exceed total stock or fall below zero. The rule
+# lives here, as a database constraint, because two routes can move the two numbers it relates:
+# SPL-96 changes ``unavailable_units`` and SPL-94's edit route changes ``total_stock``. A single
+# constraint cannot be satisfied by one route and forgotten by the other.
+UNAVAILABLE_WITHIN_STOCK = "unavailable_units >= 0 AND unavailable_units <= total_stock"
+
+
 class EquipmentType(Base):
     """A pooled equipment type managed by Technical Support Staff."""
 
     __tablename__ = "equipment_types"
     __table_args__ = (
         CheckConstraint("total_stock >= 0", name="ck_equipment_types_non_negative_stock"),
+        CheckConstraint(UNAVAILABLE_WITHIN_STOCK, name="ck_equipment_types_unavailable_in_stock"),
         UniqueConstraint("normalised_name", name="uq_equipment_types_normalised_name"),
     )
 
@@ -532,6 +546,44 @@ class EquipmentType(Base):
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     total_stock: Mapped[int] = mapped_column(Integer, nullable=False)
+    # SPL-96. Current state, not a schedule: units stay unavailable from when they are recorded
+    # until they are restored, so this one figure applies to every day SPL-95 assesses.
+    unavailable_units: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
+
+class EquipmentUnavailabilityRecord(Base):
+    """One SPL-96 entry: units marked unavailable, or units restored, and why.
+
+    The running total lives on ``EquipmentType.unavailable_units`` so the AC1 bounds can be a
+    database constraint. This table is the history behind that number: AC1 asks for the reason,
+    who and when on every change, including restorations.
+    """
+
+    __tablename__ = "equipment_unavailability_records"
+    __table_args__ = (
+        CheckConstraint(
+            "quantity > 0", name="ck_equipment_unavailability_records_positive_quantity"
+        ),
+        CheckConstraint(
+            "action in ('marked_unavailable', 'restored')",
+            name="ck_equipment_unavailability_records_known_action",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_type_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_types.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    recorded_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    equipment_type: Mapped[EquipmentType] = relationship()
 
 
 class EquipmentReservation(Base):

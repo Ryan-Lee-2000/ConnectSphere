@@ -940,3 +940,35 @@ button { touch-action: manipulation; }
   .equipment-review-queue__item { flex-wrap: wrap; }
   .equipment-review-queue__facts { grid-template-columns: 1fr; }
 }
+
+/* SPL-96: Technical Support records damaged or out-of-service units. The three stock figures sit
+   side by side so "usable" is read against "total", and the form sits under them. */
+.equipment-unavailability { display: grid; gap: var(--space-4); }
+.equipment-unavailability__figures {
+  display: grid; gap: var(--space-3); margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+.equipment-unavailability__figures div {
+  display: grid; gap: var(--space-1); padding: var(--space-3);
+  border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md);
+}
+.equipment-unavailability__figures dt { margin: 0; color: var(--color-muted-slate); font-size: 0.85rem; }
+.equipment-unavailability__figures dd { margin: 0; font-size: 1.5rem; font-weight: 600; }
+.equipment-unavailability__form { display: grid; gap: var(--space-2); max-width: 32rem; }
+.equipment-unavailability__history { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.equipment-unavailability__history li {
+  display: grid; gap: var(--space-1); padding: var(--space-3);
+  border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md);
+}
+.equipment-unavailability__history span:not(:first-child) { color: var(--color-muted-slate); font-size: 0.9rem; }
+.equipment-card__unavailability { font-size: 0.9rem; }
+@media (max-width: 32rem) {
+  .equipment-unavailability__figures { grid-template-columns: 1fr; }
+}
+
+/* SPL-96 AC4: why Technical Support flagged a line, shown to its coordinator under the status. */
+.equipment-requirements__review-reason {
+  margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-refusal-red); border-radius: var(--radius-md);
+  background: var(--color-refusal-surface); color: var(--color-ink-navy); font-size: 0.9rem;
+}
