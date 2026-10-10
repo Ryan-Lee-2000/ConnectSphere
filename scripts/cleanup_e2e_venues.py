@@ -17,11 +17,26 @@ database_url = os.environ["DATABASE_URL"]
 if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
     raise SystemExit("E2E cleanup is local-only and refuses a non-local database.")
 
-from app.models import EquipmentRequirement, EquipmentType, Venue  # noqa: E402
+from app.models import EquipmentRequirement, EquipmentType, EventRequest, Venue  # noqa: E402
 
 engine = create_engine(database_url)
 try:
     with Session(engine) as session:
+        # SPL-97 creates three named fixture events to demonstrate successful and refused
+        # revalidation. Delete their parent records first so database cascades remove each
+        # requirement and reservation before the matching catalogue types are removed.
+        equipment_events = session.scalars(
+            select(EventRequest).where(EventRequest.name.like("E2E SPL-97 %"))
+        ).all()
+        if equipment_events:
+            session.execute(
+                delete(EventRequest).where(
+                    EventRequest.id.in_([event.id for event in equipment_events])
+                )
+            )
+            session.commit()
+            print(f"Removed {len(equipment_events)} local SPL-97 evidence event(s).")
+
         test_venues = session.scalars(
             select(Venue).where(
                 or_(Venue.name.like("E2E %"), Venue.location == "E2E Test Location")

@@ -10,6 +10,7 @@ from app.models import (
     AccountRole,
     Base,
     EquipmentRequirement,
+    EquipmentReservation,
     EquipmentType,
     EventRequest,
     Organisation,
@@ -309,3 +310,99 @@ def test_tc_spl_95_07_overcommitment_is_exposed_separately_from_available_stock(
     assert assessment.available_to_reserve == 0
     assert assessment.overcommitted_units == 2
     assert assessment.shortfall == 3
+
+
+# TC-SPL-97-01 — an eligible planning requirement can retain part of its requested quantity.
+def test_tc_spl_97_01_partial_reservation_is_saved_and_reduces_the_next_availability(client):
+    """AC1/AC2/AC3: a positive feasible reservation is auditable and leaves a top-up path."""
+
+    response = client.post(
+        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+    )
+
+    assert response.status_code == 201
+    assert response.json["reservation"]["quantity"] == 3
+    assert response.json["assessment"]["requirement_status"] == "partially_reserved"
+    updated = client.get("/api/equipment-availability", headers=headers()).json["assessments"][0]
+    assert updated["reserved_quantity"] == 3
+    assert updated["available_to_reserve"] == 7
+
+
+# TC-SPL-97-02 — a partial reservation can be topped up to exactly the requested quantity.
+def test_tc_spl_97_02_top_up_marks_a_fully_covered_requirement_reserved(client):
+    """AC2 positive: a second reservation completes the same requirement, never duplicates it."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+    response = client.post(
+        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+    )
+
+    assert response.status_code == 201
+    assert response.json["assessment"]["requirement_status"] == "reserved"
+    assert response.json["assessment"]["reserved_quantity"] == 6
+
+
+# TC-SPL-97-03 — the server, not the browser input maximum, protects the remaining commitment.
+def test_tc_spl_97_03_over_reservation_is_refused_without_creating_a_record(client):
+    """AC1 unhappy boundary: an impossible request changes neither stock nor requirement state."""
+
+    response = client.post(
+        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 7}
+    )
+
+    assert response.status_code == 409
+    assert "unfulfilled" in response.json["error"]
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.query(EquipmentReservation).count() == 0
+        assert session.get(EquipmentRequirement, 1).status == "requested"
+
+
+# TC-SPL-97-04 — a trusted Technical Support role is mandatory for stock writes too.
+def test_tc_spl_97_04_only_technical_support_can_reserve_equipment(client):
+    """AC1 security: an Event Coordinator cannot reserve stock by calling the API directly."""
+
+    response = client.post(
+        "/api/equipment-requirements/1/reservations",
+        headers=headers(EVENT_COORDINATOR),
+        json={"quantity": 1},
+    )
+
+    assert response.status_code == 403
+
+
+# TC-SPL-97-05 — review status is a visible override that only clears after a safe recheck.
+def test_tc_spl_97_05_revalidation_returns_a_feasible_review_requirement_to_requested(client):
+    """AC4 positive: no retained units means the safe post-review state is Requested."""
+
+    response = client.post(
+        "/api/equipment-requirements/8/revalidate-reservation", headers=headers(), json={}
+    )
+
+    assert response.status_code == 200
+    assert response.json["assessment"]["requirement_status"] == "requested"
+
+
+# TC-SPL-97-11 — retained reservations remain auditable when stock is reduced later.
+def test_tc_spl_97_11_stock_reduction_exposes_overcommitment_without_deleting_reservations(client):
+    """AC2/AC3: a later stock edit cannot make six held units look feasible at stock two."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 6}
+        ).status_code
+        == 201
+    )
+    with Session(client.application.extensions["engine"]) as session:
+        session.get(EquipmentType, 1).total_stock = 2
+        session.commit()
+
+    line = client.get("/api/equipment-availability", headers=headers()).json["assessments"][0]
+
+    assert line["requirement_status"] == "reserved"
+    assert line["reserved_quantity"] == 6
+    assert line["overcommitted_units"] == 4

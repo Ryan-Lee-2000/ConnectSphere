@@ -12,6 +12,11 @@ function run(command, args) {
   });
 }
 
-const testResult = await run(process.execPath, [playwrightCli, 'test', ...process.argv.slice(2)]);
+// Rebuild only the named local SPL-97 evidence fixtures before browser journeys. This keeps the
+// review-required walkthrough repeatable without relying on a developer's prior manual database edits.
+const preparationResult = await run('uv', ['run', '--frozen', 'python', 'scripts/prepare_e2e_equipment.py']);
+const testResult = preparationResult === 0
+  ? await run(process.execPath, [playwrightCli, 'test', ...process.argv.slice(2)])
+  : preparationResult;
 const cleanupResult = await run('uv', ['run', '--frozen', 'python', 'scripts/cleanup_e2e_venues.py']);
 process.exitCode = testResult || cleanupResult;

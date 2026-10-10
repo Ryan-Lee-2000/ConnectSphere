@@ -239,6 +239,8 @@ def main():
             "backend/tests/test_postgres.py",
             # SPL-90: verifies its data backfill and PostgreSQL-only state constraints.
             "backend/tests/test_equipment_requirements_postgres.py",
+            # SPL-97: verifies requirement edits and reservations share a real PostgreSQL lock.
+            "backend/tests/test_equipment_reservations_postgres.py",
             "backend/tests/test_exact_venue_bookings_postgres.py",
             "backend/tests/test_timed_venue_closures_postgres.py",
             "backend/tests/test_coordinator_concurrency_postgres.py",

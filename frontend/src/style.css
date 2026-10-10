@@ -857,14 +857,29 @@ button { touch-action: manipulation; }
 .equipment-availability__event { margin: 0 0 var(--space-2); color: var(--color-mineral-teal); font-size: .75rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
 .equipment-availability__card h2 { margin: 0; font-size: 1.25rem; letter-spacing: -.025em; }
 .equipment-availability__card header p:last-child { margin: var(--space-1) 0 0; color: var(--color-muted-slate); font-size: .875rem; }
-.equipment-availability__outcome { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 2rem; padding: 0 var(--space-3); border: 1px solid color-mix(in oklch, var(--color-mineral-teal) 40%, var(--color-blueprint-line)); border-radius: 999px; color: var(--color-mineral-teal); background: var(--color-raised-surface); font-size: .8rem; font-weight: 750; white-space: nowrap; }
-.equipment-availability__outcome--attention { border-color: color-mix(in oklch, var(--color-refusal-red) 38%, var(--color-blueprint-line)); color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.equipment-availability__state { display: grid; flex: 0 0 auto; min-width: 13.25rem; gap: 3px; padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in oklch, var(--color-mineral-teal) 40%, var(--color-blueprint-line)); border-radius: var(--radius-md); color: var(--color-mineral-teal); background: var(--color-raised-surface); text-align: right; }
+.equipment-availability__state span { color: var(--color-muted-slate); font-size: .68rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.equipment-availability__state strong { font-size: 1rem; line-height: 1.2; }
+.equipment-availability__state b { font-size: .8rem; line-height: 1.35; }
+.equipment-availability__state small { font-size: .75rem; line-height: 1.35; }
+.equipment-availability__state--attention, .equipment-availability__state--review { border-color: color-mix(in oklch, var(--color-refusal-red) 38%, var(--color-blueprint-line)); color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.equipment-availability__state--complete { border-color: color-mix(in oklch, var(--color-mineral-teal) 55%, var(--color-blueprint-line)); }
 .equipment-availability__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: var(--space-5) var(--space-6); }
 .equipment-availability__metrics div { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
 .equipment-availability__metrics dd { margin: 0; font-size: 1.4rem; font-weight: 750; letter-spacing: -.04em; }
 .equipment-availability__details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-6); margin: 0 var(--space-6); border-top: 1px solid var(--color-blueprint-line); }
+.equipment-availability__details--single { grid-template-columns: 1fr; }
 .equipment-availability__details div { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-4) 0; border-bottom: 1px solid var(--color-blueprint-line); }
 .equipment-availability__details dd { margin: 0; overflow-wrap: anywhere; font-size: .9rem; font-weight: 600; line-height: 1.45; }
+.equipment-availability__action { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-4); margin: var(--space-5) var(--space-6) var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--color-blueprint-line); }
+.equipment-availability__action-copy { flex: 1 1 15rem; }
+.equipment-availability__action h3 { margin: 0; font-size: 1rem; }
+.equipment-availability__action p { margin: var(--space-1) 0 0; color: var(--color-muted-slate); font-size: .875rem; line-height: 1.5; }
+.equipment-availability__reserve-control { display: flex; flex: 1 1 20rem; align-items: end; justify-content: flex-end; gap: var(--space-3); }
+.equipment-availability__reserve-control label { display: grid; min-width: 9rem; gap: var(--space-1); color: var(--color-muted-slate); font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.equipment-availability__reserve-control input { min-height: 48px; }
+.equipment-availability__action .button { min-height: 48px; white-space: nowrap; }
+.equipment-availability__action-error { flex-basis: 100%; color: var(--color-refusal-red) !important; }
 .equipment-availability__empty { padding: var(--space-8); border: 1px dashed var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); text-align: center; }
 .equipment-availability__empty h2 { margin: 0; font-size: 1.125rem; }
 .equipment-availability__empty p { max-width: 46ch; margin: var(--space-3) auto 0; color: var(--color-muted-slate); line-height: 1.5; }
@@ -873,10 +888,16 @@ button { touch-action: manipulation; }
   .equipment-availability__summary { width: 100%; }
   .equipment-availability__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: var(--space-5); }
   .equipment-availability__details { margin: 0 var(--space-5); }
+  .equipment-availability__action { margin: var(--space-5); }
+  .equipment-availability__reserve-control { justify-content: stretch; }
 }
 @media (max-width: 32rem) {
   .equipment-availability__card > header { padding: var(--space-5); }
+  .equipment-availability__card > header { align-items: stretch; flex-direction: column; }
+  .equipment-availability__state { width: 100%; text-align: left; }
   .equipment-availability__metrics, .equipment-availability__details { grid-template-columns: 1fr; }
+  .equipment-availability__reserve-control { align-items: stretch; flex-direction: column; }
+  .equipment-availability__reserve-control label, .equipment-availability__reserve-control .button { width: 100%; }
 }
 
 /* SPL-117: an attendee's own registrations. Each entry wraps so its details and SPL-118's

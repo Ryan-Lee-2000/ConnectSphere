@@ -298,6 +298,12 @@ class EventRequest(Base):
         cascade="all, delete-orphan",
         order_by="EquipmentRequirement.id",
     )
+    # SPL-97 records each committed equipment quantity separately.  The rows are retained so
+    # availability can account for every overlapping commitment, rather than trusting a cached
+    # number on the requirement.
+    equipment_reservations: Mapped[list["EquipmentReservation"]] = relationship(
+        back_populates="event_request", cascade="all, delete-orphan"
+    )
     # CS-E05-S2. At most one coordinator is responsible at a time; the organiser is shown who.
     coordinator_assignment: Mapped["EventCoordinatorAssignment | None"] = relationship(
         back_populates="event_request", cascade="all, delete-orphan", uselist=False
@@ -506,6 +512,9 @@ class EquipmentRequirement(Base):
     essentiality_decider: Mapped["Account | None"] = relationship(
         foreign_keys=[essentiality_decided_by_account_id]
     )
+    reservations: Mapped[list["EquipmentReservation"]] = relationship(
+        back_populates="equipment_requirement", cascade="all, delete-orphan"
+    )
 
 
 class EquipmentType(Base):
@@ -523,6 +532,49 @@ class EquipmentType(Base):
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     total_stock: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class EquipmentReservation(Base):
+    """One Technical Support stock commitment for a mapped event requirement (SPL-97)."""
+
+    __tablename__ = "equipment_reservations"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_equipment_reservations_positive_quantity"),
+        CheckConstraint(
+            "commitment_start_date <= commitment_end_date",
+            name="ck_equipment_reservations_date_order",
+        ),
+        Index(
+            "ix_equipment_reservations_type_commitment",
+            "equipment_type_id",
+            "commitment_start_date",
+            "commitment_end_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    equipment_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    equipment_type_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_types.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    commitment_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    commitment_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_request: Mapped[EventRequest] = relationship(back_populates="equipment_reservations")
+    equipment_requirement: Mapped[EquipmentRequirement] = relationship(
+        back_populates="reservations"
+    )
+    equipment_type: Mapped[EquipmentType] = relationship()
+    reserved_by: Mapped[Account] = relationship(foreign_keys=[reserved_by_account_id])
 
 
 class EventCoordinatorAssignment(Base):

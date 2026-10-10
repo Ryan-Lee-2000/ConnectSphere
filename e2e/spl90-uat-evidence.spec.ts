@@ -7,6 +7,7 @@ if (existsSync('frontend/.env.local')) loadEnvFile('frontend/.env.local');
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinatorEmail =
   process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
+const planningFixtureName = 'Northstar Leadership Retreat';
 
 // A one-second pause after each observable step makes the video usable as UAT evidence,
 // instead of racing through the actions faster than a reviewer can inspect them.
@@ -21,6 +22,13 @@ async function signInAsCoordinator(page: Page) {
   await evidencePause(page);
 }
 
+// Resolve the seeded Planning event from the UI so this evidence does not depend on row IDs.
+async function openPlanningEquipmentEditor(page: Page) {
+  await page.getByRole('link', { name: 'My assigned events' }).click();
+  await page.getByRole('row').filter({ hasText: planningFixtureName }).getByRole('link', { name: planningFixtureName }).click();
+  await page.getByRole('button', { name: 'Plan equipment' }).click();
+}
+
 // SPL-90 UAT: records happy, unhappy and boundary outcomes without leaving a permanent
 // demonstration line. scripts/cleanup_e2e_venues.py removes the marker after the run.
 test('TC-SPL-90-UAT-01 records a readable equipment-planning walkthrough', async ({ page }) => {
@@ -28,7 +36,7 @@ test('TC-SPL-90-UAT-01 records a readable equipment-planning walkthrough', async
   const marker = `E2E UAT equipment requirement ${Date.now()}`;
 
   await signInAsCoordinator(page);
-  await page.goto('/workspace/assigned-events/2/equipment-requirements');
+  await openPlanningEquipmentEditor(page);
   await expect(page.getByRole('heading', { name: 'Equipment requirements' })).toBeVisible();
   await evidencePause(page);
 
@@ -71,14 +79,14 @@ test('TC-SPL-90-UAT-01 records a readable equipment-planning walkthrough', async
 
   // AC1 persistence: a refresh retains the same line and its organiser-history wording.
   await page.reload();
-  await expect(page.getByText(marker)).toBeVisible();
-  await expect(page.getByText('Organiser wording:')).toBeVisible();
+  const persistedRequirement = page.locator('.equipment-requirements__card').filter({ hasText: marker });
+  await expect(persistedRequirement.getByText(marker)).toBeVisible();
+  await expect(persistedRequirement.getByText(/Organiser wording:/)).toBeVisible();
   await evidencePause(page);
 
   // AC4 happy path: removal takes the line out of active planning but keeps traceable history.
   page.once('dialog', dialog => dialog.accept());
-  const requirement = page.locator('.equipment-requirements__card').filter({ hasText: marker });
-  await requirement.getByRole('button', { name: 'Remove' }).click();
+  await persistedRequirement.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByText('Equipment requirement removed from active planning.')).toBeVisible();
   await evidencePause(page);
   await page.getByRole('button', { name: /Show removed requirements/ }).click();
