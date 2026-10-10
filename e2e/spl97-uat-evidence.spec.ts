@@ -4,8 +4,9 @@ const password = 'LocalDemo123!';
 const technicalSupport = 'technical.support@example.test';
 const organiser = 'developer@example.test';
 
-// Preserve a visible pause after each decision so the recorded UAT is readable as evidence.
-const evidencePause = (page: Page) => page.waitForTimeout(1_000);
+// Keep each visible state on screen long enough for a reviewer to read the labels, values and
+// outcome in the captured video. This evidence test intentionally favours readability over speed.
+const evidencePause = (page: Page) => page.waitForTimeout(2_000);
 
 test.use({ video: 'on' });
 
@@ -37,7 +38,10 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
   await expect(feasibleReview.getByText('Review required', { exact: true })).toBeVisible();
   await expect(feasibleReview.getByText('5 of 5 units held')).toBeVisible();
   await evidencePause(page);
-  await feasibleReview.getByRole('button', { name: 'Revalidate availability' }).click();
+  const feasibleRevalidate = feasibleReview.getByRole('button', { name: 'Revalidate availability' });
+  await feasibleRevalidate.scrollIntoViewIfNeeded();
+  await evidencePause(page);
+  await feasibleRevalidate.click();
   await expect(feasibleReview.getByText('Reserved', { exact: true })).toBeVisible();
   await expect(feasibleReview.getByText('Fully covered')).toBeVisible();
   await evidencePause(page);
@@ -49,7 +53,12 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
   });
   await infeasibleReview.scrollIntoViewIfNeeded();
   await expect(infeasibleReview.getByText('Review required', { exact: true })).toBeVisible();
-  await infeasibleReview.getByRole('button', { name: 'Revalidate availability' }).click();
+  await expect(infeasibleReview.getByText('5 of 5 units held')).toBeVisible();
+  await evidencePause(page);
+  const infeasibleRevalidate = infeasibleReview.getByRole('button', { name: 'Revalidate availability' });
+  await infeasibleRevalidate.scrollIntoViewIfNeeded();
+  await evidencePause(page);
+  await infeasibleRevalidate.click();
   await expect(infeasibleReview.getByRole('alert')).toContainText('no longer feasible');
   await expect(infeasibleReview.getByText('Review required', { exact: true })).toBeVisible();
   await evidencePause(page);
@@ -61,8 +70,16 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
   });
   await partial.scrollIntoViewIfNeeded();
   await expect(partial.getByText('Stock is short by 2')).toBeVisible();
-  await partial.getByLabel('Units to reserve').fill('10');
-  await partial.getByRole('button', { name: 'Reserve units' }).click();
+  await expect(partial.getByText('0 of 12 units held')).toBeVisible();
+  await evidencePause(page);
+  const quantity = partial.getByLabel('Units to reserve');
+  await quantity.scrollIntoViewIfNeeded();
+  await quantity.fill('10');
+  await evidencePause(page);
+  const reserve = partial.getByRole('button', { name: 'Reserve units' });
+  await reserve.scrollIntoViewIfNeeded();
+  await evidencePause(page);
+  await reserve.click();
   await expect(partial.getByText('Partially reserved', { exact: true })).toBeVisible();
   await expect(partial.getByText('10 of 12 units held')).toBeVisible();
   await expect(partial.getByText('2 units still required')).toBeVisible();
@@ -74,6 +91,7 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await signIn(page, organiser, 'Event Organiser');
   await expect(page.getByRole('link', { name: 'Equipment availability' })).toHaveCount(0);
+  await evidencePause(page);
   await page.goto('/workspace/equipment-availability');
   await expect(page).toHaveURL(/\/workspace$/);
   await evidencePause(page);
