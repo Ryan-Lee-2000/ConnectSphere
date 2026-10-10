@@ -152,7 +152,9 @@ describe('protected access', () => {
     render(<App authGateway={gateway({ getSession: vi.fn().mockResolvedValue({ session }) })} />);
 
     expect(await screen.findByRole('heading', { name: 'Workspace access confirmed' })).toBeTruthy();
-    expect(window.location.pathname).toBe('/workspace');
+    // The safe Workspace view renders immediately; the route correction follows in an effect.
+    // Wait for that effect so this access-control check is not timing-dependent in CI.
+    await waitFor(() => expect(window.location.pathname).toBe('/workspace'));
     expect(screen.queryByRole('heading', { name: 'Request an event' })).toBeNull();
   });
 
