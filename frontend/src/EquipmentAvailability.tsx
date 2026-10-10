@@ -24,8 +24,13 @@ function formatDate(value: string | null) {
 function requirementIndicator(item: Assessment) {
   const remaining = Math.max(0, item.required_quantity - item.reserved_quantity);
   const held = `${item.reserved_quantity} of ${item.required_quantity} units held`;
+  // A Review Required line must keep its revalidation control, even when it is also overcommitted.
+  // The warning is included in the detail so staff can see both the workflow state and its reason.
+  if (item.requirement_status === 'review_required') return { detail: item.overcommitted_units > 0 ? `${item.overcommitted_units} ${item.overcommitted_units === 1 ? 'unit is' : 'units are'} overcommitted` : 'Confirm retained stock', held, label: 'Review required', tone: 'review' };
+  // A stock reduction can make an otherwise complete retained reservation unsafe. Surface that
+  // live availability warning before a persisted Reserved state so staff never see false success.
+  if (item.overcommitted_units > 0 && item.reserved_quantity > 0) return { detail: `${item.overcommitted_units} ${item.overcommitted_units === 1 ? 'unit is' : 'units are'} overcommitted`, held, label: 'Stock overcommitted', tone: 'review' };
   if (item.requirement_status === 'reserved') return { detail: 'Fully covered', held, label: 'Reserved', tone: 'complete' };
-  if (item.requirement_status === 'review_required') return { detail: 'Confirm retained stock', held, label: 'Review required', tone: 'review' };
   if (item.requirement_status === 'unavailable') return { detail: 'Cannot be reserved yet', held, label: 'Unavailable', tone: 'attention' };
   if (item.requirement_status === 'partially_reserved') return { detail: `${remaining} ${remaining === 1 ? 'unit' : 'units'} still required`, held, label: 'Partially reserved', tone: 'attention' };
   if (item.shortfall > 0) return { detail: `Stock is short by ${item.shortfall}`, held, label: 'Requested', tone: 'attention' };
@@ -142,16 +147,19 @@ function EquipmentReservationAction({ busy, error, item, onQuantityChange, onRev
   const remaining = item.required_quantity - item.reserved_quantity;
   const maximum = Math.min(remaining, item.available_to_reserve);
   const isReservable = ['requested', 'partially_reserved', 'review_required'].includes(item.requirement_status);
+  // Review Required remains actionable. Staff need the revalidation button to receive the
+  // server's current feasibility decision, rather than an overcommitment banner that blocks it.
+  if (item.requirement_status === 'review_required') return <footer className="equipment-availability__action">
+    <div className="equipment-availability__action-copy"><h3>Review retained reservation</h3><p>{item.overcommitted_units > 0 ? <>Current stock is overcommitted by {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit' : 'units'}. Revalidate to confirm whether the retained reservation can remain.</> : 'Revalidate retained units against current stock before making another reservation.'}</p></div>
+    <button className="button button--secondary" disabled={busy} onClick={onRevalidate} type="button">{busy ? 'Revalidating…' : 'Revalidate availability'}</button>
+    <div className="equipment-availability__reserve-control"><label htmlFor={`reserve-${item.requirement_id}`}>Units to reserve<input disabled={maximum === 0} id={`reserve-${item.requirement_id}`} max={Math.max(1, maximum)} min="1" onChange={event => onQuantityChange(event.target.value)} step="1" type="number" value={quantity} /></label><button className="button button--primary" disabled={busy || maximum === 0} onClick={onReserve} type="button">{busy ? 'Reserving…' : maximum === 0 ? 'No units available' : 'Reserve units'}</button></div>
+    {error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
+  </footer>;
+  if (item.overcommitted_units > 0 && item.reserved_quantity > 0) return <footer className="equipment-availability__action"><p><strong>Stock overcommitted.</strong> {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit is' : 'units are'} committed beyond current stock. The {item.reserved_quantity} retained {item.reserved_quantity === 1 ? 'unit remains' : 'units remain'} held while Technical Support resolves the stock conflict.</p></footer>;
   if (item.requirement_status === 'reserved') return <footer className="equipment-availability__action"><p><strong>Reservation complete.</strong> All required units are held for this event’s commitment period.</p></footer>;
   if (item.requirement_status === 'unavailable') return <footer className="equipment-availability__action"><p><strong>Unavailable requirement.</strong> Return this requirement to Requested before reserving units.</p></footer>;
   return <footer className="equipment-availability__action">
-    <div className="equipment-availability__action-copy">
-      <h3>{item.requirement_status === 'review_required' ? 'Review retained reservation' : 'Reserve units'}</h3>
-      <p>{item.requirement_status === 'review_required'
-        ? 'Revalidate retained units against current stock, or reserve another feasible quantity.'
-        : maximum > 0 ? `Up to ${maximum} additional ${maximum === 1 ? 'unit is' : 'units are'} available to reserve now.` : 'No additional units are available for this full commitment period.'}</p>
-    </div>
-    {item.requirement_status === 'review_required' && <button className="button button--secondary" disabled={busy} onClick={onRevalidate} type="button">{busy ? 'Revalidating…' : 'Revalidate availability'}</button>}
+    <div className="equipment-availability__action-copy"><h3>Reserve units</h3><p>{maximum > 0 ? `Up to ${maximum} additional ${maximum === 1 ? 'unit is' : 'units are'} available to reserve now.` : 'No additional units are available for this full commitment period.'}</p></div>
     {isReservable && <div className="equipment-availability__reserve-control">
       <label htmlFor={`reserve-${item.requirement_id}`}>Units to reserve<input disabled={maximum === 0} id={`reserve-${item.requirement_id}`} max={Math.max(1, maximum)} min="1" onChange={event => onQuantityChange(event.target.value)} step="1" type="number" value={quantity} /></label>
       <button className="button button--primary" disabled={busy || maximum === 0} onClick={onReserve} type="button">{busy ? 'Reserving…' : maximum === 0 ? 'No units available' : 'Reserve units'}</button>

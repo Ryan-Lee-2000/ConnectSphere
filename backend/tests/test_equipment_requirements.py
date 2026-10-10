@@ -279,6 +279,24 @@ def test_tc_spl_90_007_soft_removes_an_unreserved_requirement_with_audit_timesta
     )
 
 
+# TC-SPL-97-14 — coordinator edits and removals recheck the line after stock work is committed.
+def test_tc_spl_97_14_reserved_requirement_cannot_be_edited_or_removed(client):
+    """Regression: a coordinator cannot overwrite or remove a line once reservation work exists."""
+
+    assert client.patch(endpoint(1), json=valid_payload(), headers=headers()).status_code == 200
+    with Session(client.application.extensions["engine"]) as session:
+        session.get(EquipmentRequirement, 1).status = "partially_reserved"
+        session.commit()
+
+    edit = client.patch(endpoint(1), json={"quantity": 1}, headers=headers())
+    remove = client.delete(endpoint(1), headers=headers())
+
+    assert edit.status_code == 409
+    assert remove.status_code == 409
+    assert "unreserved" in edit.json["error"]
+    assert "unreserved" in remove.json["error"]
+
+
 # SPL-90 AC-4 / TC-SPL-90-008: only the assigned coordinator can read or change this event.
 @pytest.mark.parametrize(
     "token, expected",

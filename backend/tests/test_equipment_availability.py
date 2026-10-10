@@ -385,3 +385,24 @@ def test_tc_spl_97_05_revalidation_returns_a_feasible_review_requirement_to_requ
 
     assert response.status_code == 200
     assert response.json["assessment"]["requirement_status"] == "requested"
+
+
+# TC-SPL-97-11 — retained reservations remain auditable when stock is reduced later.
+def test_tc_spl_97_11_stock_reduction_exposes_overcommitment_without_deleting_reservations(client):
+    """AC2/AC3: a later stock edit cannot make six held units look feasible at stock two."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 6}
+        ).status_code
+        == 201
+    )
+    with Session(client.application.extensions["engine"]) as session:
+        session.get(EquipmentType, 1).total_stock = 2
+        session.commit()
+
+    line = client.get("/api/equipment-availability", headers=headers()).json["assessments"][0]
+
+    assert line["requirement_status"] == "reserved"
+    assert line["reserved_quantity"] == 6
+    assert line["overcommitted_units"] == 4

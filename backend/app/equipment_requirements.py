@@ -69,15 +69,16 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def update_equipment_requirement(event_request_id: int, requirement_id: int):
         data = _request_data()
-        with Session(app.extensions["engine"]) as session:
+        with Session(app.extensions["engine"]) as session, session.begin():
             event = _assigned_planning_event(session, event_request_id)
-            line = _editable_requirement(event, requirement_id)
+            line = _locked_editable_requirement(session, event, requirement_id)
             attributes = _update_attributes(session, event, line, data)
             for field, value in attributes.items():
                 setattr(line, field, value)
-            session.commit()
+            session.flush()
             session.refresh(line)
-            return jsonify(requirement=_serialize_requirement(line))
+            result = {"requirement": _serialize_requirement(line)}
+        return jsonify(result)
 
     @app.delete(
         "/api/event-requests/<int:event_request_id>/equipment-requirements/<int:requirement_id>"
@@ -85,17 +86,17 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def remove_equipment_requirement(event_request_id: int, requirement_id: int):
         _require_empty_body()
-        with Session(app.extensions["engine"]) as session:
+        with Session(app.extensions["engine"]) as session, session.begin():
             event = _assigned_planning_event(session, event_request_id)
-            line = _editable_requirement(event, requirement_id)
+            line = _locked_editable_requirement(session, event, requirement_id)
             line.status = REMOVED
             line.removed_by_account_id = g.user_id
             line.removed_at = datetime.now(SINGAPORE)
-            session.commit()
-            return jsonify(
+            result = dict(
                 message="Equipment requirement removed.",
                 requirement=_serialize_requirement(line),
             )
+        return jsonify(result)
 
 
 def _assigned_planning_event(session: Session, event_request_id: int) -> EventRequest:
@@ -126,13 +127,43 @@ def _assigned_planning_event(session: Session, event_request_id: int) -> EventRe
     return event
 
 
-def _editable_requirement(event: EventRequest, requirement_id: int) -> EquipmentRequirement:
-    """Allow changes only before a future reservation workflow has committed the line."""
-    line = next((item for item in event.equipment_requirements if item.id == requirement_id), None)
+def _locked_editable_requirement(
+    session: Session, event: EventRequest, requirement_id: int
+) -> EquipmentRequirement:
+    """Lock an editable line on the same boundary used by Technical Support reservations.
+
+    A coordinator edit and a reservation must never both validate an old quantity.  Locking the
+    requirement row first serialises those actions; locking its mapped catalogue type as well
+    shares the stock-pool boundary used by the reservation route.  Once waiting work resumes,
+    this function rechecks that the line is still genuinely editable.
+    """
+
+    line = session.scalar(
+        select(EquipmentRequirement)
+        .where(
+            EquipmentRequirement.id == requirement_id,
+            EquipmentRequirement.event_request_id == event.id,
+        )
+        # ``event.equipment_requirements`` was preloaded for ownership checks.  If this query
+        # waited behind a reservation, overwrite that cached line with PostgreSQL's current
+        # status before deciding whether the coordinator may still edit it.
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if line is None:
         abort(404, "Equipment requirement not found.")
     if line.status not in EDITABLE_STATUSES:
         abort(409, "Only unreserved equipment requirements can be changed or removed.")
+    if line.equipment_type_id is not None:
+        # Reservation transactions lock this exact row after the requirement row.  Keep the
+        # order identical to prevent deadlocks while making catalogue remapping atomic.
+        equipment_type = session.scalar(
+            select(EquipmentType)
+            .where(EquipmentType.id == line.equipment_type_id)
+            .with_for_update()
+        )
+        if equipment_type is None:
+            abort(409, "The mapped equipment type is no longer available.")
     return line
 
 

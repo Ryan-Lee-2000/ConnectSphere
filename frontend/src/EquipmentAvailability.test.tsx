@@ -40,3 +40,25 @@ it('[TC-SPL-95-09] makes an actual shortfall visible instead of displaying negat
   expect(screen.getAllByText('Shortfall')).toHaveLength(2);
   expect(screen.queryByText('-2')).toBeNull();
 });
+
+// TC-SPL-97-12 — a retained reservation must not look successful after its stock pool shrinks.
+it('[TC-SPL-97-12] prioritises an overcommitment warning over a fully covered reservation message', async () => {
+  render(<EquipmentAvailability accessToken="token" request={async () => response({ assessments: [{ ...assessment, requirement_status: 'reserved', reserved_quantity: 6, available_to_reserve: 0, overcommitted_units: 4 }], input_notice: 'Reservations included.' })} />);
+
+  expect(await screen.findByText('Stock overcommitted')).toBeTruthy();
+  expect(screen.getByText('4 units are overcommitted')).toBeTruthy();
+  expect(screen.getByText(/The 6 retained units remain held/)).toBeTruthy();
+  expect(screen.queryByText('Fully covered')).toBeNull();
+  expect(screen.queryByText('Reservation complete.')).toBeNull();
+});
+
+// TC-SPL-97-15 — a Review Required line remains actionable when the stock conflict is visible.
+it('[TC-SPL-97-15] keeps revalidation available while explaining an overcommitted review requirement', async () => {
+  render(<EquipmentAvailability accessToken="token" request={async () => response({ assessments: [{ ...assessment, requirement_status: 'review_required', reserved_quantity: 6, available_to_reserve: 0, overcommitted_units: 2 }], input_notice: 'Reservations included.' })} />);
+
+  expect(await screen.findByText('Review required')).toBeTruthy();
+  expect(screen.getByText('2 units are overcommitted')).toBeTruthy();
+  expect(screen.getByText(/Current stock is overcommitted by 2 units/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Revalidate availability' })).toBeTruthy();
+  expect(screen.queryByText('Reservation complete.')).toBeNull();
+});

@@ -31,8 +31,8 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
 
   // AC4 happy path: feasible retained units clear Review Required and become Reserved.
   const feasibleReview = page.locator('.equipment-availability__card').filter({
-    has: page.getByRole('heading', { name: 'Wireless Microphone' }),
-    hasText: 'Facilitator Briefing',
+    has: page.getByRole('heading', { name: 'E2E SPL-97 Feasible Microphone' }),
+    hasText: 'E2E SPL-97 Feasible review',
   });
   await feasibleReview.scrollIntoViewIfNeeded();
   await expect(feasibleReview.getByText('Review required', { exact: true })).toBeVisible();
@@ -48,8 +48,8 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
 
   // AC4 unhappy path: infeasible retained units remain Review Required and show a refusal.
   const infeasibleReview = page.locator('.equipment-availability__card').filter({
-    has: page.getByRole('heading', { name: 'Presentation Kit' }),
-    hasText: 'Community Funding Workshop',
+    has: page.getByRole('heading', { name: 'E2E SPL-97 Infeasible Presentation Kit' }),
+    hasText: 'E2E SPL-97 Infeasible review',
   });
   await infeasibleReview.scrollIntoViewIfNeeded();
   await expect(infeasibleReview.getByText('Review required', { exact: true })).toBeVisible();
@@ -65,8 +65,8 @@ test('TC-SPL-97-UAT-01 records equipment reservation and revalidation evidence',
 
   // AC1/AC2/AC3: reserve only the feasible ten units of a twelve-unit requirement.
   const partial = page.locator('.equipment-availability__card').filter({
-    has: page.getByRole('heading', { name: 'Display Plinth Set' }),
-    hasText: 'Civic Arts Open Studio',
+    has: page.getByRole('heading', { name: 'E2E SPL-97 Partial Display Plinth' }),
+    hasText: 'E2E SPL-97 Partial reservation',
   });
   await partial.scrollIntoViewIfNeeded();
   await expect(partial.getByText('Stock is short by 2')).toBeVisible();

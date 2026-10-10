@@ -49,13 +49,13 @@ test('TC-SPL-95-10 records availability, shortfall, and read-only access evidenc
   await expect(retreat.getByText('6 units to arrange')).toBeVisible();
   await evidencePause(page);
 
-  // AC2/AC3 unhappy path: insufficient pooled stock produces a bounded zero availability and a
-  // concrete shortfall rather than a negative number. The UI deliberately hides calculation-only
-  // fields such as busiest day and stock basis.
+  // AC2/AC3 unhappy path: this line is partially reserved, so the remaining uncovered quantity
+  // is visible alongside bounded zero availability rather than a negative stock value. The UI
+  // deliberately hides calculation-only fields such as busiest day and stock basis.
   const studio = page.locator('.equipment-availability__card').filter({ hasText: 'Civic Arts Open Studio' });
   await studio.scrollIntoViewIfNeeded();
   await expect(studio.getByRole('heading', { name: 'Display Plinth Set' })).toBeVisible();
-  await expect(studio.getByText('Stock is short by 2')).toBeVisible();
+  await expect(studio.getByText('2 units still required')).toBeVisible();
   await expect(studio.getByText('Available to reserve', { exact: true })).toBeVisible();
   await expect(studio.getByText('0', { exact: true })).toBeVisible();
   await expect(studio.getByText('Shortfall')).toBeVisible();
