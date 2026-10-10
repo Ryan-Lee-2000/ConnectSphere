@@ -9,7 +9,7 @@ import { defaultRequest, responseError, type ApiRequest } from './api';
 
 type Reason = { key: string; label: string; detail: string };
 type SlotEntry = { slot: string; status: string; reasons: Reason[] };
-type TimedEntry = { start: string; end: string; status: string; reasons: Reason[] };
+type TimedEntry = { requires_review?: boolean; start: string; end: string; status: string; reasons: Reason[] };
 type DayEntry = { date: string; slots: SlotEntry[]; intervals?: TimedEntry[] };
 type Calendar = { mode?: 'exact'; venue: { id: number; name: string }; start_date: string; end_date: string; days: DayEntry[] };
 export type CalendarVenue = { id: number; name: string };
@@ -110,7 +110,8 @@ export function VenueOccupancyCalendar({ accessToken, venues, request }: {
         <h2>{dateName(day.date)}</h2>
         <ul>{day.intervals?.map(entry => <li className={`occupancy-cell occupancy-cell--${entry.status}`} key={entry.start}>
           <strong>{clockTime(entry.start)} – {entry.end.slice(0, 10) !== day.date ? '24:00' : clockTime(entry.end)} · {STATUS_NAMES[entry.status] || entry.status}</strong>
-          {entry.reasons.map(reason => <span className="occupancy-cell__reason" key={reason.key}>{reason.label}</span>)}
+          {entry.reasons.map((reason, index) => <span className="occupancy-cell__reason" key={`${reason.key}-${index}`}>{reason.label}</span>)}
+          {entry.requires_review && <strong>Review required</strong>}
         </li>)}</ul>
       </section>)}
     </div>}

@@ -230,3 +230,19 @@ release it while retaining evidence. Legacy claims stay intact, and each represe
 other. Request, approval, release, venue/profile edits and block writes share the ordered transaction
 boundary documented in [SPL-137](development/SPL-137.md). The gate stays off pending combined release
 integration. Cancellation's shared helper is delivered here; arrangement UI remains a SPL-131 handoff.
+
+## All-venues availability overview (SPL-107)
+
+The read-only `GET /api/venues/occupancy-overview?date=YYYY-MM-DD` composes the existing exact
+calendar for every venue on one Singapore date. It uses the same stored booking snapshots,
+legacy claims and operational-block intervals; there is no second availability engine or migration.
+The existing calendar allowlist protects this route. A separate detail projection returns event
+names/navigation only to Venue Staff or the event's currently assigned coordinator, and closure
+free text only to Venue Staff. Destination endpoints recheck authorization.
+
+Both exact calendar views include persistent and current shared booking-review indicators.
+Review remains a warning on occupied time, not a release of occupancy. The overview preserves
+arbitrary-minute preparation boundaries against quarter-hour booking guides and distinguishes
+closed or unconfirmed timing from available operating time. `EXACT_VENUE_TIMING_ENABLED`
+continues to gate this slice; shared release activation and future hold expiry remain their existing
+integration responsibilities. See [SPL-107](development/SPL-107.md) for verification and limitations.
