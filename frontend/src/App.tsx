@@ -620,6 +620,7 @@ function Workspace({
         ) : safePath === '/workspace/venue-calendar' ? (
           <VenueOccupancyCalendarPage
             accessToken={session.access_token}
+            activeRole={activeRole}
             key={`${activeRole}:venue-calendar`}
           />
         ) : safePath === '/workspace/venues' ? (

@@ -53,6 +53,42 @@ _EVENT_SLOT_STATUS = {"requested": REQUESTED, "approved": BOOKED}
 
 
 def register_venue_occupancy_calendar_routes(app: Flask) -> None:
+    @app.get("/api/venues/occupancy-overview")
+    @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR, Role.EVENT_OPERATIONS_MANAGER)
+    def venue_occupancy_overview():
+        from app.exact_venue_calendar import exact_calendar
+
+        if not app.config["EXACT_VENUE_TIMING_ENABLED"]:
+            abort(409, "The all-venues timeline is not enabled yet. Use the one-venue calendar.")
+        if set(request.args) != {"date"} or len(request.args.getlist("date")) != 1:
+            abort(400, "Provide one date in YYYY-MM-DD format.")
+        raw = request.args.get("date", "")
+        try:
+            day = date.fromisoformat(raw)
+            if day.isoformat() != raw or day == date.max:
+                raise ValueError
+        except ValueError:
+            abort(400, "Choose a supported date in YYYY-MM-DD format.")
+        with Session(app.extensions["engine"]) as session:
+            venues = session.scalars(select(Venue).order_by(Venue.name, Venue.id)).all()
+            rows = []
+            for venue in venues:
+                from app.venue_calendar_details import (
+                    block_calendar_detail,
+                    booking_calendar_detail,
+                )
+
+                calendar = exact_calendar(
+                    session,
+                    venue,
+                    day,
+                    day,
+                    booking_details=lambda booking: booking_calendar_detail(session, booking),
+                    block_details=block_calendar_detail,
+                )
+                rows.append({**calendar["venue"], "intervals": calendar["days"][0]["intervals"]})
+            return jsonify(mode="exact", timezone="Asia/Singapore", date=raw, venues=rows)
+
     @app.get("/api/venues/<int:venue_id>/occupancy")
     @require_roles(Role.VENUE_STAFF, Role.EVENT_COORDINATOR, Role.EVENT_OPERATIONS_MANAGER)
     def venue_occupancy_calendar(venue_id: int):

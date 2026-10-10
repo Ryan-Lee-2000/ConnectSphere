@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
 import { VenueOccupancyCalendar, type CalendarVenue } from './VenueOccupancyCalendar';
+import { VenueAvailabilityOverview } from './VenueAvailabilityOverview';
+import type { AccountRole } from './roles';
 
 // SPL-88: loads the venue list the calendar's picker chooses from, so the calendar itself stays a
 // pure renderer of one venue's occupancy and can be tested without a second stubbed request.
 
-export function VenueOccupancyCalendarPage({ accessToken, request }: {
+function OneVenueCalendar({ accessToken, request }: {
   accessToken: string;
   request?: ApiRequest;
 }) {
@@ -32,4 +34,19 @@ export function VenueOccupancyCalendarPage({ accessToken, request }: {
     return <p className="catalogue-empty">No venues have been added yet.</p>;
   }
   return <VenueOccupancyCalendar accessToken={accessToken} request={request} venues={venues} />;
+}
+
+
+export function VenueOccupancyCalendarPage({ accessToken, activeRole, request }: {
+  accessToken: string; activeRole: AccountRole; request?: ApiRequest;
+}) {
+  const [view, setView] = useState<'one' | 'all'>('one');
+  return <>
+    <div className="calendar-view-switch" role="group" aria-label="Calendar view">
+      <button className="button button--secondary" type="button" aria-pressed={view === 'one'} onClick={() => setView('one')}>One venue</button>
+      <button className="button button--secondary" type="button" aria-pressed={view === 'all'} onClick={() => setView('all')}>All venues</button>
+    </div>
+    {view === 'one' ? <OneVenueCalendar accessToken={accessToken} request={request} />
+      : <VenueAvailabilityOverview accessToken={accessToken} activeRole={activeRole} request={request} />}
+  </>;
 }
