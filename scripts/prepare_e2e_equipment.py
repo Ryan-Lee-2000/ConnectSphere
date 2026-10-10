@@ -9,6 +9,7 @@ import os
 import sys
 from datetime import date, datetime, time, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
@@ -28,7 +29,11 @@ from app.models import (  # noqa: E402
 )
 
 load_dotenv(ROOT / ".env")
-engine = create_engine(os.environ["DATABASE_URL"])
+database_url = os.environ["DATABASE_URL"]
+if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
+    raise SystemExit("E2E fixture preparation is local-only and refuses a non-local database.")
+
+engine = create_engine(database_url)
 
 
 def account_with_role(session: Session, role: Role) -> Account:
