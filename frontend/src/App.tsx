@@ -21,6 +21,7 @@ import { VenueBookingReview } from './VenueBookingReview';
 import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 import { EquipmentCatalogue } from './EquipmentCatalogue';
 import { EquipmentRequirements } from './EquipmentRequirements';
+import { EquipmentAvailability } from './EquipmentAvailability';
 import { OpenEvents } from './OpenEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
@@ -76,6 +77,7 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
       || role === 'event_operations_manager';
   }
   if (requestedPath === '/workspace/equipment-catalogue') return role === 'technical_support_staff';
+  if (requestedPath === '/workspace/equipment-availability') return role === 'technical_support_staff';
   // SPL-115. Events open for registration, for attendees only (AC5); the server enforces it too.
   if (requestedPath === '/workspace/open-events') return role === 'attendee';
   return requestedPath === '/workspace/venues'
@@ -412,6 +414,8 @@ function Workspace({
       ? 'Coordinator assignment workspace'
       : safePath === '/workspace/equipment-catalogue'
         ? 'Equipment catalogue workspace'
+      : safePath === '/workspace/equipment-availability'
+        ? 'Equipment availability workspace'
     : safePath === '/workspace/open-events'
       ? 'Open events workspace'
     : venueSearchEventId !== undefined
@@ -497,6 +501,11 @@ function Workspace({
           href="/workspace/equipment-catalogue"
           onClick={event => { event.preventDefault(); navigate('/workspace/equipment-catalogue'); }}
         >Equipment catalogue</a>}
+        {technicalSupportRole && <a
+          aria-current={safePath === '/workspace/equipment-availability' ? 'page' : undefined}
+          href="/workspace/equipment-availability"
+          onClick={event => { event.preventDefault(); navigate('/workspace/equipment-availability'); }}
+        >Equipment availability</a>}
         {/* SPL-115: an attendee's way into registration. */}
         {attendeeRole && <a
           aria-current={safePath === '/workspace/open-events' ? 'page' : undefined}
@@ -614,6 +623,8 @@ function Workspace({
           />
         ) : safePath === '/workspace/equipment-catalogue' ? (
           <EquipmentCatalogue accessToken={session.access_token} key={`${activeRole}:equipment-catalogue`} />
+        ) : safePath === '/workspace/equipment-availability' ? (
+          <EquipmentAvailability accessToken={session.access_token} key={`${activeRole}:equipment-availability`} />
         ) : safePath === '/workspace/open-events' ? (
           <OpenEvents accessToken={session.access_token} key={`${activeRole}:open-events`} />
         ) : (
