@@ -878,3 +878,12 @@ button { touch-action: manipulation; }
   .equipment-availability__card > header { padding: var(--space-5); }
   .equipment-availability__metrics, .equipment-availability__details { grid-template-columns: 1fr; }
 }
+
+/* SPL-117: an attendee's own registrations. Each entry wraps so its details and SPL-118's
+   withdraw control open full-width underneath it. */
+.my-registrations__item { flex-wrap: wrap; align-items: flex-start; }
+.my-registrations__details { display: grid; gap: var(--space-1); }
+.my-registrations__details h2 { margin: 0; font-size: 1.15rem; }
+.my-registrations__details p, .my-registrations__empty { margin: 0; color: var(--color-muted-slate); }
+.my-registrations__panel { flex-basis: 100%; display: grid; gap: var(--space-1); }
+.my-registrations__panel p { margin: 0; }

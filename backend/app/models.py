@@ -662,6 +662,9 @@ class EventRegistration(Base):
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # SPL-118 AC2: when the attendee withdrew. Empty while the registration is Registered.
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SPL-117: lets "my registrations" load each event with its registration in one query.
+    # Read-only navigation over the existing foreign key; no schema change.
+    event_request: Mapped[EventRequest] = relationship()
 
 
 class ClarificationRequest(Base):
