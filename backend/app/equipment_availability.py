@@ -24,6 +24,11 @@ ACTIVE_REQUIREMENT_STATUSES = (
     "unavailable",
 )
 
+# Technical Support assesses requirements while an event is being planned. Confirmed events stop
+# appearing as actionable work here, but their future reservations must still be supplied to the
+# shared calculation when SPL-97 integrates persisted reservation records.
+ASSESSABLE_EVENT_STATUSES = ("planning",)
+
 
 @dataclass(frozen=True)
 class AvailabilityAssessment:
@@ -62,9 +67,10 @@ def calculate_availability(
 ) -> AvailabilityAssessment:
     """Calculate the safest availability across the whole commitment period.
 
-    The worst (busiest) day determines the units that can be promised.  Reservations are supplied
-    without the current line's own retained quantity, preventing it from being deducted twice.
-    This is pure domain logic so SPL-97 can reuse it inside its later reservation transaction.
+    The worst (busiest) day determines the units that can be promised. ``reservations_by_day``
+    contains every active reservation on that day, including this line's retained quantity. The
+    retained quantity is therefore removed once from physical stock and once from this line's
+    remaining need. This is pure domain logic so SPL-97 can reuse it in its reservation transaction.
     """
 
     unavailable_by_day = unavailable_by_day or {}
@@ -111,7 +117,7 @@ def register_equipment_availability_routes(app: Flask) -> None:
                         joinedload(EquipmentRequirement.event_request),
                     )
                     .where(
-                        EventRequest.status == "planning",
+                        EventRequest.status.in_(ASSESSABLE_EVENT_STATUSES),
                         EquipmentRequirement.status.in_(ACTIVE_REQUIREMENT_STATUSES),
                         EquipmentRequirement.equipment_type_id.is_not(None),
                         EquipmentRequirement.required_start_date.is_not(None),

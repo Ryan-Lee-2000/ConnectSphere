@@ -12,7 +12,8 @@ const assessment = {
   unavailable_units: 0, active_reservations: 0, reserved_quantity: 0, available_to_reserve: 10, shortfall: 0, overcommitted_units: 0,
 };
 
-it('[TC-SPL-95-005] presents the commitment period and decision quantities without a reserve action or internal calculation fields', async () => {
+// TC-SPL-95-08 — the user sees decision values, not internal calculation diagnostics or reservation controls.
+it('[TC-SPL-95-08] presents the commitment period and decision quantities without a reserve action or internal calculation fields', async () => {
   render(<EquipmentAvailability accessToken="token" request={async () => response({ assessments: [assessment], input_notice: 'Stock baseline only.' })} />);
   expect(await screen.findByRole('heading', { name: 'Wireless Microphone' })).toBeTruthy();
   expect(screen.getByText('Available to reserve')).toBeTruthy();
@@ -22,7 +23,8 @@ it('[TC-SPL-95-005] presents the commitment period and decision quantities witho
   expect(screen.queryByText('Stock basis')).toBeNull();
 });
 
-it('[TC-SPL-95-006] makes an actual shortfall visible instead of displaying negative availability', async () => {
+// TC-SPL-95-09 — a stock deficit is understandable and never rendered as a negative availability value.
+it('[TC-SPL-95-09] makes an actual shortfall visible instead of displaying negative availability', async () => {
   render(<EquipmentAvailability accessToken="token" request={async () => response({ assessments: [{ ...assessment, available_to_reserve: 0, shortfall: 6, overcommitted_units: 2 }], input_notice: 'Stock baseline only.' })} />);
   expect(await screen.findByText('6 short')).toBeTruthy();
   expect(screen.getAllByText('Shortfall')).toHaveLength(2);

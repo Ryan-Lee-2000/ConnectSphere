@@ -25,7 +25,7 @@ async function signOut(page: Page) {
 
 // SPL-95 UAT: a read-only, staff-only availability assessment. The locally seeded scenarios
 // show both a satisfiable requirement and a real stock shortfall without creating test records.
-test('TC-SPL-95-UAT-01 records availability, shortfall, and read-only access evidence', async ({ page }) => {
+test('TC-SPL-95-10 records availability, shortfall, and read-only access evidence', async ({ page }) => {
   test.setTimeout(60_000);
 
   await signIn(page, technicalSupport);

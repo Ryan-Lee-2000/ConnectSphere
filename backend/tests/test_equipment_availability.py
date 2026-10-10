@@ -13,12 +13,16 @@ from app.models import (
     EquipmentType,
     EventRequest,
     Organisation,
+    Role,
 )
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 TECHNICAL_SUPPORT = "11111111-1111-4111-8111-111111111111"
-OUTSIDER = "22222222-2222-4222-8222-222222222222"
+EVENT_ORGANISER = "22222222-2222-4222-8222-222222222222"
+EVENT_COORDINATOR = "33333333-3333-4333-8333-333333333333"
+VENUE_STAFF = "44444444-4444-4444-8444-444444444444"
+OPERATIONS_MANAGER = "55555555-5555-4555-8555-555555555555"
 
 
 @pytest.fixture()
@@ -30,14 +34,25 @@ def client(tmp_path):
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         organisation = Organisation(id=1, name="Northstar Community Partners")
-        technical_support = Account(id=TECHNICAL_SUPPORT, display_name="Taylor Goh", is_active=True)
-        outsider = Account(id=OUTSIDER, display_name="Outside User", is_active=True)
+        accounts = [
+            Account(id=TECHNICAL_SUPPORT, display_name="Taylor Goh", is_active=True),
+            Account(id=EVENT_ORGANISER, display_name="Olivia Organiser", is_active=True),
+            Account(id=EVENT_COORDINATOR, display_name="Casey Coordinator", is_active=True),
+            Account(id=VENUE_STAFF, display_name="Valerie Venue", is_active=True),
+            Account(id=OPERATIONS_MANAGER, display_name="Morgan Manager", is_active=True),
+        ]
         session.add_all(
             [
                 organisation,
-                technical_support,
-                outsider,
+                *accounts,
                 AccountRole(account_id=TECHNICAL_SUPPORT, role="technical_support_staff"),
+                AccountRole(account_id=EVENT_ORGANISER, role=Role.EVENT_ORGANISER.value),
+                AccountRole(account_id=EVENT_COORDINATOR, role=Role.EVENT_COORDINATOR.value),
+                AccountRole(account_id=VENUE_STAFF, role=Role.VENUE_STAFF.value),
+                AccountRole(
+                    account_id=OPERATIONS_MANAGER,
+                    role=Role.EVENT_OPERATIONS_MANAGER.value,
+                ),
             ]
         )
         event = EventRequest(
@@ -57,18 +72,107 @@ def client(tmp_path):
             location="Technical Store",
             total_stock=10,
         )
-        session.add_all([event, microphone])
-        session.add(
-            EquipmentRequirement(
-                id=1,
-                event_request_id=1,
-                equipment_type="Wireless microphones",
-                quantity=6,
-                equipment_type_id=1,
-                required_start_date=date(2026, 10, 15),
-                required_end_date=date(2026, 10, 15),
-                status="requested",
-            )
+        confirmed_event = EventRequest(
+            id=2,
+            organiser_account_id=EVENT_ORGANISER,
+            organisation_id=1,
+            name="Already Confirmed Conference",
+            proposed_date=date(2026, 10, 20),
+            expected_attendance=80,
+            status="confirmed",
+        )
+        session.add_all([event, confirmed_event, microphone])
+        session.add_all(
+            [
+                # TC-SPL-95-06 fixture: an assessable line returned by the route.
+                EquipmentRequirement(
+                    id=1,
+                    event_request_id=1,
+                    equipment_type="Wireless microphones",
+                    quantity=6,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="requested",
+                ),
+                # Each following line must remain outside the planning workspace for one reason.
+                EquipmentRequirement(
+                    id=2,
+                    event_request_id=2,
+                    equipment_type="Confirmed event microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 20),
+                    required_end_date=date(2026, 10, 20),
+                    status="requested",
+                ),
+                EquipmentRequirement(
+                    id=3,
+                    event_request_id=1,
+                    equipment_type="Unmapped microphone",
+                    quantity=2,
+                    status="unmapped",
+                ),
+                EquipmentRequirement(
+                    id=4,
+                    event_request_id=1,
+                    equipment_type="Removed microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="removed",
+                ),
+                EquipmentRequirement(
+                    id=5,
+                    event_request_id=1,
+                    equipment_type="Undated microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    status="requested",
+                ),
+                # Every active requirement status remains visible as Technical Support work.
+                EquipmentRequirement(
+                    id=6,
+                    event_request_id=1,
+                    equipment_type="Partially reserved microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="partially_reserved",
+                ),
+                EquipmentRequirement(
+                    id=7,
+                    event_request_id=1,
+                    equipment_type="Reserved microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="reserved",
+                ),
+                EquipmentRequirement(
+                    id=8,
+                    event_request_id=1,
+                    equipment_type="Review-required microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="review_required",
+                ),
+                EquipmentRequirement(
+                    id=9,
+                    event_request_id=1,
+                    equipment_type="Unavailable microphone",
+                    quantity=2,
+                    equipment_type_id=1,
+                    required_start_date=date(2026, 10, 15),
+                    required_end_date=date(2026, 10, 15),
+                    status="unavailable",
+                ),
+            ]
         )
         session.commit()
 
@@ -88,7 +192,8 @@ def headers(account_id=TECHNICAL_SUPPORT):
     return {"Authorization": f"Bearer {account_id}"}
 
 
-def test_tc_spl_95_001_busiest_day_controls_available_stock():
+# TC-SPL-95-01 — busiest-day calculation with non-overlapping reservations.
+def test_tc_spl_95_01_busiest_day_controls_available_stock():
     """AC1/AC2: availability is the worst daily balance, not a sum across different days."""
 
     assessment = calculate_availability(
@@ -105,14 +210,19 @@ def test_tc_spl_95_001_busiest_day_controls_available_stock():
     assert assessment.shortfall == 1
 
 
-def test_tc_spl_95_002_returned_units_are_available_on_the_following_day():
-    """AC1 boundary: commitment includes collection through return, so reuse starts the next day."""
+# TC-SPL-95-02 — adjacent D-1 collection boundary after a return day.
+def test_tc_spl_95_02_returned_units_are_available_for_collection_from_the_following_day():
+    """AC1 boundary: a return on the 15th blocks collection on the 15th, not on the 16th.
+
+    Collection on the 16th represents an event whose required-use date is the 17th. This makes the
+    D-1 rule explicit instead of labelling the required-use date as the availability boundary.
+    """
 
     assert (
         calculate_availability(
             total_stock=4,
             required_quantity=1,
-            collection_date=date(2026, 10, 14),
+            collection_date=date(2026, 10, 15),
             return_date=date(2026, 10, 15),
             reservations_by_day={date(2026, 10, 15): 4},
         ).available_to_reserve
@@ -130,8 +240,9 @@ def test_tc_spl_95_002_returned_units_are_available_on_the_following_day():
     )
 
 
-def test_tc_spl_95_007_retained_units_are_not_counted_twice_or_turned_into_a_negative_shortfall():
-    """AC2/AC3: retained units count once and the shortfall cannot become negative."""
+# TC-SPL-95-03 — own retained units occupy stock once and reduce the remaining need once.
+def test_tc_spl_95_03_retained_units_do_not_hide_a_real_shortfall():
+    """AC2/AC3: all reservations include this line's three retained units exactly once."""
 
     assessment = calculate_availability(
         total_stock=10,
@@ -139,14 +250,15 @@ def test_tc_spl_95_007_retained_units_are_not_counted_twice_or_turned_into_a_neg
         reserved_quantity=3,
         collection_date=date(2026, 10, 14),
         return_date=date(2026, 10, 15),
-        reservations_by_day={date(2026, 10, 14): 4},
+        reservations_by_day={date(2026, 10, 14): 7},
     )
 
-    assert assessment.available_to_reserve == 6
-    assert assessment.shortfall == 0
+    assert assessment.available_to_reserve == 3
+    assert assessment.shortfall == 2
 
 
-def test_tc_spl_95_003_endpoint_shows_requirement_quantities_without_creating_a_reservation(client):
+# TC-SPL-95-04 — read-only endpoint presents a mapped planning requirement.
+def test_tc_spl_95_04_endpoint_shows_requirement_quantities_without_creating_a_reservation(client):
     """AC3/AC4: Technical Support sees an assessment and the endpoint remains read-only."""
 
     response = client.get("/api/equipment-availability", headers=headers())
@@ -160,7 +272,40 @@ def test_tc_spl_95_003_endpoint_shows_requirement_quantities_without_creating_a_
     assert line["commitment_end"] == "2026-10-15"
 
 
-def test_tc_spl_95_004_only_technical_support_can_read_availability(client):
-    """AC4 negative/security: a valid account without Technical Support permission is refused."""
+# TC-SPL-95-05 — authentication and every non-Technical-Support staff role are refused.
+@pytest.mark.parametrize(
+    "account_id",
+    [EVENT_ORGANISER, EVENT_COORDINATOR, VENUE_STAFF, OPERATIONS_MANAGER],
+)
+def test_tc_spl_95_05_only_technical_support_can_read_availability(client, account_id):
+    """AC4 negative/security: authentication alone never grants the availability workspace."""
 
-    assert client.get("/api/equipment-availability", headers=headers(OUTSIDER)).status_code == 403
+    assert client.get("/api/equipment-availability").status_code == 401
+    assert client.get("/api/equipment-availability", headers=headers(account_id)).status_code == 403
+
+
+# TC-SPL-95-06 — only active, mapped, dated requirements on planning events are actionable.
+def test_tc_spl_95_06_endpoint_filters_to_assessable_planning_requirements(client):
+    """Scope: each active planning status appears; excluded lines are not staff work."""
+
+    response = client.get("/api/equipment-availability", headers=headers())
+
+    assert response.status_code == 200
+    assert [line["requirement_id"] for line in response.json["assessments"]] == [1, 6, 7, 8, 9]
+
+
+# TC-SPL-95-07 — an exhausted stock pool remains explicit rather than looking healthy.
+def test_tc_spl_95_07_overcommitment_is_exposed_separately_from_available_stock():
+    """AC3 boundary: availability floors at zero while overcommitment remains visible to staff."""
+
+    assessment = calculate_availability(
+        total_stock=4,
+        required_quantity=3,
+        collection_date=date(2026, 10, 14),
+        return_date=date(2026, 10, 15),
+        reservations_by_day={date(2026, 10, 14): 6},
+    )
+
+    assert assessment.available_to_reserve == 0
+    assert assessment.overcommitted_units == 2
+    assert assessment.shortfall == 3
