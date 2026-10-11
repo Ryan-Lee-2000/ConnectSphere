@@ -11,6 +11,7 @@ from .coordinator_assignment import register_coordinator_assignment_routes
 from .equipment_availability import register_equipment_availability_routes
 from .equipment_catalogue import register_equipment_catalogue_routes
 from .equipment_requirements import register_equipment_requirement_routes
+from .equipment_return_dates import register_equipment_return_date_routes
 from .equipment_review_queue import register_equipment_review_queue_routes
 from .event_registrations import register_event_registration_routes
 from .event_requests import register_event_request_routes
@@ -126,6 +127,7 @@ def create_app(test_config=None):
     register_equipment_availability_routes(app)
     register_equipment_requirement_routes(app)
     register_equipment_review_queue_routes(app)
+    register_equipment_return_date_routes(app)
     register_coordinator_assignment_routes(app)
     register_event_review_routes(app)
     register_registration_settings_routes(app)
