@@ -940,3 +940,10 @@ button { touch-action: manipulation; }
   .equipment-review-queue__item { flex-wrap: wrap; }
   .equipment-review-queue__facts { grid-template-columns: 1fr; }
 }
+/* SPL-100: a reservation's planned return date, with its own change history underneath. */
+.planned-return-date { display: grid; gap: var(--space-2); max-width: 28rem; }
+.planned-return-date dl { display: flex; gap: var(--space-2); align-items: baseline; margin: 0; }
+.planned-return-date dt { margin: 0; color: var(--color-muted-slate); font-size: 0.85rem; }
+.planned-return-date dd { margin: 0; font-size: 1.1rem; font-weight: 600; }
+.planned-return-date__note,
+.planned-return-date__history { margin: 0; color: var(--color-muted-slate); font-size: 0.85rem; }

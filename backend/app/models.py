@@ -569,6 +569,14 @@ class EquipmentReservation(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # SPL-100 AC3: who last moved the planned return date, and when. The date itself is
+    # ``commitment_end_date``, which SPL-97 already defaults to the requirement's required end
+    # date (AC1); these two record only that someone changed it, so a reservation nobody has
+    # edited reads as untouched rather than as edited by whoever reserved it.
+    return_date_changed_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    return_date_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship(back_populates="equipment_reservations")
     equipment_requirement: Mapped[EquipmentRequirement] = relationship(
         back_populates="reservations"
