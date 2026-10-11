@@ -11,7 +11,7 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
 RUN pnpm build
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 WORKDIR /app
 RUN pip install --no-cache-dir uv==0.11.33
 COPY pyproject.toml uv.lock ./
