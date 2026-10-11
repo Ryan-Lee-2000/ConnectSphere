@@ -138,6 +138,11 @@ def test_tc_spl_138_05_populated_migration_preserves_legacy(pg_url):
         equipment_after = dict(
             conn.execute(text("SELECT * FROM equipment_types WHERE id=138")).mappings().one()
         )
+        # SPL-96 adds equipment_types.unavailable_units after this story's migration, so the
+        # upgrade legitimately introduces one new column. This case is about the catalogue's
+        # existing data surviving, so the new column is checked for its documented default
+        # ("all stock usable") and then removed, exactly as exact_start/exact_end are above.
+        assert equipment_after.pop("unavailable_units") == 0
         assert equipment_after == equipment_before
         assert conn.scalar(
             text("SELECT relrowsecurity FROM pg_class WHERE relname='venue_operational_blocks'")

@@ -48,6 +48,16 @@ def register_equipment_catalogue_routes(app: Flask) -> None:
             item = session.get(EquipmentType, equipment_type_id)
             if item is None:
                 abort(404, "Equipment type not found.")
+            # SPL-96 AC1 says the unavailable total can never exceed total stock. Lowering stock
+            # is the other way to break that rule, so it is refused here with a clear message
+            # instead of failing later as a database constraint error.
+            new_stock = attributes.get("total_stock")
+            if new_stock is not None and new_stock < item.unavailable_units:
+                abort(
+                    400,
+                    f"{item.unavailable_units} unit(s) are marked unavailable, so total stock "
+                    f"cannot be lowered to {new_stock}. Restore units first.",
+                )
             for name, value in attributes.items():
                 setattr(item, name, value)
             try:

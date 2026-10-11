@@ -17,6 +17,7 @@ const unmappedRequirement = {
   planned_return_date: '2026-10-14', status: 'unmapped', essentiality: 'undecided' as const,
   consulted_technical_support: null, essentiality_decision_note: null,
   essentiality_decided_at: null, essentiality_decided_by: null,
+  review_reason: null, review_flagged_at: null,
 };
 
 function payload(requirements: unknown[] = [unmappedRequirement], removed_requirements: unknown[] = []) {

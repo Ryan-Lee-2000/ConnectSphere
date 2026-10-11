@@ -27,6 +27,9 @@ type Requirement = {
   essentiality_decision_note: string | null;
   essentiality_decided_at: string | null;
   essentiality_decided_by: TechnicalSupportStaff | null;
+  // SPL-96 AC4: why Technical Support flagged this line, and when. Null unless flagged.
+  review_reason: string | null;
+  review_flagged_at: string | null;
 };
 
 type EquipmentRequirementPayload = {
@@ -308,6 +311,11 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
               <h2>{requirement.equipment_type?.name ?? requirement.organiser_equipment_text}</h2>
               {requirement.equipment_type && <p className="equipment-requirements__original">Organiser wording: {requirement.organiser_equipment_text}</p>}</div>
               <span className={`equipment-requirements__status equipment-requirements__status--${requirement.status}`}>{statusLabel(requirement.status)}</span></header>
+            {/* SPL-96 AC4: the coordinator sees the flag and its reason on their own line. The
+                status badge above already carries the flag; this says why it is there. */}
+            {requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
+              Technical support flagged this for review: {requirement.review_reason}
+            </p>}
             <dl className="equipment-requirements__facts">
               <div><dt>Quantity</dt><dd>{requirement.quantity}</dd></div>
               <div><dt>Required date</dt><dd>{requirement.required_start_date ? formatDate(requirement.required_start_date) : 'Set when mapped'}</dd></div>

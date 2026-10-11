@@ -32,6 +32,9 @@ type QueueLine = {
   required_start_date: string | null;
   required_end_date: string | null;
   status: string;
+  // SPL-96 AC4: why this line was flagged Review Required. Null unless flagged.
+  review_reason: string | null;
+  review_flagged_at: string | null;
   notes?: string | null;
   review_notes?: ReviewNote[];
 };
@@ -139,6 +142,10 @@ export function EquipmentReviewQueue({ accessToken, request }: {
               <h2>{line.equipment_type ? line.equipment_type.name : line.organiser_equipment_text}</h2>
               {/* AC2: a line never mapped to the catalogue is work in itself, so it says so. */}
               {line.needs_mapping && <p className="equipment-review-queue__flag">Needs mapping to the catalogue</p>}
+              {/* SPL-96 AC4: a flagged line shows Review Required (in the status below) and the
+                  reason it was flagged, so the queue says what needs deciding, not just that
+                  something does. */}
+              {line.review_reason && <p className="equipment-review-queue__flag">Review required: {line.review_reason}</p>}
               <dl className="equipment-review-queue__facts">
                 <div><dt>Quantity</dt><dd>{line.quantity}</dd></div>
                 <div><dt>Required</dt><dd>{formatDate(line.required_start_date)} – {formatDate(line.required_end_date)}</dd></div>
