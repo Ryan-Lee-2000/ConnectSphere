@@ -140,9 +140,12 @@ def register_equipment_availability_routes(app: Flask) -> None:
                 assessments=[
                     _serialize_requirement(session, requirement) for requirement in requirements
                 ],
+                # Both inputs this calculation was built to take are now supplied: SPL-97's
+                # reservations and SPL-96's unavailable units.
                 input_notice=(
                     "Availability includes reservations held across each equipment type's full "
-                    "commitment period. Reserving units does not confirm the event."
+                    "commitment period, and units Technical Support has recorded as unavailable. "
+                    "Reserving units does not confirm the event."
                 ),
             )
 
@@ -210,6 +213,10 @@ def register_equipment_availability_routes(app: Flask) -> None:
             requirement.status = _quantity_status(
                 requirement.quantity, assessment.reserved_quantity
             )
+            # SPL-96 AC3/AC4 added the explanation behind the flag. It is cleared with the flag,
+            # so a stale reason can never outlive the Review Required state it explains.
+            requirement.review_reason = None
+            requirement.review_flagged_at = None
             result = {"assessment": _serialize_requirement(session, requirement)}
         return jsonify(result)
 
@@ -284,12 +291,21 @@ def _assessment_for(
         overlap_end = min(requirement.required_end_date, reservation.commitment_end_date)
         for day in commitment_days(overlap_start, overlap_end):
             reservations_by_day[day] = reservations_by_day.get(day, 0) + reservation.quantity
+    # SPL-96 AC2. Unavailability is current state with no end date (the story rules out a
+    # maintenance schedule), so the same figure applies to every day of this commitment. Supplying
+    # it here, rather than at the route, means the reserve and revalidate transactions above honour
+    # it too — which is the "and reservation" half of AC2.
+    unavailable_by_day = {
+        day: equipment_type.unavailable_units
+        for day in commitment_days(collection_date, requirement.required_end_date)
+    }
     return calculate_availability(
         total_stock=equipment_type.total_stock,
         required_quantity=requirement.quantity,
         collection_date=collection_date,
         return_date=requirement.required_end_date,
         reserved_quantity=reserved_quantity,
+        unavailable_by_day=unavailable_by_day,
         reservations_by_day=reservations_by_day,
     )
 
@@ -312,6 +328,8 @@ def _serialize_requirement(session: Session, requirement: EquipmentRequirement) 
     assert equipment_type is not None
     assert requirement.required_start_date is not None
     assert requirement.required_end_date is not None
+    # SPL-96's unavailable units are supplied inside _assessment_for, so the list, reserve and
+    # revalidate paths all see the same reduced usable stock.
     assessment = _assessment_for(session, requirement, equipment_type)
     return {
         "requirement_id": requirement.id,

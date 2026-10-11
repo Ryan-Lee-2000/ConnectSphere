@@ -443,6 +443,13 @@ def _serialize_requirement(line: EquipmentRequirement) -> dict[str, Any]:
         if line.essentiality_decider
         else None,
         "removed_at": line.removed_at.isoformat() if line.removed_at else None,
+        # SPL-96 AC4: the assigned coordinator sees the Review Required flag and its reason on
+        # their own event's affected line. The flag itself is ``status``; these explain it.
+        # Null on any line that is not flagged.
+        "review_reason": line.review_reason,
+        "review_flagged_at": (
+            line.review_flagged_at.isoformat() if line.review_flagged_at else None
+        ),
     }
 
 

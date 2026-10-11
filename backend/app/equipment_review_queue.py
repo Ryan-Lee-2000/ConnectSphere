@@ -265,6 +265,12 @@ def _serialize_line(line: EquipmentRequirement, coordinator: Account | None) -> 
             line.required_end_date.isoformat() if line.required_end_date else None
         ),
         "status": line.status,
+        # SPL-96 AC4: Technical Support sees the Review Required flag *and its reason* here.
+        # Null on any line that is not flagged.
+        "review_reason": line.review_reason,
+        "review_flagged_at": (
+            line.review_flagged_at.isoformat() if line.review_flagged_at else None
+        ),
     }
 
 
