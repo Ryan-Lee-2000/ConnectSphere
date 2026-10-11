@@ -577,6 +577,42 @@ class EquipmentReservation(Base):
     reserved_by: Mapped[Account] = relationship(foreign_keys=[reserved_by_account_id])
 
 
+# SPL-92 AC3: a note is saved with its author and time. The longest a reviewer may write; the
+# same limit SPL-90 puts on a coordinator's technical notes, so the two read alike.
+MAX_REVIEW_NOTE_LENGTH = 2_000
+
+
+class EquipmentReviewNote(Base):
+    """One Technical Support note or clarification question on a requirement line (SPL-92).
+
+    Notes are additive and never edited or deleted: AC3 asks for the author and time, and the
+    assigned coordinator reads them as a record of what was asked. A line's note history is
+    therefore append-only, which is also why there is no status on this table.
+    """
+
+    __tablename__ = "equipment_review_notes"
+    __table_args__ = (
+        CheckConstraint("length(trim(note)) > 0", name="ck_equipment_review_notes_note_not_blank"),
+        Index(
+            "ix_equipment_review_notes_requirement_created",
+            "equipment_requirement_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    author_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    equipment_requirement: Mapped[EquipmentRequirement] = relationship()
+    author: Mapped[Account] = relationship(foreign_keys=[author_account_id])
+
+
 class EventCoordinatorAssignment(Base):
     """The single Event Coordinator currently responsible for an event request."""
 

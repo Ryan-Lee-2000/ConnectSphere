@@ -23,6 +23,7 @@ import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 import { EquipmentCatalogue } from './EquipmentCatalogue';
 import { EquipmentRequirements } from './EquipmentRequirements';
 import { EquipmentAvailability } from './EquipmentAvailability';
+import { EquipmentReviewQueue } from './EquipmentReviewQueue';
 import { OpenEvents } from './OpenEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
@@ -81,6 +82,9 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   }
   if (requestedPath === '/workspace/equipment-catalogue') return role === 'technical_support_staff';
   if (requestedPath === '/workspace/equipment-availability') return role === 'technical_support_staff';
+  // SPL-92 AC5. The review queue is Technical Support's; the server enforces it too, so this only
+  // avoids offering a page that would refuse the request.
+  if (requestedPath === '/workspace/equipment-review-queue') return role === 'technical_support_staff';
   // SPL-115. Events open for registration, for attendees only (AC5); the server enforces it too.
   if (requestedPath === '/workspace/open-events') return role === 'attendee';
   return requestedPath === '/workspace/venues'
@@ -421,6 +425,8 @@ function Workspace({
         ? 'Equipment catalogue workspace'
       : safePath === '/workspace/equipment-availability'
         ? 'Equipment availability workspace'
+      : safePath === '/workspace/equipment-review-queue'
+        ? 'Equipment review queue workspace'
     : safePath === '/workspace/open-events'
       ? 'Open events workspace'
     : venueSearchEventId !== undefined
@@ -511,6 +517,12 @@ function Workspace({
           href="/workspace/equipment-availability"
           onClick={event => { event.preventDefault(); navigate('/workspace/equipment-availability'); }}
         >Equipment availability</a>}
+        {/* SPL-92: Technical Support's own queue of lines awaiting review. */}
+        {technicalSupportRole && <a
+          aria-current={safePath === '/workspace/equipment-review-queue' ? 'page' : undefined}
+          href="/workspace/equipment-review-queue"
+          onClick={event => { event.preventDefault(); navigate('/workspace/equipment-review-queue'); }}
+        >Equipment review queue</a>}
         {/* SPL-115: an attendee's way into registration. */}
         {attendeeRole && <a
           aria-current={safePath === '/workspace/open-events' ? 'page' : undefined}
@@ -639,7 +651,9 @@ function Workspace({
           <EquipmentCatalogue accessToken={session.access_token} key={`${activeRole}:equipment-catalogue`} />
         ) : safePath === '/workspace/equipment-availability' ? (
           <EquipmentAvailability accessToken={session.access_token} key={`${activeRole}:equipment-availability`} />
-        ) : safePath === '/workspace/open-events' ? (
+        ) : safePath === '/workspace/equipment-review-queue' ? (
+          <EquipmentReviewQueue accessToken={session.access_token} key={`${activeRole}:equipment-review-queue`} />
+        ) :safePath === '/workspace/open-events' ? (
           <OpenEvents accessToken={session.access_token} key={`${activeRole}:open-events`} />
         ) : (
           <>

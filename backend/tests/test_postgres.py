@@ -30,6 +30,8 @@ PRODUCT_TABLES = {
     "venue_booking_status_history",
     "registration_settings_history",
     "event_registrations",
+    # SPL-92: Technical Support's notes and questions on requirement lines.
+    "equipment_review_notes",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 
