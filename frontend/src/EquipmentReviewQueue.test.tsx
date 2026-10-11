@@ -22,6 +22,8 @@ const mappedLine = {
   required_start_date: '2026-11-20',
   required_end_date: '2026-11-21',
   status: 'requested',
+  review_reason: null,
+  review_flagged_at: null,
 };
 
 const legacyLine = {
@@ -127,4 +129,22 @@ it('[TC-SPL-92-09] says plainly when nothing is awaiting review', async () => {
   expect(await screen.findByRole('heading', { name: 'Nothing is awaiting review' })).toBeTruthy();
   // The page still explains itself rather than showing a bare empty list.
   expect(screen.getByRole('heading', { name: 'Equipment awaiting review' })).toBeTruthy();
+});
+
+// TC-SPL-96-03 — SPL-96 AC4 is displayed here, in SPL-92's queue.
+it('[TC-SPL-96-03] shows the Review Required reason on a flagged line, and nothing on an unflagged one', async () => {
+  const flagged = {
+    ...mappedLine,
+    id: 21,
+    status: 'review_required',
+    review_reason: 'Two units water damaged.',
+    review_flagged_at: '2026-10-10T09:30:00+08:00',
+  };
+  const request = async () => response({ requirements: [flagged, mappedLine] });
+  render(<EquipmentReviewQueue accessToken="token" request={request} />);
+
+  expect(await screen.findByText('Review required: Two units water damaged.')).toBeTruthy();
+  expect(screen.getByText('Review Required')).toBeTruthy();
+  // The unflagged line in the same list carries no reason, so the message is not boilerplate.
+  expect(screen.getAllByText(/Review required:/)).toHaveLength(1);
 });

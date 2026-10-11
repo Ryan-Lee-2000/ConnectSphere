@@ -112,6 +112,10 @@ export function EquipmentCatalogue({ accessToken, request }: { accessToken: stri
         <div className="equipment-card__heading"><div><p className="venue-card-label">Equipment type</p><h3>{item.name}</h3></div><button className="icon-button" aria-label={`Edit ${item.name}`} onClick={() => startEdit(item)} type="button"><Pencil size={16} />Edit</button></div>
         <p className="equipment-card__description">{item.description || 'No description recorded.'}</p>
         <div className="equipment-card__location"><MapPin size={16} aria-hidden="true" /><span>{item.location || 'Storage location not recorded'}</span></div>
+        {/* SPL-96: the way in to recording damaged or out-of-service units for this type. */}
+        <a className="equipment-card__unavailability" href={`/workspace/equipment-types/${item.id}/unavailability`}>
+          Unavailable units
+        </a>
       </article>)}
       {!loading && items.length === 0 && <div className="catalogue-empty"><Plus aria-hidden="true" size={22} /><h3>No equipment types yet</h3><p>Add the first shared equipment type above.</p></div>}
     </div>

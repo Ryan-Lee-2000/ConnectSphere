@@ -24,6 +24,7 @@ import { EquipmentCatalogue } from './EquipmentCatalogue';
 import { EquipmentRequirements } from './EquipmentRequirements';
 import { EquipmentAvailability } from './EquipmentAvailability';
 import { EquipmentReviewQueue } from './EquipmentReviewQueue';
+import { EquipmentUnavailability } from './EquipmentUnavailability';
 import { OpenEvents } from './OpenEvents';
 
 const INVALID_CREDENTIALS_MESSAGE =
@@ -85,6 +86,11 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   // SPL-92 AC5. The review queue is Technical Support's; the server enforces it too, so this only
   // avoids offering a page that would refuse the request.
   if (requestedPath === '/workspace/equipment-review-queue') return role === 'technical_support_staff';
+  // SPL-96 AC6. Recording and restoring unavailable units is Technical Support only; the server
+  // enforces it too, so this only avoids offering a page that would refuse the request.
+  if (/^\/workspace\/equipment-types\/\d+\/unavailability$/.test(requestedPath)) {
+    return role === 'technical_support_staff';
+  }
   // SPL-115. Events open for registration, for attendees only (AC5); the server enforces it too.
   if (requestedPath === '/workspace/open-events') return role === 'attendee';
   return requestedPath === '/workspace/venues'
@@ -411,6 +417,9 @@ function Workspace({
   const equipmentRequirementsEventId = equipmentRequirementsMatch ? Number(equipmentRequirementsMatch[1]) : undefined;
   const venueBookingMatch = safePath.match(/^\/workspace\/venue-bookings\/(\d+)$/);
   const venueBookingId = venueBookingMatch ? Number(venueBookingMatch[1]) : undefined;
+  // SPL-96. One equipment type's unavailable units, reached from the catalogue.
+  const unavailabilityMatch = safePath.match(/^\/workspace\/equipment-types\/(\d+)\/unavailability$/);
+  const unavailabilityTypeId = unavailabilityMatch ? Number(unavailabilityMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
     : safePath === '/workspace/venue-calendar'
@@ -427,6 +436,8 @@ function Workspace({
         ? 'Equipment availability workspace'
       : safePath === '/workspace/equipment-review-queue'
         ? 'Equipment review queue workspace'
+      : unavailabilityTypeId !== undefined
+        ? 'Equipment unavailable units workspace'
     : safePath === '/workspace/open-events'
       ? 'Open events workspace'
     : venueSearchEventId !== undefined
@@ -653,7 +664,13 @@ function Workspace({
           <EquipmentAvailability accessToken={session.access_token} key={`${activeRole}:equipment-availability`} />
         ) : safePath === '/workspace/equipment-review-queue' ? (
           <EquipmentReviewQueue accessToken={session.access_token} key={`${activeRole}:equipment-review-queue`} />
-        ) :safePath === '/workspace/open-events' ? (
+        ) : unavailabilityTypeId !== undefined ? (
+          <EquipmentUnavailability
+            accessToken={session.access_token}
+            equipmentTypeId={unavailabilityTypeId}
+            key={`${activeRole}:equipment-unavailability:${unavailabilityTypeId}`}
+          />
+        ) : safePath === '/workspace/open-events' ? (
           <OpenEvents accessToken={session.access_token} key={`${activeRole}:open-events`} />
         ) : (
           <>
