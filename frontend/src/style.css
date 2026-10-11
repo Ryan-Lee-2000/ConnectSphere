@@ -631,7 +631,7 @@ button { touch-action: manipulation; }
 .venue-booking-panel .eyebrow { margin: 0; }
 .venue-booking-panel__summary { display: grid; gap: var(--space-1); line-height: 1.5; }
 .venue-booking-panel__summary > span { color: var(--color-muted-slate); }
-.venue-booking-panel__status strong { color: var(--color-ink); }
+.venue-booking-panel__status strong { color: var(--color-ink-navy); }
 .venue-booking-panel .button { justify-self: start; }
 .venue-booking-panel__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .venue-booking-panel__confirm p { flex: 1 1 100%; margin: 0; max-width: 65ch; line-height: 1.5; }
@@ -640,14 +640,14 @@ button { touch-action: manipulation; }
 .registration-settings__form { gap: var(--space-4); margin-top: 0; }
 .registration-settings__form .hint, .registration-settings__form .error { margin: 0; }
 .registration-settings__history { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-3) 0 0 var(--space-5); border-top: 1px solid var(--color-blueprint-line); color: var(--color-muted-slate); line-height: 1.5; }
-.registration-settings__history strong { color: var(--color-ink); }
+.registration-settings__history strong { color: var(--color-ink-navy); }
 /* SPL-115: the attendee's list of events open for registration. Each entry wraps so SPL-116's
    form can open full-width underneath the event it registers for. */
 .open-events__item { flex-wrap: wrap; align-items: flex-start; }
 .open-events__details { display: grid; gap: var(--space-1); }
 .open-events__details h2 { margin: 0; font-size: 1.15rem; }
 .open-events__details p { margin: 0; color: var(--color-muted-slate); }
-.open-events__details .open-events__places { color: var(--color-ink); font-weight: 600; }
+.open-events__details .open-events__places { color: var(--color-ink-navy); font-weight: 600; }
 .open-events__form { flex-basis: 100%; }
 .open-events__empty { color: var(--color-muted-slate); }
 /* SPL-118: withdrawing asks for confirmation inline, beside the registration it applies to. */
