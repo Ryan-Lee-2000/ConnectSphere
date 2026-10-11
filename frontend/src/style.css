@@ -908,3 +908,35 @@ button { touch-action: manipulation; }
 .my-registrations__details p, .my-registrations__empty { margin: 0; color: var(--color-muted-slate); }
 .my-registrations__panel { flex-basis: 100%; display: grid; gap: var(--space-1); }
 .my-registrations__panel p { margin: 0; }
+
+/* SPL-92: the equipment review queue. Each line is a work item, so the facts sit in a row under
+   the heading and the Open control stays on the right at desk width. */
+.equipment-review-queue { display: grid; gap: var(--space-4); }
+.equipment-review-queue__list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.equipment-review-queue__item {
+  display: flex; gap: var(--space-3); align-items: flex-start; justify-content: space-between;
+  padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md);
+}
+.equipment-review-queue__item h2 { margin: var(--space-1) 0; font-size: 1.15rem; }
+.equipment-review-queue__event { margin: 0; color: var(--color-muted-slate); font-size: 0.9rem; }
+.equipment-review-queue__flag { margin: 0 0 var(--space-2); color: var(--color-refusal-red); font-size: 0.9rem; }
+.equipment-review-queue__facts {
+  display: grid; gap: var(--space-2) var(--space-4); margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+.equipment-review-queue__facts dt { margin: 0; color: var(--color-muted-slate); font-size: 0.8rem; }
+.equipment-review-queue__facts dd { margin: 0; }
+.equipment-review-queue__detail {
+  display: grid; gap: var(--space-2); padding: var(--space-4);
+  border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md);
+}
+.equipment-review-queue__detail h3 { margin: var(--space-2) 0 0; font-size: 1rem; }
+.equipment-review-queue__detail form { display: grid; gap: var(--space-2); max-width: 32rem; }
+.equipment-review-queue__notes { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.equipment-review-queue__notes li { display: grid; gap: var(--space-1); }
+.equipment-review-queue__notes span:last-child { color: var(--color-muted-slate); font-size: 0.85rem; }
+.equipment-review-queue__empty p { margin: 0; color: var(--color-muted-slate); }
+@media (max-width: 32rem) {
+  .equipment-review-queue__item { flex-wrap: wrap; }
+  .equipment-review-queue__facts { grid-template-columns: 1fr; }
+}
