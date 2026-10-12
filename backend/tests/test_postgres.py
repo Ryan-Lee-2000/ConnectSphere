@@ -36,6 +36,8 @@ PRODUCT_TABLES = {
     "equipment_review_notes",
     # SPL-96: the history behind each equipment type's unavailable-unit total.
     "equipment_unavailability_records",
+    # SPL-93: requirement-level unavailable/restored audit history.
+    "equipment_requirement_unavailability_records",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

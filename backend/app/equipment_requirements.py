@@ -9,8 +9,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.coordinator_assignment import is_assigned_coordinator
+from app.equipment_requirement_unavailability import serialize_record
 from app.event_requests import SINGAPORE
-from app.models import Account, AccountRole, EquipmentRequirement, EquipmentType, EventRequest, Role
+from app.models import (
+    Account,
+    AccountRole,
+    EquipmentRequirement,
+    EquipmentRequirementUnavailabilityRecord,
+    EquipmentType,
+    EventRequest,
+    Role,
+)
 
 PLANNING = "planning"
 UNMAPPED = "unmapped"
@@ -116,6 +125,9 @@ def _assigned_planning_event(session: Session, event_request_id: int) -> EventRe
             selectinload(EventRequest.equipment_requirements).joinedload(
                 EquipmentRequirement.essentiality_decider
             ),
+            selectinload(EventRequest.equipment_requirements)
+            .selectinload(EquipmentRequirement.unavailability_records)
+            .joinedload(EquipmentRequirementUnavailabilityRecord.recorded_by),
         )
     )
     if event is None or not is_assigned_coordinator(session, event_request_id, g.user_id):
@@ -453,6 +465,11 @@ def _serialize_requirement(line: EquipmentRequirement) -> dict[str, Any]:
         "review_flagged_at": (
             line.review_flagged_at.isoformat() if line.review_flagged_at else None
         ),
+        # SPL-93 AC2/AC3: the assigned coordinator sees the current status together with the
+        # original reason, optional suggestion and immutable actor/time history on this line.
+        "unavailability_history": [
+            serialize_record(record) for record in line.unavailability_records
+        ],
     }
 
 

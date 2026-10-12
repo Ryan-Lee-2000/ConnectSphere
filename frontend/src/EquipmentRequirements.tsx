@@ -30,6 +30,14 @@ type Requirement = {
   // SPL-96 AC4: why Technical Support flagged this line, and when. Null unless flagged.
   review_reason: string | null;
   review_flagged_at: string | null;
+  unavailability_history?: Array<{
+    id: number;
+    action: 'marked_unavailable' | 'restored_to_requested';
+    reason: string | null;
+    alternative_suggestion: string | null;
+    recorded_at: string;
+    recorded_by: { id: string; name: string | null };
+  }>;
 };
 
 type EquipmentRequirementPayload = {
@@ -316,6 +324,14 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
             {requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
               Technical support flagged this for review: {requirement.review_reason}
             </p>}
+            {(requirement.unavailability_history || []).length > 0 && <section className="equipment-requirements__unavailability" aria-label="Unavailable requirement history">
+              <strong>Technical Support availability history</strong>
+              <ul>{requirement.unavailability_history!.map(entry => <li key={entry.id}>
+                <span>{entry.action === 'marked_unavailable' ? 'Marked unavailable' : 'Restored to requested'} · {formatTimestamp(entry.recorded_at)} · {entry.recorded_by.name ?? 'Technical Support'}</span>
+                {entry.reason && <span>Reason: {entry.reason}</span>}
+                {entry.alternative_suggestion && <span>Alternative suggestion: {entry.alternative_suggestion}</span>}
+              </li>)}</ul>
+            </section>}
             <dl className="equipment-requirements__facts">
               <div><dt>Quantity</dt><dd>{requirement.quantity}</dd></div>
               <div><dt>Required date</dt><dd>{requirement.required_start_date ? formatDate(requirement.required_start_date) : 'Set when mapped'}</dd></div>
