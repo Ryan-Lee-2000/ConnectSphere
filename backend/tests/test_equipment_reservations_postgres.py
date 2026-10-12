@@ -163,11 +163,16 @@ def test_tc_spl_98_10_competing_releases_serialize_on_the_held_requirement(postg
 
     from test_exact_venue_bookings_postgres import ordered_race
 
-    assert postgres_app.test_client().post(
-        "/api/equipment-requirements/97/reservations",
-        headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
-        json={"quantity": 3},
-    ).status_code == 201
+    assert (
+        postgres_app.test_client()
+        .post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+        .status_code
+        == 201
+    )
 
     def release(client):
         return client.post(
