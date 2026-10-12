@@ -191,9 +191,9 @@ def test_tc_spl_98_10_competing_releases_serialize_on_the_held_requirement(postg
         assert requirement.status == "partially_reserved"
 
 
-# TC-SPL-98-12 — releases and SPL-96 unavailability use the stock-pool-first lock order.
-def test_tc_spl_98_12_release_and_unavailability_do_not_deadlock(postgres_app):
-    """AC4: PostgreSQL serializes the two workflows instead of aborting either as a deadlock."""
+# TC-SPL-98-12 — event-wide release and SPL-96 unavailability use the stock-pool-first lock order.
+def test_tc_spl_98_12_event_release_and_unavailability_do_not_deadlock(postgres_app):
+    """AC3/AC4: waiting release-all reads SPL-96's Review Required status after the pool lock."""
 
     assert (
         postgres_app.test_client()
@@ -243,9 +243,9 @@ def test_tc_spl_98_12_release_and_unavailability_do_not_deadlock(postgres_app):
         thread_ids["release"] = threading.get_ident()
         with postgres_app.test_client() as client:
             return client.post(
-                "/api/equipment-requirements/97/releases",
+                "/api/event-requests/97/equipment-releases",
                 headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
-                json={"quantity": 2, "reason": "Programme needs fewer units."},
+                json={"reason": "Programme needs fewer units."},
             ).status_code
 
     sql_event.listen(engine, "after_cursor_execute", after_type_lock)
@@ -278,6 +278,46 @@ def test_tc_spl_98_12_release_and_unavailability_do_not_deadlock(postgres_app):
     with Session(engine) as session:
         requirement = session.get(EquipmentRequirement, 97)
         equipment_type = session.get(EquipmentType, 97)
-        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 2
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 3
         assert equipment_type.unavailable_units == 8
         assert requirement.status == "review_required"
+
+
+# TC-SPL-98-13 — releasing and reserving a partially held line share the same stock-pool lock.
+def test_tc_spl_98_13_release_and_reserve_serialize_on_stock_pool(postgres_app):
+    """AC4: a release cannot deadlock with a later reservation of the same catalogue type."""
+
+    from test_exact_venue_bookings_postgres import ordered_race
+
+    assert (
+        postgres_app.test_client()
+        .post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+        .status_code
+        == 201
+    )
+
+    def release(client):
+        return client.post(
+            "/api/equipment-requirements/97/releases",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 2, "reason": "Programme needs fewer units."},
+        )
+
+    def reserve(client):
+        return client.post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+
+    first, second = ordered_race(postgres_app, release, reserve)
+    assert [first[0], second[0]] == [201, 201]
+    with Session(postgres_app.extensions["engine"]) as session:
+        requirement = session.get(EquipmentRequirement, 97)
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 2
+        assert sum(item.quantity for item in session.query(EquipmentReservation)) == 6
+        assert requirement.status == "partially_reserved"

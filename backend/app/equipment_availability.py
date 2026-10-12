@@ -238,9 +238,27 @@ def _locked_reservable_requirement(
 ) -> tuple[EquipmentRequirement, EquipmentType]:
     """Lock one line and its stock pool before the transaction-time availability recheck."""
 
+    # All stock-mutating routes lock the pool before its requirement lines. SPL-98 releases and
+    # SPL-96 unavailability both need this order, or two transactions can form a deadlock cycle.
+    equipment_type_id = session.scalar(
+        select(EquipmentRequirement.equipment_type_id).where(
+            EquipmentRequirement.id == requirement_id
+        )
+    )
+    if equipment_type_id is None:
+        requirement = session.get(EquipmentRequirement, requirement_id)
+        if requirement is None:
+            abort(404, "Equipment requirement not found.")
+        abort(409, "Map and date the equipment requirement before reserving it.")
+    equipment_type = session.scalar(
+        select(EquipmentType).where(EquipmentType.id == equipment_type_id).with_for_update()
+    )
+    if equipment_type is None:
+        abort(409, "The mapped equipment type is no longer available.")
     requirement = session.scalar(
         select(EquipmentRequirement)
         .where(EquipmentRequirement.id == requirement_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if requirement is None:
@@ -250,21 +268,12 @@ def _locked_reservable_requirement(
     if requirement.status not in RESERVABLE_REQUIREMENT_STATUSES:
         abort(409, "This equipment requirement cannot receive another reservation.")
     if (
-        requirement.equipment_type_id is None
+        requirement.equipment_type_id != equipment_type_id
         or requirement.required_start_date is None
         or requirement.required_end_date is None
     ):
         abort(409, "Map and date the equipment requirement before reserving it.")
 
-    # Every reservation of this type takes this same row lock. A competing transaction waits,
-    # then recalculates after the first commitment is visible instead of overallocating stock.
-    equipment_type = session.scalar(
-        select(EquipmentType)
-        .where(EquipmentType.id == requirement.equipment_type_id)
-        .with_for_update()
-    )
-    if equipment_type is None:
-        abort(409, "The mapped equipment type is no longer available.")
     return requirement, equipment_type
 
 

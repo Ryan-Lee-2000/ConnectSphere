@@ -79,16 +79,20 @@ def register_equipment_release_routes(app: Flask) -> None:
             # affected requirement rows.  Keep that order here and in the single-line release
             # path: SPL-96 may flag a requirement after it has locked the same stock pool.
             # Reversing the order can otherwise form a PostgreSQL deadlock cycle.
-            requirement_preview = session.scalars(
-                select(EquipmentRequirement)
+            # Preview scalar IDs only. Loading requirement entities before waiting for a stock-pool
+            # lock would cache their status in this session and could overwrite SPL-96's later
+            # Review Required update when the locked reread resumes.
+            type_ids = session.scalars(
+                select(EquipmentRequirement.equipment_type_id)
                 .where(EquipmentRequirement.event_request_id == event.id)
                 .order_by(EquipmentRequirement.id)
             ).all()
-            types = _locked_types_for(session, requirement_preview)
+            types = _locked_types_for(session, type_ids)
             requirements = session.scalars(
                 select(EquipmentRequirement)
                 .where(EquipmentRequirement.event_request_id == event.id)
                 .order_by(EquipmentRequirement.id)
+                .execution_options(populate_existing=True)
                 .with_for_update()
             ).all()
             releases: list[EquipmentReservationRelease] = []
@@ -203,11 +207,11 @@ def _locked_planning_event(session: Session, event_request_id: int) -> EventRequ
 
 
 def _locked_types_for(
-    session: Session, requirements: list[EquipmentRequirement]
+    session: Session, equipment_type_ids: list[int | None]
 ) -> dict[int, EquipmentType]:
     """Lock all pools in ascending order so event-wide release has a stable lock order."""
 
-    type_ids = sorted({item.equipment_type_id for item in requirements if item.equipment_type_id})
+    type_ids = sorted({item for item in equipment_type_ids if item is not None})
     if not type_ids:
         return {}
     types = session.scalars(
