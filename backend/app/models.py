@@ -635,6 +635,35 @@ class EquipmentReservation(Base):
     )
     equipment_type: Mapped[EquipmentType] = relationship()
     reserved_by: Mapped[Account] = relationship(foreign_keys=[reserved_by_account_id])
+    # SPL-98 keeps the original reservation immutable. Each later release is an appended audit
+    # record, so availability can use the remaining quantity without losing who reserved it.
+    releases: Mapped[list["EquipmentReservationRelease"]] = relationship(
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+        order_by="EquipmentReservationRelease.id",
+    )
+
+
+class EquipmentReservationRelease(Base):
+    """One auditable partial or full release from an equipment reservation (SPL-98)."""
+
+    __tablename__ = "equipment_reservation_releases"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_equipment_reservation_releases_positive_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reservation_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_reservations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    released_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reservation: Mapped[EquipmentReservation] = relationship(back_populates="releases")
+    released_by: Mapped[Account] = relationship(foreign_keys=[released_by_account_id])
 
 
 # SPL-92 AC3: a note is saved with its author and time. The longest a reviewer may write; the

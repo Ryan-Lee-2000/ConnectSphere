@@ -43,6 +43,8 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
   const [notice, setNotice] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({});
+  const [releaseQuantityDrafts, setReleaseQuantityDrafts] = useState<Record<number, string>>({});
+  const [releaseReasonDrafts, setReleaseReasonDrafts] = useState<Record<number, string>>({});
   const [actionError, setActionError] = useState<Record<number, string>>({});
   const [busyRequirement, setBusyRequirement] = useState<number | null>(null);
 
@@ -100,6 +102,54 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
     } finally { setBusyRequirement(null); }
   }
 
+  async function release(item: Assessment) {
+    const quantity = Number(releaseQuantityDrafts[item.requirement_id] || '');
+    const reason = (releaseReasonDrafts[item.requirement_id] || '').trim();
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > item.reserved_quantity) {
+      setActionError(current => ({ ...current, [item.requirement_id]: `Enter a whole number from 1 to ${item.reserved_quantity}.` }));
+      return;
+    }
+    if (!reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: 'Enter a reason for this release.' }));
+      return;
+    }
+    setBusyRequirement(item.requirement_id);
+    setActionError(current => ({ ...current, [item.requirement_id]: '' }));
+    try {
+      const response = await api(`/api/equipment-requirements/${item.requirement_id}/releases`, {
+        method: 'POST', body: JSON.stringify({ quantity, reason }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'Equipment could not be released.'));
+      setReleaseQuantityDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      setReleaseReasonDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      await reload();
+    } catch (reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: reason instanceof Error ? reason.message : 'Equipment could not be released.' }));
+    } finally { setBusyRequirement(null); }
+  }
+
+  async function releaseAllForEvent(item: Assessment) {
+    const reason = (releaseReasonDrafts[item.requirement_id] || '').trim();
+    if (!reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: 'Enter a reason before releasing this event’s equipment.' }));
+      return;
+    }
+    if (!window.confirm(`Release all remaining equipment held for “${item.event.name}”? This keeps the reservation history.`)) return;
+    setBusyRequirement(item.requirement_id);
+    setActionError(current => ({ ...current, [item.requirement_id]: '' }));
+    try {
+      const response = await api(`/api/event-requests/${item.event.id}/equipment-releases`, {
+        method: 'POST', body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'The event’s equipment could not be released.'));
+      setReleaseQuantityDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      setReleaseReasonDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      await reload();
+    } catch (reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: reason instanceof Error ? reason.message : 'The event’s equipment could not be released.' }));
+    } finally { setBusyRequirement(null); }
+  }
+
   if (error) return <section className="equipment-availability"><p className="error" role="alert">{error}</p></section>;
   if (!items) return <p role="status">Loading equipment availability…</p>;
 
@@ -115,7 +165,7 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
     </header>
     <p className="equipment-availability__notice" role="status">{notice}</p>
     {items.length === 0 ? <section className="equipment-availability__empty"><h2>No mapped planning requirements</h2><p>Availability appears here after an Event Coordinator maps an equipment requirement to the catalogue.</p></section> : <div className="equipment-availability__list">
-      {items.map(item => {
+      {items.map((item, index) => {
         const indicator = requirementIndicator(item);
         return <article className="equipment-availability__card" key={item.requirement_id}>
         <header><div><p className="equipment-availability__event">{item.event.name} · {formatDate(item.event.date)}</p><h2>{item.equipment_type.name}</h2><p>{item.equipment_type.location || 'Storage location not recorded'}</p></div><div className={`equipment-availability__state equipment-availability__state--${indicator.tone}`}><span>Requirement state</span><strong>{indicator.label}</strong><b>{indicator.held}</b><small>{indicator.detail}</small></div></header>
@@ -128,11 +178,18 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
         <EquipmentReservationAction
           busy={busyRequirement === item.requirement_id}
           error={actionError[item.requirement_id]}
+          firstForEvent={items.findIndex(candidate => candidate.event.id === item.event.id && candidate.reserved_quantity > 0) === index}
           item={item}
           onQuantityChange={value => setQuantityDrafts(current => ({ ...current, [item.requirement_id]: value }))}
+          onRelease={() => void release(item)}
+          onReleaseAll={() => void releaseAllForEvent(item)}
+          onReleaseQuantityChange={value => setReleaseQuantityDrafts(current => ({ ...current, [item.requirement_id]: value }))}
+          onReleaseReasonChange={value => setReleaseReasonDrafts(current => ({ ...current, [item.requirement_id]: value }))}
           onRevalidate={() => void revalidate(item)}
           onReserve={() => void reserve(item)}
           quantity={quantityDrafts[item.requirement_id] || ''}
+          releaseQuantity={releaseQuantityDrafts[item.requirement_id] || ''}
+          releaseReason={releaseReasonDrafts[item.requirement_id] || ''}
         />
       </article>;
       })}
@@ -140,23 +197,36 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
   </section>;
 }
 
-function EquipmentReservationAction({ busy, error, item, onQuantityChange, onRevalidate, onReserve, quantity }: {
+function EquipmentReservationAction({ busy, error, firstForEvent, item, onQuantityChange, onRelease, onReleaseAll, onReleaseQuantityChange, onReleaseReasonChange, onRevalidate, onReserve, quantity, releaseQuantity, releaseReason }: {
   busy: boolean; error?: string; item: Assessment; onQuantityChange: (value: string) => void;
-  onRevalidate: () => void; onReserve: () => void; quantity: string;
+  firstForEvent: boolean; onRelease: () => void; onReleaseAll: () => void;
+  onReleaseQuantityChange: (value: string) => void; onReleaseReasonChange: (value: string) => void;
+  onRevalidate: () => void; onReserve: () => void; quantity: string; releaseQuantity: string; releaseReason: string;
 }) {
   const remaining = item.required_quantity - item.reserved_quantity;
   const maximum = Math.min(remaining, item.available_to_reserve);
   const isReservable = ['requested', 'partially_reserved', 'review_required'].includes(item.requirement_status);
+  const releaseControl = item.reserved_quantity > 0 ? <section className="equipment-availability__release-control" aria-label={`Release ${item.equipment_type.name}`}>
+    <div className="equipment-availability__action-copy"><h3>Release held units</h3><p>Release only units no longer needed. The original reservation and this reason remain in history.</p></div>
+    <label htmlFor={`release-quantity-${item.requirement_id}`}>Units to release
+      <input id={`release-quantity-${item.requirement_id}`} min="1" max={item.reserved_quantity} onChange={event => onReleaseQuantityChange(event.target.value)} step="1" type="number" value={releaseQuantity} />
+    </label>
+    <label className="equipment-availability__release-reason" htmlFor={`release-reason-${item.requirement_id}`}>Release reason
+      <input id={`release-reason-${item.requirement_id}`} maxLength={2000} onChange={event => onReleaseReasonChange(event.target.value)} value={releaseReason} />
+    </label>
+    <button className="button button--secondary" disabled={busy} onClick={onRelease} type="button">{busy ? 'Releasing…' : 'Release units'}</button>
+    {firstForEvent && <button className="button button--secondary" disabled={busy} onClick={onReleaseAll} type="button">{busy ? 'Releasing…' : 'Release all for event'}</button>}
+  </section> : null;
   // Review Required remains actionable. Staff need the revalidation button to receive the
   // server's current feasibility decision, rather than an overcommitment banner that blocks it.
   if (item.requirement_status === 'review_required') return <footer className="equipment-availability__action">
     <div className="equipment-availability__action-copy"><h3>Review retained reservation</h3><p>{item.overcommitted_units > 0 ? <>Current stock is overcommitted by {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit' : 'units'}. Revalidate to confirm whether the retained reservation can remain.</> : 'Revalidate retained units against current stock before making another reservation.'}</p></div>
     <button className="button button--secondary" disabled={busy} onClick={onRevalidate} type="button">{busy ? 'Revalidating…' : 'Revalidate availability'}</button>
     <div className="equipment-availability__reserve-control"><label htmlFor={`reserve-${item.requirement_id}`}>Units to reserve<input disabled={maximum === 0} id={`reserve-${item.requirement_id}`} max={Math.max(1, maximum)} min="1" onChange={event => onQuantityChange(event.target.value)} step="1" type="number" value={quantity} /></label><button className="button button--primary" disabled={busy || maximum === 0} onClick={onReserve} type="button">{busy ? 'Reserving…' : maximum === 0 ? 'No units available' : 'Reserve units'}</button></div>
-    {error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
+    {releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
   </footer>;
-  if (item.overcommitted_units > 0 && item.reserved_quantity > 0) return <footer className="equipment-availability__action"><p><strong>Stock overcommitted.</strong> {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit is' : 'units are'} committed beyond current stock. The {item.reserved_quantity} retained {item.reserved_quantity === 1 ? 'unit remains' : 'units remain'} held while Technical Support resolves the stock conflict.</p></footer>;
-  if (item.requirement_status === 'reserved') return <footer className="equipment-availability__action"><p><strong>Reservation complete.</strong> All required units are held for this event’s commitment period.</p></footer>;
+  if (item.overcommitted_units > 0 && item.reserved_quantity > 0) return <footer className="equipment-availability__action"><p><strong>Stock overcommitted.</strong> {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit is' : 'units are'} committed beyond current stock. The {item.reserved_quantity} retained {item.reserved_quantity === 1 ? 'unit remains' : 'units remain'} held while Technical Support resolves the stock conflict.</p>{releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}</footer>;
+  if (item.requirement_status === 'reserved') return <footer className="equipment-availability__action"><p><strong>Reservation complete.</strong> All required units are held for this event’s commitment period.</p>{releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}</footer>;
   if (item.requirement_status === 'unavailable') return <footer className="equipment-availability__action"><p><strong>Unavailable requirement.</strong> Return this requirement to Requested before reserving units.</p></footer>;
   return <footer className="equipment-availability__action">
     <div className="equipment-availability__action-copy"><h3>Reserve units</h3><p>{maximum > 0 ? `Up to ${maximum} additional ${maximum === 1 ? 'unit is' : 'units are'} available to reserve now.` : 'No additional units are available for this full commitment period.'}</p></div>
@@ -164,6 +234,6 @@ function EquipmentReservationAction({ busy, error, item, onQuantityChange, onRev
       <label htmlFor={`reserve-${item.requirement_id}`}>Units to reserve<input disabled={maximum === 0} id={`reserve-${item.requirement_id}`} max={Math.max(1, maximum)} min="1" onChange={event => onQuantityChange(event.target.value)} step="1" type="number" value={quantity} /></label>
       <button className="button button--primary" disabled={busy || maximum === 0} onClick={onReserve} type="button">{busy ? 'Reserving…' : maximum === 0 ? 'No units available' : 'Reserve units'}</button>
     </div>}
-    {error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
+    {releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
   </footer>;
 }

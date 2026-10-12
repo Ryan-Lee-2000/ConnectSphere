@@ -132,12 +132,23 @@ def _locked_editable_requirement(
 ) -> EquipmentRequirement:
     """Lock an editable line on the same boundary used by Technical Support reservations.
 
-    A coordinator edit and a reservation must never both validate an old quantity.  Locking the
-    requirement row first serialises those actions; locking its mapped catalogue type as well
-    shares the stock-pool boundary used by the reservation route.  Once waiting work resumes,
-    this function rechecks that the line is still genuinely editable.
+    A coordinator edit and stock-mutation workflow must never validate an old quantity. All of
+    them acquire a mapped catalogue type before its requirement line, then re-read the line after
+    any wait. This avoids a cycle with release/unavailability while retaining the edit guard.
     """
 
+    equipment_type_id = session.scalar(
+        select(EquipmentRequirement.equipment_type_id).where(
+            EquipmentRequirement.id == requirement_id,
+            EquipmentRequirement.event_request_id == event.id,
+        )
+    )
+    if equipment_type_id is not None:
+        equipment_type = session.scalar(
+            select(EquipmentType).where(EquipmentType.id == equipment_type_id).with_for_update()
+        )
+        if equipment_type is None:
+            abort(409, "The mapped equipment type is no longer available.")
     line = session.scalar(
         select(EquipmentRequirement)
         .where(
@@ -154,16 +165,8 @@ def _locked_editable_requirement(
         abort(404, "Equipment requirement not found.")
     if line.status not in EDITABLE_STATUSES:
         abort(409, "Only unreserved equipment requirements can be changed or removed.")
-    if line.equipment_type_id is not None:
-        # Reservation transactions lock this exact row after the requirement row.  Keep the
-        # order identical to prevent deadlocks while making catalogue remapping atomic.
-        equipment_type = session.scalar(
-            select(EquipmentType)
-            .where(EquipmentType.id == line.equipment_type_id)
-            .with_for_update()
-        )
-        if equipment_type is None:
-            abort(409, "The mapped equipment type is no longer available.")
+    if line.equipment_type_id != equipment_type_id:
+        abort(409, "This equipment requirement changed while its edit was being prepared.")
     return line
 
 

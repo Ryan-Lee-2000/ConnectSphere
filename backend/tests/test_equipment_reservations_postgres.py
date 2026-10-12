@@ -10,6 +10,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
+from time import monotonic, sleep
 
 import pytest
 from app import create_app
@@ -19,13 +20,15 @@ from app.models import (
     Base,
     EquipmentRequirement,
     EquipmentReservation,
+    EquipmentReservationRelease,
     EquipmentType,
     EventCoordinatorAssignment,
     EventRequest,
     Organisation,
     Role,
 )
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy import event as sql_event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -154,3 +157,167 @@ def test_tc_spl_97_13_coordinator_quantity_change_and_reservation_cannot_both_su
         requirement = session.get(EquipmentRequirement, 97)
         reservations = session.query(EquipmentReservation).all()
         assert (requirement.quantity, sum(row.quantity for row in reservations)) in {(1, 0), (6, 3)}
+
+
+# TC-SPL-98-10 — two release requests cannot both consume the same held units.
+def test_tc_spl_98_10_competing_releases_serialize_on_the_held_requirement(postgres_app):
+    """AC4: PostgreSQL locks make the second release recalculate after the first commits."""
+
+    from test_exact_venue_bookings_postgres import ordered_race
+
+    assert (
+        postgres_app.test_client()
+        .post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+        .status_code
+        == 201
+    )
+
+    def release(client):
+        return client.post(
+            "/api/equipment-requirements/97/releases",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 2, "reason": "Reduce the held equipment."},
+        )
+
+    first, second = ordered_race(postgres_app, release, release)
+    assert sorted([first[0], second[0]]) == [201, 409]
+    with Session(postgres_app.extensions["engine"]) as session:
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 2
+        requirement = session.get(EquipmentRequirement, 97)
+        assert requirement.status == "partially_reserved"
+
+
+# TC-SPL-98-12 — event-wide release and SPL-96 unavailability use the stock-pool-first lock order.
+def test_tc_spl_98_12_event_release_and_unavailability_do_not_deadlock(postgres_app):
+    """AC3/AC4: waiting release-all reads SPL-96's Review Required status after the pool lock."""
+
+    assert (
+        postgres_app.test_client()
+        .post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+        .status_code
+        == 201
+    )
+    engine = postgres_app.extensions["engine"]
+    unavailability_type_locked = threading.Event()
+    permit_unavailability = threading.Event()
+    release_waiting_on_type = threading.Event()
+    thread_ids: dict[str, int] = {}
+    pids: dict[str, int] = {}
+
+    def after_type_lock(conn, cursor, statement, params, context, many):
+        if (
+            threading.get_ident() == thread_ids.get("unavailability")
+            and "FROM equipment_types" in statement
+            and "FOR UPDATE" in statement
+        ):
+            unavailability_type_locked.set()
+            assert permit_unavailability.wait(10), "Race driver did not release unavailability"
+
+    def before_type_lock(conn, cursor, statement, params, context, many):
+        if (
+            threading.get_ident() == thread_ids.get("release")
+            and "FROM equipment_types" in statement
+            and "FOR UPDATE" in statement
+        ):
+            pids["release"] = conn.connection.driver_connection.info.backend_pid
+            release_waiting_on_type.set()
+
+    def mark_unavailable():
+        thread_ids["unavailability"] = threading.get_ident()
+        with postgres_app.test_client() as client:
+            return client.post(
+                "/api/equipment-types/97/unavailable-units",
+                headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+                json={"quantity": 8, "reason": "Stock is temporarily unavailable."},
+            ).status_code
+
+    def release():
+        thread_ids["release"] = threading.get_ident()
+        with postgres_app.test_client() as client:
+            return client.post(
+                "/api/event-requests/97/equipment-releases",
+                headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+                json={"reason": "Programme needs fewer units."},
+            ).status_code
+
+    sql_event.listen(engine, "after_cursor_execute", after_type_lock)
+    sql_event.listen(engine, "before_cursor_execute", before_type_lock)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            unavailable = executor.submit(mark_unavailable)
+            assert unavailability_type_locked.wait(10), "Unavailability never locked the stock pool"
+            released = executor.submit(release)
+            assert release_waiting_on_type.wait(10), "Release did not request the stock-pool lock"
+            deadline = monotonic() + 8
+            while monotonic() < deadline:
+                with engine.connect() as connection:
+                    if connection.scalar(
+                        text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"),
+                        {"pid": pids["release"]},
+                    ):
+                        break
+                sleep(0.01)
+            else:
+                pytest.fail("Release did not wait behind the unavailability stock-pool lock")
+            permit_unavailability.set()
+            assert unavailable.result(timeout=10) == 201
+            assert released.result(timeout=10) == 201
+    finally:
+        permit_unavailability.set()
+        sql_event.remove(engine, "after_cursor_execute", after_type_lock)
+        sql_event.remove(engine, "before_cursor_execute", before_type_lock)
+
+    with Session(engine) as session:
+        requirement = session.get(EquipmentRequirement, 97)
+        equipment_type = session.get(EquipmentType, 97)
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 3
+        assert equipment_type.unavailable_units == 8
+        assert requirement.status == "review_required"
+
+
+# TC-SPL-98-13 — releasing and reserving a partially held line share the same stock-pool lock.
+def test_tc_spl_98_13_release_and_reserve_serialize_on_stock_pool(postgres_app):
+    """AC4: a release cannot deadlock with a later reservation of the same catalogue type."""
+
+    from test_exact_venue_bookings_postgres import ordered_race
+
+    assert (
+        postgres_app.test_client()
+        .post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+        .status_code
+        == 201
+    )
+
+    def release(client):
+        return client.post(
+            "/api/equipment-requirements/97/releases",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 2, "reason": "Programme needs fewer units."},
+        )
+
+    def reserve(client):
+        return client.post(
+            "/api/equipment-requirements/97/reservations",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 3},
+        )
+
+    first, second = ordered_race(postgres_app, release, reserve)
+    assert [first[0], second[0]] == [201, 201]
+    with Session(postgres_app.extensions["engine"]) as session:
+        requirement = session.get(EquipmentRequirement, 97)
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 2
+        assert sum(item.quantity for item in session.query(EquipmentReservation)) == 6
+        assert requirement.status == "partially_reserved"

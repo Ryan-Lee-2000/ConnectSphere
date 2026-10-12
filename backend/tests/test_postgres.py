@@ -19,6 +19,8 @@ PRODUCT_TABLES = {
     "event_requests",
     "equipment_requirements",
     "equipment_reservations",
+    # SPL-98: append-only history for partial and whole-event equipment releases.
+    "equipment_reservation_releases",
     "equipment_types",
     "event_coordinator_assignments",
     "event_coordinator_history",

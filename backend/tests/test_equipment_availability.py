@@ -11,6 +11,7 @@ from app.models import (
     Base,
     EquipmentRequirement,
     EquipmentReservation,
+    EquipmentReservationRelease,
     EquipmentType,
     EventRequest,
     Organisation,
@@ -406,3 +407,185 @@ def test_tc_spl_97_11_stock_reduction_exposes_overcommitment_without_deleting_re
     assert line["requirement_status"] == "reserved"
     assert line["reserved_quantity"] == 6
     assert line["overcommitted_units"] == 4
+
+
+# TC-SPL-98-01 — a positive partial release returns only the chosen held units to availability.
+def test_tc_spl_98_01_partial_release_preserves_reservation_and_updates_availability(client):
+    """AC1/AC2: a 3-unit hold released by 2 becomes a 1-unit partial reservation."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+
+    response = client.post(
+        "/api/equipment-requirements/1/releases",
+        headers=headers(),
+        json={"quantity": 2, "reason": "Two microphones are no longer needed."},
+    )
+
+    assert response.status_code == 201
+    assert response.json["assessment"]["reserved_quantity"] == 1
+    assert response.json["assessment"]["requirement_status"] == "partially_reserved"
+    assert response.json["releases"] == [
+        {
+            "id": 1,
+            "reservation_id": 1,
+            "quantity": 2,
+            "reason": "Two microphones are no longer needed.",
+            "released_by_account_id": TECHNICAL_SUPPORT,
+            "released_at": response.json["releases"][0]["released_at"],
+        }
+    ]
+    availability = client.get("/api/equipment-availability", headers=headers()).json["assessments"][
+        0
+    ]
+    assert (availability["reserved_quantity"], availability["available_to_reserve"]) == (1, 9)
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.query(EquipmentReservation).one().quantity == 3
+        assert session.query(EquipmentReservationRelease).one().quantity == 2
+
+
+# TC-SPL-98-02 — releasing a complete held quantity returns the line to Requested.
+def test_tc_spl_98_02_full_release_marks_the_active_line_requested(client):
+    """AC2: zero held units means Requested, while the original reservation remains auditable."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 6}
+        ).status_code
+        == 201
+    )
+    response = client.post(
+        "/api/equipment-requirements/1/releases",
+        headers=headers(),
+        json={"quantity": 6, "reason": "The programme no longer needs microphones."},
+    )
+
+    assert response.status_code == 201
+    assert response.json["assessment"]["requirement_status"] == "requested"
+    assert response.json["assessment"]["reserved_quantity"] == 0
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.query(EquipmentReservation).one().quantity == 6
+        assert session.query(EquipmentReservationRelease).one().reason.startswith("The programme")
+
+
+# TC-SPL-98-03 — invalid quantities and blank reasons have no effect.
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        ({"quantity": 4, "reason": "Too many"}, 409),
+        ({"quantity": 1, "reason": "   "}, 400),
+        ({"quantity": 0, "reason": "Nothing"}, 400),
+    ],
+)
+def test_tc_spl_98_03_invalid_release_is_refused_without_mutation(client, payload, expected_status):
+    """AC1/AC4: the server enforces the remaining held quantity and reason itself."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+    response = client.post(
+        "/api/equipment-requirements/1/releases", headers=headers(), json=payload
+    )
+
+    assert response.status_code == expected_status
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.query(EquipmentReservationRelease).count() == 0
+        assert session.get(EquipmentRequirement, 1).status == "partially_reserved"
+
+
+# TC-SPL-98-04 — event-wide release touches every held line once and leaves the event unchanged.
+def test_tc_spl_98_04_release_all_for_event_preserves_history_and_event_status(client):
+    """AC3: several line commitments release in one equipment workflow, not an event transition."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            "/api/equipment-requirements/6/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
+
+    response = client.post(
+        "/api/event-requests/1/equipment-releases",
+        headers=headers(),
+        json={"reason": "Event equipment plan has changed."},
+    )
+
+    assert response.status_code == 201
+    assert sorted(release["quantity"] for release in response.json["releases"]) == [2, 3]
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.get(EventRequest, 1).status == "planning"
+        assert [session.get(EquipmentRequirement, item).status for item in (1, 6)] == [
+            "requested",
+            "requested",
+        ]
+        assert session.query(EquipmentReservation).count() == 2
+        assert session.query(EquipmentReservationRelease).count() == 2
+
+
+# TC-SPL-98-05 — role and repeat guards stop a second release from changing stock again.
+def test_tc_spl_98_05_release_is_technical_support_only_and_never_releases_twice(client):
+    """AC4: identity and remaining quantities, not browser state, protect release history."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
+    forbidden = client.post(
+        "/api/equipment-requirements/1/releases",
+        headers=headers(EVENT_COORDINATOR),
+        json={"quantity": 1, "reason": "Not authorised"},
+    )
+    first = client.post(
+        "/api/equipment-requirements/1/releases",
+        headers=headers(),
+        json={"quantity": 2, "reason": "Release once"},
+    )
+    repeated = client.post(
+        "/api/equipment-requirements/1/releases",
+        headers=headers(),
+        json={"quantity": 1, "reason": "Try again"},
+    )
+
+    assert (forbidden.status_code, first.status_code, repeated.status_code) == (403, 201, 409)
+    with Session(client.application.extensions["engine"]) as session:
+        assert session.query(EquipmentReservationRelease).count() == 1
+
+
+# TC-SPL-98-08 — release does not clear an unresolved review safety state.
+def test_tc_spl_98_08_release_keeps_review_required_until_staff_revalidate(client):
+    """AC2: releasing stock changes the held quantity but never bypasses the review workflow."""
+
+    assert (
+        client.post(
+            "/api/equipment-requirements/8/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
+    # The review flag comes from the stock-review workflow. Seed that existing state here so this
+    # test isolates SPL-98's promise not to clear it while changing the retained quantity.
+    with Session(client.application.extensions["engine"]) as session, session.begin():
+        session.get(EquipmentRequirement, 8).status = "review_required"
+    response = client.post(
+        "/api/equipment-requirements/8/releases",
+        headers=headers(),
+        json={"quantity": 1, "reason": "One unit is no longer needed."},
+    )
+
+    assert response.status_code == 201
+    assert response.json["assessment"]["reserved_quantity"] == 1
+    assert response.json["assessment"]["requirement_status"] == "review_required"

@@ -10,6 +10,7 @@ from .authorization import associate_account_roles, authenticated_only
 from .coordinator_assignment import register_coordinator_assignment_routes
 from .equipment_availability import register_equipment_availability_routes
 from .equipment_catalogue import register_equipment_catalogue_routes
+from .equipment_releases import register_equipment_release_routes
 from .equipment_requirements import register_equipment_requirement_routes
 from .equipment_return_dates import register_equipment_return_date_routes
 from .equipment_review_queue import register_equipment_review_queue_routes
@@ -127,6 +128,7 @@ def create_app(test_config=None):
     register_equipment_catalogue_routes(app)
     register_equipment_availability_routes(app)
     register_equipment_requirement_routes(app)
+    register_equipment_release_routes(app)
     register_equipment_review_queue_routes(app)
     register_equipment_unavailability_routes(app)
     register_equipment_return_date_routes(app)
