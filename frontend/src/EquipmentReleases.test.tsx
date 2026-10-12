@@ -80,3 +80,21 @@ it('[TC-SPL-98-09] confirms and submits release-all through the event equipment 
   expect(confirm).toHaveBeenCalledOnce();
   confirm.mockRestore();
 });
+
+// TC-SPL-98-11 — an event-wide release remains available when an earlier request line holds none.
+it('[TC-SPL-98-11] renders release-all on the first held line for an event', async () => {
+  const unheldAssessment = {
+    ...heldAssessment,
+    requirement_id: 2,
+    equipment_type: { ...heldAssessment.equipment_type, id: 2, name: 'Projector' },
+    requirement_status: 'requested',
+    required_quantity: 1,
+    reserved_quantity: 0,
+  };
+  const request = vi.fn(async () => response({
+    assessments: [unheldAssessment, heldAssessment], input_notice: 'Reservations included.',
+  }));
+  render(<EquipmentAvailability accessToken="token" request={request} />);
+
+  expect(await screen.findByRole('button', { name: 'Release all for event' })).toBeTruthy();
+});

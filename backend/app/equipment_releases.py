@@ -75,13 +75,22 @@ def register_equipment_release_routes(app: Flask) -> None:
         _, reason = _release_request(require_quantity=False)
         with Session(app.extensions["engine"]) as session, session.begin():
             event = _locked_planning_event(session, event_request_id)
+            # Every workflow which changes a stock pool locks its EquipmentType before the
+            # affected requirement rows.  Keep that order here and in the single-line release
+            # path: SPL-96 may flag a requirement after it has locked the same stock pool.
+            # Reversing the order can otherwise form a PostgreSQL deadlock cycle.
+            requirement_preview = session.scalars(
+                select(EquipmentRequirement)
+                .where(EquipmentRequirement.event_request_id == event.id)
+                .order_by(EquipmentRequirement.id)
+            ).all()
+            types = _locked_types_for(session, requirement_preview)
             requirements = session.scalars(
                 select(EquipmentRequirement)
                 .where(EquipmentRequirement.event_request_id == event.id)
                 .order_by(EquipmentRequirement.id)
                 .with_for_update()
             ).all()
-            types = _locked_types_for(session, requirements)
             releases: list[EquipmentReservationRelease] = []
             released_requirements: list[EquipmentRequirement] = []
             for requirement in requirements:
@@ -147,6 +156,23 @@ def _locked_requirement(
 
     if requirement_id > MAX_REQUIREMENT_ID:
         abort(404, "Equipment requirement not found.")
+    # This first read finds the pool only. It deliberately does not lock the requirement: the
+    # global stock-mutation order is EquipmentType then EquipmentRequirement (SPL-96/SPL-98).
+    equipment_type_id = session.scalar(
+        select(EquipmentRequirement.equipment_type_id).where(
+            EquipmentRequirement.id == requirement_id
+        )
+    )
+    if equipment_type_id is None:
+        requirement = session.get(EquipmentRequirement, requirement_id)
+        if requirement is None:
+            abort(404, "Equipment requirement not found.")
+        abort(409, "This equipment requirement is not mapped to a catalogue type.")
+    equipment_type = session.scalar(
+        select(EquipmentType).where(EquipmentType.id == equipment_type_id).with_for_update()
+    )
+    if equipment_type is None:
+        abort(409, "The mapped equipment type is no longer available.")
     requirement = session.scalar(
         select(EquipmentRequirement)
         .where(EquipmentRequirement.id == requirement_id)
@@ -158,15 +184,8 @@ def _locked_requirement(
         abort(409, "Equipment can only be released while the event is in Planning.")
     if requirement.status not in RELEASABLE_REQUIREMENT_STATUSES:
         abort(409, "This equipment requirement has no active reservation to release.")
-    if requirement.equipment_type_id is None:
-        abort(409, "This equipment requirement is not mapped to a catalogue type.")
-    equipment_type = session.scalar(
-        select(EquipmentType)
-        .where(EquipmentType.id == requirement.equipment_type_id)
-        .with_for_update()
-    )
-    if equipment_type is None:
-        abort(409, "The mapped equipment type is no longer available.")
+    if requirement.equipment_type_id != equipment_type_id:
+        abort(409, "This equipment requirement changed while its release was being prepared.")
     return requirement, equipment_type
 
 

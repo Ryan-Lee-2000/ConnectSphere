@@ -178,7 +178,7 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
         <EquipmentReservationAction
           busy={busyRequirement === item.requirement_id}
           error={actionError[item.requirement_id]}
-          firstForEvent={items.findIndex(candidate => candidate.event.id === item.event.id) === index}
+          firstForEvent={items.findIndex(candidate => candidate.event.id === item.event.id && candidate.reserved_quantity > 0) === index}
           item={item}
           onQuantityChange={value => setQuantityDrafts(current => ({ ...current, [item.requirement_id]: value }))}
           onRelease={() => void release(item)}
