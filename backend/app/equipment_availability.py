@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
+from app.equipment_reservation_state import remaining_quantity, released_quantity
 from app.models import (
     EquipmentRequirement,
     EquipmentReservation,
@@ -285,12 +286,15 @@ def _assessment_for(
     reservations_by_day: dict[date, int] = {}
     reserved_quantity = 0
     for reservation in reservations:
+        held_quantity = remaining_quantity(reservation)
+        if not held_quantity:
+            continue
         if reservation.equipment_requirement_id == requirement.id:
-            reserved_quantity += reservation.quantity
+            reserved_quantity += held_quantity
         overlap_start = max(collection_date, reservation.commitment_start_date)
         overlap_end = min(requirement.required_end_date, reservation.commitment_end_date)
         for day in commitment_days(overlap_start, overlap_end):
-            reservations_by_day[day] = reservations_by_day.get(day, 0) + reservation.quantity
+            reservations_by_day[day] = reservations_by_day.get(day, 0) + held_quantity
     # SPL-96 AC2. Unavailability is current state with no end date (the story rules out a
     # maintenance schedule), so the same figure applies to every day of this commitment. Supplying
     # it here, rather than at the route, means the reserve and revalidate transactions above honour
@@ -366,5 +370,7 @@ def _serialize_reservation(reservation: EquipmentReservation) -> dict:
     return {
         "id": reservation.id,
         "quantity": reservation.quantity,
+        "released_quantity": released_quantity(reservation),
+        "remaining_quantity": remaining_quantity(reservation),
         "reserved_at": reservation.reserved_at.isoformat(),
     }

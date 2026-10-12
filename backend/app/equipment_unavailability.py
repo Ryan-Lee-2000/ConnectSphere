@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.equipment_availability import commitment_days
+from app.equipment_reservation_state import remaining_quantity
 from app.event_requests import SINGAPORE
 from app.models import (
     EquipmentRequirement,
@@ -191,10 +192,13 @@ def _flag_shortfall_lines(
 
     promised_by_day: dict[date, int] = {}
     for reservation in reservations:
+        held_quantity = remaining_quantity(reservation)
+        if not held_quantity:
+            continue
         for day in commitment_days(
             reservation.commitment_start_date, reservation.commitment_end_date
         ):
-            promised_by_day[day] = promised_by_day.get(day, 0) + reservation.quantity
+            promised_by_day[day] = promised_by_day.get(day, 0) + held_quantity
     short_days = {day for day, promised in promised_by_day.items() if promised > usable}
     if not short_days:
         return []
@@ -202,6 +206,8 @@ def _flag_shortfall_lines(
     # Several reservations can belong to one requirement line, so the line is flagged once.
     flagged: dict[int, EquipmentRequirement] = {}
     for reservation in reservations:
+        if not remaining_quantity(reservation):
+            continue
         days = set(
             commitment_days(reservation.commitment_start_date, reservation.commitment_end_date)
         )

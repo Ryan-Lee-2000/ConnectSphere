@@ -19,6 +19,7 @@ from app.models import (
     Base,
     EquipmentRequirement,
     EquipmentReservation,
+    EquipmentReservationRelease,
     EquipmentType,
     EventCoordinatorAssignment,
     EventRequest,
@@ -154,3 +155,30 @@ def test_tc_spl_97_13_coordinator_quantity_change_and_reservation_cannot_both_su
         requirement = session.get(EquipmentRequirement, 97)
         reservations = session.query(EquipmentReservation).all()
         assert (requirement.quantity, sum(row.quantity for row in reservations)) in {(1, 0), (6, 3)}
+
+
+# TC-SPL-98-10 — two release requests cannot both consume the same held units.
+def test_tc_spl_98_10_competing_releases_serialize_on_the_held_requirement(postgres_app):
+    """AC4: PostgreSQL locks make the second release recalculate after the first commits."""
+
+    from test_exact_venue_bookings_postgres import ordered_race
+
+    assert postgres_app.test_client().post(
+        "/api/equipment-requirements/97/reservations",
+        headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+        json={"quantity": 3},
+    ).status_code == 201
+
+    def release(client):
+        return client.post(
+            "/api/equipment-requirements/97/releases",
+            headers={"Authorization": f"Bearer {TECHNICAL_SUPPORT}"},
+            json={"quantity": 2, "reason": "Reduce the held equipment."},
+        )
+
+    first, second = ordered_race(postgres_app, release, release)
+    assert sorted([first[0], second[0]]) == [201, 409]
+    with Session(postgres_app.extensions["engine"]) as session:
+        assert sum(item.quantity for item in session.query(EquipmentReservationRelease)) == 2
+        requirement = session.get(EquipmentRequirement, 97)
+        assert requirement.status == "partially_reserved"

@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.equipment_availability import commitment_days
+from app.equipment_reservation_state import remaining_quantity
 from app.equipment_unavailability import usable_stock
 from app.event_requests import SINGAPORE
 from app.models import (
@@ -91,6 +92,8 @@ def register_equipment_return_date_routes(app: Flask) -> None:
                 .with_for_update()
             )
             requirement = session.get(EquipmentRequirement, reservation.equipment_requirement_id)
+            if remaining_quantity(reservation) == 0:
+                abort(409, "A fully released reservation cannot have its return date changed.")
 
             floor = requirement.required_end_date
             if floor is not None and new_date < floor:
@@ -142,14 +145,17 @@ def _added_day_conflict(
     ).all()
     promised_by_day: dict[date, int] = {}
     for other in others:
+        held_quantity = remaining_quantity(other)
+        if not held_quantity:
+            continue
         for day in commitment_days(other.commitment_start_date, other.commitment_end_date):
-            promised_by_day[day] = promised_by_day.get(day, 0) + other.quantity
+            promised_by_day[day] = promised_by_day.get(day, 0) + held_quantity
 
     # SPL-96's definition: total stock less the units currently out of service. Using total stock
     # here would promise units that physically cannot be handed over.
     usable = usable_stock(equipment_type)
     for day in added:
-        if promised_by_day.get(day, 0) + reservation.quantity > usable:
+        if promised_by_day.get(day, 0) + remaining_quantity(reservation) > usable:
             return day
     return None
 
