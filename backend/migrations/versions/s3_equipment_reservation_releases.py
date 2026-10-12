@@ -7,7 +7,6 @@ Revises: s3_equipment_return_dates
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "s3_equipment_releases"
 down_revision = "s3_equipment_return_dates"
 branch_labels = None
@@ -50,7 +49,9 @@ def upgrade():
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("released_by_account_id", sa.Uuid(), nullable=False),
         sa.Column("released_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("quantity > 0", name="ck_equipment_reservation_releases_positive_quantity"),
+        sa.CheckConstraint(
+            "quantity > 0", name="ck_equipment_reservation_releases_positive_quantity"
+        ),
         sa.ForeignKeyConstraint(
             ["reservation_id"], ["equipment_reservations.id"], ondelete="CASCADE"
         ),

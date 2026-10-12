@@ -638,7 +638,9 @@ class EquipmentReservation(Base):
     # SPL-98 keeps the original reservation immutable. Each later release is an appended audit
     # record, so availability can use the remaining quantity without losing who reserved it.
     releases: Mapped[list["EquipmentReservationRelease"]] = relationship(
-        back_populates="reservation", cascade="all, delete-orphan", order_by="EquipmentReservationRelease.id"
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+        order_by="EquipmentReservationRelease.id",
     )
 
 
@@ -647,9 +649,7 @@ class EquipmentReservationRelease(Base):
 
     __tablename__ = "equipment_reservation_releases"
     __table_args__ = (
-        CheckConstraint(
-            "quantity > 0", name="ck_equipment_reservation_releases_positive_quantity"
-        ),
+        CheckConstraint("quantity > 0", name="ck_equipment_reservation_releases_positive_quantity"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

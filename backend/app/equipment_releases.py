@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.equipment_availability import _quantity_status, _serialize_requirement
-from app.equipment_reservation_state import remaining_quantity, released_quantity
+from app.equipment_reservation_state import remaining_quantity
 from app.event_requests import SINGAPORE
 from app.models import (
     EquipmentRequirement,
@@ -86,7 +86,10 @@ def register_equipment_release_routes(app: Flask) -> None:
             released_requirements: list[EquipmentRequirement] = []
             for requirement in requirements:
                 equipment_type = types.get(requirement.equipment_type_id)
-                if equipment_type is None or requirement.status not in RELEASABLE_REQUIREMENT_STATUSES:
+                if (
+                    equipment_type is None
+                    or requirement.status not in RELEASABLE_REQUIREMENT_STATUSES
+                ):
                     continue
                 held = _held_quantity(session, requirement.id)
                 if held:
@@ -109,7 +112,9 @@ def register_equipment_release_routes(app: Flask) -> None:
                 "releases": [_serialize_release(item) for item in releases],
                 # An event may contain unmapped request lines. They never hold a catalogue
                 # reservation, so return assessments only for the lines this operation changed.
-                "assessments": [_serialize_requirement(session, item) for item in released_requirements],
+                "assessments": [
+                    _serialize_requirement(session, item) for item in released_requirements
+                ],
             }
         return jsonify(result), 201
 
@@ -187,7 +192,10 @@ def _locked_types_for(
     if not type_ids:
         return {}
     types = session.scalars(
-        select(EquipmentType).where(EquipmentType.id.in_(type_ids)).order_by(EquipmentType.id).with_for_update()
+        select(EquipmentType)
+        .where(EquipmentType.id.in_(type_ids))
+        .order_by(EquipmentType.id)
+        .with_for_update()
     ).all()
     return {item.id: item for item in types}
 

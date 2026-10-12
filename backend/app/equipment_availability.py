@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
-from app.equipment_reservation_state import remaining_quantity, released_quantity
+from app.equipment_reservation_state import released_quantity, remaining_quantity
 from app.models import (
     EquipmentRequirement,
     EquipmentReservation,

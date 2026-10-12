@@ -413,9 +413,12 @@ def test_tc_spl_97_11_stock_reduction_exposes_overcommitment_without_deleting_re
 def test_tc_spl_98_01_partial_release_preserves_reservation_and_updates_availability(client):
     """AC1/AC2: a 3-unit hold released by 2 becomes a 1-unit partial reservation."""
 
-    assert client.post(
-        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
 
     response = client.post(
         "/api/equipment-requirements/1/releases",
@@ -436,7 +439,9 @@ def test_tc_spl_98_01_partial_release_preserves_reservation_and_updates_availabi
             "released_at": response.json["releases"][0]["released_at"],
         }
     ]
-    availability = client.get("/api/equipment-availability", headers=headers()).json["assessments"][0]
+    availability = client.get("/api/equipment-availability", headers=headers()).json["assessments"][
+        0
+    ]
     assert (availability["reserved_quantity"], availability["available_to_reserve"]) == (1, 9)
     with Session(client.application.extensions["engine"]) as session:
         assert session.query(EquipmentReservation).one().quantity == 3
@@ -447,9 +452,12 @@ def test_tc_spl_98_01_partial_release_preserves_reservation_and_updates_availabi
 def test_tc_spl_98_02_full_release_marks_the_active_line_requested(client):
     """AC2: zero held units means Requested, while the original reservation remains auditable."""
 
-    assert client.post(
-        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 6}
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 6}
+        ).status_code
+        == 201
+    )
     response = client.post(
         "/api/equipment-requirements/1/releases",
         headers=headers(),
@@ -476,10 +484,15 @@ def test_tc_spl_98_02_full_release_marks_the_active_line_requested(client):
 def test_tc_spl_98_03_invalid_release_is_refused_without_mutation(client, payload, expected_status):
     """AC1/AC4: the server enforces the remaining held quantity and reason itself."""
 
-    assert client.post(
-        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
-    ).status_code == 201
-    response = client.post("/api/equipment-requirements/1/releases", headers=headers(), json=payload)
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+    response = client.post(
+        "/api/equipment-requirements/1/releases", headers=headers(), json=payload
+    )
 
     assert response.status_code == expected_status
     with Session(client.application.extensions["engine"]) as session:
@@ -491,12 +504,18 @@ def test_tc_spl_98_03_invalid_release_is_refused_without_mutation(client, payloa
 def test_tc_spl_98_04_release_all_for_event_preserves_history_and_event_status(client):
     """AC3: several line commitments release in one equipment workflow, not an event transition."""
 
-    assert client.post(
-        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
-    ).status_code == 201
-    assert client.post(
-        "/api/equipment-requirements/6/reservations", headers=headers(), json={"quantity": 2}
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 3}
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            "/api/equipment-requirements/6/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
 
     response = client.post(
         "/api/event-requests/1/equipment-releases",
@@ -520,9 +539,12 @@ def test_tc_spl_98_04_release_all_for_event_preserves_history_and_event_status(c
 def test_tc_spl_98_05_release_is_technical_support_only_and_never_releases_twice(client):
     """AC4: identity and remaining quantities, not browser state, protect release history."""
 
-    assert client.post(
-        "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 2}
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
     forbidden = client.post(
         "/api/equipment-requirements/1/releases",
         headers=headers(EVENT_COORDINATOR),
@@ -548,9 +570,12 @@ def test_tc_spl_98_05_release_is_technical_support_only_and_never_releases_twice
 def test_tc_spl_98_08_release_keeps_review_required_until_staff_revalidate(client):
     """AC2: releasing stock changes the held quantity but never bypasses the review workflow."""
 
-    assert client.post(
-        "/api/equipment-requirements/8/reservations", headers=headers(), json={"quantity": 2}
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/8/reservations", headers=headers(), json={"quantity": 2}
+        ).status_code
+        == 201
+    )
     # The review flag comes from the stock-review workflow. Seed that existing state here so this
     # test isolates SPL-98's promise not to clear it while changing the retained quantity.
     with Session(client.application.extensions["engine"]) as session, session.begin():
