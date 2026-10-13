@@ -874,3 +874,27 @@ class ClarificationRequest(Base):
     )
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     respondent: Mapped[Account | None] = relationship(foreign_keys=[respondent_account_id])
+
+
+class Notification(Base):
+    """One in-app notice for a single account (SPL-101); only its recipient may read it."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        # One notice per recipient per triggering change, so a retry cannot add a duplicate.
+        UniqueConstraint("recipient_account_id", "dedupe_key", name="uq_notifications_dedupe"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipient_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Null means unread.
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    event_request: Mapped[EventRequest] = relationship()

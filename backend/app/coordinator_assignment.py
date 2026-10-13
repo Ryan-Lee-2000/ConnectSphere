@@ -32,6 +32,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.notifications import add_coordinator_assigned_notice
 from app.slots import slots_for_range
 
 SUBMITTED = "submitted"
@@ -164,14 +165,16 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                         assigned_at=now,
                     )
                 )
-                session.add(
-                    EventCoordinatorHistory(
-                        event_request_id=event_request_id,
-                        new_coordinator_account_id=coordinator.id,
-                        changed_by_account_id=g.user_id,
-                        changed_at=now,
-                    )
+                history = EventCoordinatorHistory(
+                    event_request_id=event_request_id,
+                    new_coordinator_account_id=coordinator.id,
+                    changed_by_account_id=g.user_id,
+                    changed_at=now,
                 )
+                session.add(history)
+                session.flush()
+                # SPL-101. Saved with the assignment, so a refused assignment leaves no notice.
+                add_coordinator_assigned_notice(session, event, coordinator.id, history.id)
                 session.commit()
             except IntegrityError:
                 session.rollback()

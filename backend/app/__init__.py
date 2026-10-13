@@ -19,6 +19,7 @@ from .event_registrations import register_event_registration_routes
 from .event_requests import register_event_request_routes
 from .event_review import register_event_review_routes
 from .my_registrations import register_my_registration_routes
+from .notifications import register_notification_routes
 from .open_registrations import register_open_registration_routes
 from .registration_settings import register_registration_settings_routes
 from .venue_availability import register_venue_availability_routes
@@ -138,6 +139,7 @@ def create_app(test_config=None):
     register_event_registration_routes(app)
     register_open_registration_routes(app)
     register_my_registration_routes(app)
+    register_notification_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")
