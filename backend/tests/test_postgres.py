@@ -26,6 +26,7 @@ PRODUCT_TABLES = {
     "event_coordinator_history",
     "event_status_history",
     "clarification_requests",
+    "notifications",
     "venue_operational_blocks",
     "venue_bookings",
     "venue_booking_occupancy",

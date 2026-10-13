@@ -987,6 +987,26 @@ button { touch-action: manipulation; }
 .planned-return-date__note,
 .planned-return-date__history { margin: 0; color: var(--color-muted-slate); font-size: 0.85rem; }
 
+/* SPL-101: the personal notification inbox. */
+.notifications { max-width: 48rem; }
+.notifications h2 { margin: 0; font-size: clamp(1.75rem, 3.2vw, 2.5rem); line-height: 1.08; letter-spacing: -0.045em; }
+.notifications__heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-6); }
+.notifications__count { margin: 0; color: var(--color-muted-slate); }
+.notifications__list { margin: var(--space-6) 0 0; padding: 0; border-top: 1px solid var(--color-blueprint-line); list-style: none; }
+.notifications__item { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--color-blueprint-line); }
+.notifications__item--unread { padding-left: var(--space-4); border-left: 3px solid var(--color-mineral-teal); background: var(--color-mist-surface); }
+.notifications__message { margin: 0; font-weight: 650; line-height: 1.5; }
+.notifications__item:not(.notifications__item--unread) .notifications__message { font-weight: 400; }
+.notifications__meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: var(--space-1) 0 0; color: var(--color-muted-slate); font-size: .875rem; }
+.notifications__meta a { color: var(--color-mineral-teal); font-weight: 700; text-underline-offset: .2em; }
+.notifications__meta a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.notifications__empty { display: grid; gap: var(--space-1); padding: var(--space-12) 0; border-top: 1px solid var(--color-blueprint-line); border-bottom: 1px solid var(--color-blueprint-line); }
+.notifications__empty span { color: var(--color-muted-slate); }
+.notifications__skeleton { width: min(100%, 44rem); height: 4rem; border-radius: var(--radius-sm); background: var(--color-skeleton); animation: pulse 1.6s var(--ease-out) infinite alternate; }
+@media (max-width: 42rem) {
+  .notifications__item { flex-direction: column; }
+}
+
 /* SPL-91: before a coordinator changes a line Technical Support has already reserved stock for,
    say what the change will cost. Informational rather than an error, so it uses the accent line
    on a quiet surface instead of the refusal colours. */
