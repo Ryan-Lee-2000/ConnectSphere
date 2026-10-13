@@ -280,8 +280,17 @@ def test_tc_spl_90_007_soft_removes_an_unreserved_requirement_with_audit_timesta
 
 
 # TC-SPL-97-14 — coordinator edits and removals recheck the line after stock work is committed.
-def test_tc_spl_97_14_reserved_requirement_cannot_be_edited_or_removed(client):
-    """Regression: a coordinator cannot overwrite or remove a line once reservation work exists."""
+def test_tc_spl_97_14_a_reserved_line_is_never_silently_overwritten(client):
+    """Regression: a coordinator never silently overwrites a line once reservation work exists.
+
+    Updated by SPL-91. This case originally asserted that a change or removal of a reserved line
+    was *refused* (409), because until SPL-91 there was no safe way to change one. SPL-91 is the
+    story that makes it safe, and it keeps this case's guarantee by a different means: the change
+    is accepted, but the line is sent back to Technical Support as Review Required instead of
+    quietly keeping a status that described the old values. Releasing the held units is proved
+    in test_equipment_requirement_changes.py, which creates real reservations; this fixture has
+    none, so here the guarantee is the status, not a release.
+    """
 
     assert client.patch(endpoint(1), json=valid_payload(), headers=headers()).status_code == 200
     with Session(client.application.extensions["engine"]) as session:
@@ -289,12 +298,18 @@ def test_tc_spl_97_14_reserved_requirement_cannot_be_edited_or_removed(client):
         session.commit()
 
     edit = client.patch(endpoint(1), json={"quantity": 1}, headers=headers())
-    remove = client.delete(endpoint(1), headers=headers())
 
-    assert edit.status_code == 409
-    assert remove.status_code == 409
-    assert "unreserved" in edit.json["error"]
-    assert "unreserved" in remove.json["error"]
+    # Accepted, but never as a silent overwrite: the reviewer's earlier judgement no longer
+    # stands, so the line goes back to them rather than staying Partially Reserved.
+    assert edit.status_code == 200
+    assert edit.json["requirement"]["status"] == "review_required"
+    assert edit.json["requirement"]["review_reason"]
+
+    remove = client.delete(endpoint(1), headers=headers())
+    assert remove.status_code == 200
+    assert remove.json["requirement"]["status"] == "removed"
+    # And a removed line cannot be changed again, so stock work can never be resurrected.
+    assert client.patch(endpoint(1), json={"quantity": 2}, headers=headers()).status_code == 409
 
 
 # SPL-90 AC-4 / TC-SPL-90-008: only the assigned coordinator can read or change this event.

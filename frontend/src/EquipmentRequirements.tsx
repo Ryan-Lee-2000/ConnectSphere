@@ -106,6 +106,10 @@ function asPayload(draft: Draft) {
   return payload;
 }
 
+// SPL-91: the statuses in which a line may hold stock. Changing one of these lines releases
+// whatever it holds and sends it back to Technical Support, so the editor warns before saving.
+const HOLDING_STATUSES = new Set(['reserved', 'partially_reserved', 'review_required']);
+
 function RequirementEditor({
   eventDate,
   catalogue,
@@ -114,6 +118,7 @@ function RequirementEditor({
   onCancel,
   onSave,
   saving,
+  error,
 }: {
   eventDate: string | null;
   catalogue: EquipmentType[];
@@ -122,10 +127,13 @@ function RequirementEditor({
   onCancel: () => void;
   onSave: (draft: Draft) => void;
   saving: boolean;
+  error?: string | null;
 }) {
-  // This single editor handles three user actions: add a catalogue item, map organiser wording,
-  // and update an unreserved requirement. It never offers a reservation action.
+  // This single editor handles four user actions: add a catalogue item, map organiser wording,
+  // update an unreserved requirement, and (SPL-91) revise a line Technical Support has already
+  // reserved stock for. It never offers a reservation action of its own.
   const [draft, setDraft] = useState(() => newDraft(eventDate, initial));
+  const holdsStock = Boolean(initial && HOLDING_STATUSES.has(initial.status));
   const mapped = Boolean(initial?.equipment_type);
   const selectingDecision = draft.essentiality !== 'undecided';
   const decisionLocked = Boolean(initial && initial.essentiality !== 'undecided');
@@ -144,6 +152,13 @@ function RequirementEditor({
       </div>
       {initial && !mapped && <p className="equipment-requirements__history-note">Original organiser wording is retained as history.</p>}
     </div>
+    {/* SPL-91 AC2, said before the coordinator commits to it rather than discovered after: a
+        change to a line holding stock costs it that stock and a fresh Technical Support review. */}
+    {holdsStock && <p className="equipment-requirements__release-warning" role="note">
+      Technical Support has already reviewed this line. Changing the equipment, quantity, dates
+      or technical notes releases any units reserved for it and sends it back to Technical Support
+      for review. Recording criticality does not.
+    </p>}
     <div className="equipment-requirements__form-grid">
       <label className="equipment-requirements__wide">Catalogue equipment <span>Required</span>
         <select value={draft.equipment_type_id} onChange={event => update('equipment_type_id', event.target.value)} required>
@@ -199,6 +214,11 @@ function RequirementEditor({
         </label>
       </div>}
     </fieldset>
+    {/* A refused save is shown here, inside the form being edited and just above Save, rather
+        than at the top of the page (TC-SPL-91-10). The server's validation messages name the
+        field in their wording ("Quantity must be…") rather than as a separate key, so the form
+        cannot pin a message to one input; it sits with the form as a whole instead. */}
+    {error && <p className="error equipment-requirements__editor-error" role="alert">{error}</p>}
     <div className="equipment-requirements__editor-actions">
       <button className="button button--secondary" type="button" onClick={onCancel} disabled={saving}>Cancel</button>
       <button className="button button--primary" type="submit" disabled={saving || !draft.equipment_type_id}>
@@ -220,9 +240,14 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
   const [data, setData] = useState<EquipmentRequirementPayload | null>(null);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // SPL-91: a refused save belongs to the form that was being saved, not to the page. Kept
+  // separate from `error` so a failed removal on one line can never appear inside another
+  // line's open form.
+  const [editorError, setEditorError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showRemoved, setShowRemoved] = useState(false);
+  const openEditor = (target: number | 'new' | null) => { setEditorError(null); setEditing(target); };
 
   const endpoint = `/api/event-requests/${eventId}/equipment-requirements`;
   const load = async () => {
@@ -235,34 +260,46 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
 
   useEffect(() => {
     let current = true;
-    setData(null); setEditing(null); setError(null); setNotice(null);
+    setData(null); setEditing(null); setError(null); setEditorError(null); setNotice(null);
     void load().catch((reason: unknown) => { if (current) setError(reason instanceof Error ? reason.message : 'Could not load equipment requirements. Try again.'); });
     return () => { current = false; };
   }, [api, endpoint]);
 
   async function save(draft: Draft, requirement?: Requirement) {
     // POST adds a new catalogue-backed line; PATCH maps or updates an existing unreserved line.
-    setSaving(true); setError(null); setNotice(null);
+    setSaving(true); setError(null); setEditorError(null); setNotice(null);
     try {
       const response = await api(requirement ? `${endpoint}/${requirement.id}` : endpoint, {
         method: requirement ? 'PATCH' : 'POST',
         body: JSON.stringify(asPayload(draft)),
       });
       if (!response.ok) {
-        setError(await responseError(response, 'Could not save this equipment requirement.'));
+        setEditorError(await responseError(response, 'Could not save this equipment requirement.'));
         return;
       }
+      // SPL-91: say what the save cost, from the server's own count, so the coordinator is
+      // never left to infer that their reservation has gone.
+      const body = await response.json().catch(() => ({}));
+      const released = typeof body.released_quantity === 'number' ? body.released_quantity : 0;
       await load();
       setEditing(null);
-      setNotice(requirement ? 'Equipment requirement saved.' : 'Equipment requirement added.');
+      setNotice(!requirement
+        ? 'Equipment requirement added.'
+        : released > 0
+          ? `Equipment requirement saved. ${released} reserved unit(s) were released, and the line is back with Technical Support for review.`
+          : 'Equipment requirement saved.');
     } catch {
-      setError('Could not save this equipment requirement. Try again.');
+      setEditorError('Could not save this equipment requirement. Try again.');
     } finally { setSaving(false); }
   }
 
   async function remove(requirement: Requirement) {
-    // Removing is a soft removal: the record remains in event history for traceability.
-    if (!window.confirm(`Remove “${requirement.organiser_equipment_text}” from active planning? It will remain in the event history.`)) return;
+    // Removing is a soft removal: the record remains in event history for traceability. SPL-91:
+    // for a line holding stock, the confirmation says the units go too, before they do.
+    const releases = HOLDING_STATUSES.has(requirement.status)
+      ? ' Any units reserved for it will be released.'
+      : '';
+    if (!window.confirm(`Remove “${requirement.organiser_equipment_text}” from active planning?${releases} It will remain in the event history.`)) return;
     setSaving(true); setError(null); setNotice(null);
     try {
       const response = await api(`${endpoint}/${requirement.id}`, { method: 'DELETE' });
@@ -294,27 +331,32 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {editing === 'new' ? <RequirementEditor eventDate={data.event.proposed_date} catalogue={data.equipment_types}
-      technicalSupport={data.technical_support_staff} onCancel={() => setEditing(null)} onSave={draft => { void save(draft); }} saving={saving} /> : <>
+      technicalSupport={data.technical_support_staff} onCancel={() => openEditor(null)} onSave={draft => { void save(draft); }} saving={saving} error={editorError} /> : <>
       <section className="equipment-requirements__overview" aria-label="Equipment planning guidance">
         <div><strong>{data.requirements.filter(line => line.status === 'unmapped').length}</strong><span>Needs mapping</span></div>
         <div><strong>{data.requirements.filter(line => line.status !== 'unmapped').length}</strong><span>Active requirements</span></div>
         <p>Map organiser wording to the shared catalogue, then mark criticality only after consulting Technical Support.</p>
-        <button className="button button--primary" type="button" onClick={() => setEditing('new')}>Add requirement</button>
+        <button className="button button--primary" type="button" onClick={() => openEditor('new')}>Add requirement</button>
       </section>
       <section className="equipment-requirements__list" aria-label="Active equipment requirements">
         {data.requirements.length === 0 && <div className="equipment-requirements__empty"><strong>No equipment requirements yet.</strong><span>Add a requirement when this event needs equipment or technical preparation.</span></div>}
         {data.requirements.map(requirement => <article className="equipment-requirements__card" key={requirement.id}>
           {editing === requirement.id ? <RequirementEditor eventDate={data.event.proposed_date} catalogue={data.equipment_types}
-            technicalSupport={data.technical_support_staff} initial={requirement} onCancel={() => setEditing(null)}
-            onSave={draft => { void save(draft, requirement); }} saving={saving} /> : <>
+            technicalSupport={data.technical_support_staff} initial={requirement} onCancel={() => openEditor(null)}
+            onSave={draft => { void save(draft, requirement); }} saving={saving} error={editorError} /> : <>
             <header><div><p className="equipment-requirements__card-label">{requirement.status === 'unmapped' ? 'Organiser request' : 'Equipment requirement'}</p>
               <h2>{requirement.equipment_type?.name ?? requirement.organiser_equipment_text}</h2>
               {requirement.equipment_type && <p className="equipment-requirements__original">Organiser wording: {requirement.organiser_equipment_text}</p>}</div>
               <span className={`equipment-requirements__status equipment-requirements__status--${requirement.status}`}>{statusLabel(requirement.status)}</span></header>
             {/* SPL-96 AC4: the coordinator sees the flag and its reason on their own line. The
-                status badge above already carries the flag; this says why it is there. */}
-            {requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
-              Technical support flagged this for review: {requirement.review_reason}
+                status badge above already carries the flag; this says why it is there. The label
+                is deliberately neutral about who raised it: SPL-96 flags a line when Technical
+                Support takes units out of service, and SPL-91 when the coordinator changes it.
+                The reason text itself says which. It is shown only while the line is actually
+                Review Required: a reason arriving with any other status describes a review that
+                is already over, so it must not read as an active warning (TC-SPL-91-16). */}
+            {requirement.status === 'review_required' && requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
+              Back with Technical Support for review: {requirement.review_reason}
             </p>}
             <dl className="equipment-requirements__facts">
               <div><dt>Quantity</dt><dd>{requirement.quantity}</dd></div>
@@ -326,7 +368,7 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
             </dl>
             {requirement.notes && <p className="equipment-requirements__notes"><strong>Technical notes</strong>{requirement.notes}</p>}
             {requirement.essentiality !== 'undecided' && <div className="equipment-requirements__decision"><strong>{essentialityLabel(requirement.essentiality)}</strong><span>Consulted {requirement.consulted_technical_support?.name} · {requirement.essentiality_decision_note}</span><span>Recorded by {requirement.essentiality_decided_by?.name ?? 'the assigned Event Coordinator'} · {formatTimestamp(requirement.essentiality_decided_at)}</span></div>}
-            <footer><button className="button button--secondary" type="button" onClick={() => setEditing(requirement.id)} disabled={saving}>{requirement.status === 'unmapped' ? 'Map to catalogue' : 'Edit requirement'}</button>
+            <footer><button className="button button--secondary" type="button" onClick={() => openEditor(requirement.id)} disabled={saving}>{requirement.status === 'unmapped' ? 'Map to catalogue' : 'Edit requirement'}</button>
               <button className="equipment-requirements__remove" type="button" onClick={() => { void remove(requirement); }} disabled={saving}>Remove</button></footer>
           </>}
         </article>)}

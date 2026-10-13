@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, time
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -664,6 +665,51 @@ class EquipmentReservationRelease(Base):
     released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     reservation: Mapped[EquipmentReservation] = relationship(back_populates="releases")
     released_by: Mapped[Account] = relationship(foreign_keys=[released_by_account_id])
+
+
+class EquipmentRequirementChange(Base):
+    """One coordinator change or removal of a requirement line, and what it released (SPL-91).
+
+    AC4 asks for "the old and new values, who made it and when" on every change or removal. The
+    values are stored as JSON because a change touches whichever fields the coordinator edited,
+    and a fixed column per field would make most of each row empty.
+
+    ``released_quantity`` records how many units this action gave back. The release rows
+    themselves live in SPL-98's ``equipment_reservation_releases``, which stays the only place
+    units are released; this column is the cross-reference that lets a reader see, from the line's
+    own history, that a change cost it its reservation.
+    """
+
+    __tablename__ = "equipment_requirement_changes"
+    __table_args__ = (
+        CheckConstraint(
+            "action in ('changed', 'removed')",
+            name="ck_equipment_requirement_changes_known_action",
+        ),
+        CheckConstraint(
+            "released_quantity >= 0",
+            name="ck_equipment_requirement_changes_released_not_negative",
+        ),
+        Index(
+            "ix_equipment_requirement_changes_requirement_changed",
+            "equipment_requirement_id",
+            "changed_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    old_values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    new_values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    released_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
 
 
 # SPL-92 AC3: a note is saved with its author and time. The longest a reviewer may write; the

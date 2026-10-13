@@ -1,14 +1,14 @@
 """Add the in-app notifications inbox (SPL-101).
 
 Revision ID: s3_notifications
-Revises: s3_equipment_releases
+Revises: s3_equipment_requirement_changes
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "s3_notifications"
-down_revision = "s3_equipment_releases"
+down_revision = "s3_equipment_requirement_changes"
 branch_labels = None
 depends_on = None
 

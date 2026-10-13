@@ -184,7 +184,16 @@ def register_equipment_availability_routes(app: Flask) -> None:
             session.add(reservation)
             session.flush()
             total_reserved = assessment.reserved_quantity + quantity
+            previous_status = requirement.status
             requirement.status = _quantity_status(requirement.quantity, total_reserved)
+            if previous_status == "review_required":
+                # Reserving is Technical Support's answer to the review, so the line leaves
+                # Review Required here (to Reserved or Partially Reserved). The explanation
+                # behind the flag (set by SPL-96 or an SPL-91 coordinator change) is cleared with
+                # it, as revalidation does below, so it never outlives the state it explains.
+                # The change and release history is kept in its own tables and is not touched.
+                requirement.review_reason = None
+                requirement.review_flagged_at = None
             result = {
                 "reservation": _serialize_reservation(reservation),
                 "assessment": _serialize_requirement(session, requirement),

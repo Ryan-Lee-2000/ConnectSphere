@@ -14,6 +14,7 @@ from time import monotonic, sleep
 
 import pytest
 from app import create_app
+from app.equipment_reservation_state import remaining_quantity
 from app.models import (
     Account,
     AccountRole,
@@ -122,8 +123,17 @@ def postgres_app():
 
 
 # TC-SPL-97-13 — a reservation waits for an in-progress coordinator edit, then rechecks the line.
-def test_tc_spl_97_13_coordinator_quantity_change_and_reservation_cannot_both_succeed(postgres_app):
-    """AC1/AC2 concurrency: three units cannot be reserved after the line becomes one unit."""
+def test_tc_spl_97_13_quantity_change_racing_a_reservation_never_leaves_stale_units_held(
+    postgres_app,
+):
+    """AC1/AC2 concurrency: three units are never left held against a line that now needs one.
+
+    Updated by SPL-91. SPL-97 protected this by refusing any edit to a reserved line, so one of
+    the two requests always lost. SPL-91 AC2 lets the coordinator change a reserved line, and
+    the change releases what was held. So when the reservation wins the race, the edit now
+    succeeds too. The promise this case exists for is unchanged: the edit and the reservation
+    cannot both act on the old quantity of 6, and nothing stays held for it.
+    """
 
     barrier = threading.Barrier(2, timeout=10)
 
@@ -150,13 +160,24 @@ def test_tc_spl_97_13_coordinator_quantity_change_and_reservation_cannot_both_su
             executor.map(lambda operation: operation(), [edit_requirement, reserve_equipment])
         )
 
-    # Either operation may win the race: a successful edit returns 200, while a successful
-    # reservation creates its audit row and returns 201.  The loser must be refused.
-    assert statuses in ([200, 409], [201, 409])
+    # Either request may win the lock. The edit always succeeds (200), because the coordinator
+    # may change a reserved line under SPL-91. What differs is the reservation:
+    # - edit first: the line now needs 1, so reserving 3 is refused (409) and nothing is held;
+    # - reservation first (201): the edit then waits, finds 3 held, releases all 3, and sends
+    #   the line back to Technical Support for review.
+    assert statuses in ([200, 409], [200, 201])
     with Session(postgres_app.extensions["engine"]) as session:
         requirement = session.get(EquipmentRequirement, 97)
         reservations = session.query(EquipmentReservation).all()
-        assert (requirement.quantity, sum(row.quantity for row in reservations)) in {(1, 0), (6, 3)}
+        releases = session.query(EquipmentReservationRelease).all()
+        assert requirement.quantity == 1
+        # The SPL-97 promise: no unit stays held for the old quantity of 6.
+        assert sum(remaining_quantity(row) for row in reservations) == 0
+        if statuses == [200, 201]:
+            assert sum(row.quantity for row in releases) == 3
+            assert requirement.status == "review_required"
+        else:
+            assert (reservations, releases) == ([], [])
 
 
 # TC-SPL-98-10 — two release requests cannot both consume the same held units.

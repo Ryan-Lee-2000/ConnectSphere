@@ -1,4 +1,29 @@
-"""Assigned Event Coordinator equipment-requirement planning routes for SPL-90."""
+"""Assigned Event Coordinator equipment-requirement planning routes (SPL-90, extended by SPL-91).
+
+SPL-90 lets the assigned coordinator add, change and remove requirement lines that hold no stock.
+SPL-91 extends the same change and removal routes to lines that *do* hold stock — Reserved,
+Partially Reserved and Review Required — under one rule:
+
+    A change to any field Technical Support reserved against releases every unit the line still
+    holds, and sends the line back to Technical Support as Review Required.
+
+Why release everything rather than adjust the reservation (AC2, AC4)
+--------------------------------------------------------------------
+AC4 says a change must "never leave a stale reservation". A reservation is Technical Support's
+judgement that *these* units suit *this* need on *these* days. If the coordinator changes the
+quantity, the dates, the equipment type or the technical notes, that judgement no longer holds,
+and only Technical Support can make it again. Releasing every held unit is the one action that
+guarantees no reservation is left describing values the line no longer has. This is "option A" of
+the open question on AC2, built as the criterion is written; the question passed its stand-up
+fallback unanswered.
+
+One release path
+----------------
+Units are released only through SPL-98's ``_release_from_requirement``, so the release history
+has a single owner across SPL-91, SPL-98 and any later story. That function expects the equipment
+type and then the requirement line to be row-locked already, in that order; every stock-changing
+route in the codebase takes locks in that order so they can never deadlock one another.
+"""
 
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -9,17 +34,63 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
 from app.coordinator_assignment import is_assigned_coordinator
+from app.equipment_releases import _held_quantity, _release_from_requirement
 from app.event_requests import SINGAPORE
-from app.models import Account, AccountRole, EquipmentRequirement, EquipmentType, EventRequest, Role
+from app.models import (
+    Account,
+    AccountRole,
+    EquipmentRequirement,
+    EquipmentRequirementChange,
+    EquipmentType,
+    EventRequest,
+    Role,
+)
 
 PLANNING = "planning"
 UNMAPPED = "unmapped"
 REQUESTED = "requested"
 REMOVED = "removed"
-EDITABLE_STATUSES = frozenset({UNMAPPED, REQUESTED})
+RESERVED = "reserved"
+PARTIALLY_RESERVED = "partially_reserved"
+REVIEW_REQUIRED = "review_required"
+
+# SPL-91: the statuses a line may hold stock in. A Review Required line counts because SPL-96
+# flags a line *without* releasing its units, so it can still be holding them.
+HOLDING_STATUSES = frozenset({RESERVED, PARTIALLY_RESERVED, REVIEW_REQUIRED})
+
+# Lines the coordinator may change or remove: SPL-90's unreserved lines plus SPL-91's held ones.
+# Removed lines are history, and Unavailable is left to the story that defines it (SPL-93).
+EDITABLE_STATUSES = frozenset({UNMAPPED, REQUESTED}) | HOLDING_STATUSES
+
+# AC1's fields. A change to any of these on a line holding stock releases it (AC2). Essentiality
+# is deliberately absent: recording whether equipment is essential is SPL-90's, and it does not
+# alter what Technical Support reserved.
+REVIEWED_FIELDS = (
+    "equipment_type_id",
+    "quantity",
+    "required_start_date",
+    "required_end_date",
+    "notes",
+)
+FIELD_LABELS = {
+    "equipment_type_id": "equipment type",
+    "quantity": "quantity",
+    "required_start_date": "required start date",
+    "required_end_date": "required end date",
+    "notes": "technical notes",
+}
+# Stored on the SPL-98 release row, so Technical Support can see why the units came back.
+REMOVAL_RELEASE_REASON = "Released because the assigned coordinator removed this requirement."
+MAX_REQUIREMENT_ID = 2**31 - 1
 ESSENTIALITY_VALUES = frozenset({"undecided", "essential", "non_essential"})
 MAX_EVENT_REQUEST_ID = 2**31 - 1
 MAX_NOTE_LENGTH = 2_000
+
+
+def _now() -> datetime:
+    """The single clock for this module's audit times, so tests can freeze it (SPL-91 AC4)."""
+
+    return datetime.now(SINGAPORE)
 
 
 def register_equipment_requirement_routes(app: Flask) -> None:
@@ -68,16 +139,31 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     )
     @require_roles(Role.EVENT_COORDINATOR)
     def update_equipment_requirement(event_request_id: int, requirement_id: int):
+        """Change a line, releasing its stock if the change invalidates the reservation.
+
+        Step 1. Lock the equipment type, then the line (the codebase-wide stock lock order).
+        Step 2. Validate every field *before* anything is released, so a bad request can never
+                cost a line its reservation (TC-SPL-91-05). An abort here rolls back the whole
+                transaction.
+        Step 3. Work out what actually changed. Saving the values the line already has releases
+                nothing and records nothing (AC2, "saving without changing anything").
+        Step 4. If a reviewed field changed on a line holding stock, release every held unit
+                through SPL-98 and mark the line Review Required with a reason (AC2).
+        Step 5. Record the change with its old and new values, who and when (AC4).
+        """
+
         data = _request_data()
         with Session(app.extensions["engine"]) as session, session.begin():
             event = _assigned_planning_event(session, event_request_id)
-            line = _locked_editable_requirement(session, event, requirement_id)
+            line, equipment_type = _locked_editable_requirement(session, event, requirement_id)
             attributes = _update_attributes(session, event, line, data)
-            for field, value in attributes.items():
-                setattr(line, field, value)
+            changed = _changed_values(line, attributes)
+            released = 0
+            if changed:
+                released = _apply_change(session, line, equipment_type, attributes, changed)
             session.flush()
             session.refresh(line)
-            result = {"requirement": _serialize_requirement(line)}
+            result = {"requirement": _serialize_requirement(line), "released_quantity": released}
         return jsonify(result)
 
     @app.delete(
@@ -85,18 +171,88 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     )
     @require_roles(Role.EVENT_COORDINATOR)
     def remove_equipment_requirement(event_request_id: int, requirement_id: int):
+        """Remove a line, releasing whatever it still holds exactly once (AC3).
+
+        "Released once" comes from the locks: a second removal waits on the same rows, then
+        re-reads the line, finds it Removed and is refused, so it never reaches the release.
+        """
+
         _require_empty_body()
         with Session(app.extensions["engine"]) as session, session.begin():
             event = _assigned_planning_event(session, event_request_id)
-            line = _locked_editable_requirement(session, event, requirement_id)
+            line, equipment_type = _locked_editable_requirement(session, event, requirement_id)
+            previous_status = line.status
+            now = _now()
+            released = 0
+            if equipment_type is not None:
+                held = _held_quantity(session, line.id)
+                if held:
+                    _release_from_requirement(
+                        session,
+                        line,
+                        equipment_type,
+                        quantity=held,
+                        reason=REMOVAL_RELEASE_REASON,
+                        actor_id=g.user_id,
+                        now=now,
+                    )
+                    released = held
             line.status = REMOVED
             line.removed_by_account_id = g.user_id
-            line.removed_at = datetime.now(SINGAPORE)
+            line.removed_at = now
+            _record_change(
+                session,
+                line,
+                action="removed",
+                old_values={"status": previous_status},
+                new_values={"status": REMOVED},
+                released=released,
+                now=now,
+            )
             result = dict(
                 message="Equipment requirement removed.",
                 requirement=_serialize_requirement(line),
+                released_quantity=released,
             )
         return jsonify(result)
+
+    @app.get(
+        "/api/event-requests/<int:event_request_id>/equipment-requirements/"
+        "<int:requirement_id>/history"
+    )
+    @require_roles(Role.EVENT_COORDINATOR)
+    def get_equipment_requirement_history(event_request_id: int, requirement_id: int):
+        """Every change and removal of one line, newest first (AC4).
+
+        Unlike changing a line, reading its history does not require the event to be In
+        planning: an audit trail is still worth reading after the event is Confirmed. It does
+        require the caller to be the assigned coordinator, and anyone else gets the same 404 as
+        an unknown line, so ids reveal nothing about other people's events.
+        """
+
+        with Session(app.extensions["engine"]) as session:
+            if event_request_id > MAX_EVENT_REQUEST_ID or requirement_id > MAX_REQUIREMENT_ID:
+                abort(404, "Equipment requirement not found.")
+            event = session.get(EventRequest, event_request_id)
+            if event is None or not is_assigned_coordinator(session, event.id, g.user_id):
+                abort(404, "Equipment requirement not found.")
+            line = session.scalar(
+                select(EquipmentRequirement).where(
+                    EquipmentRequirement.id == requirement_id,
+                    EquipmentRequirement.event_request_id == event.id,
+                )
+            )
+            if line is None:
+                abort(404, "Equipment requirement not found.")
+            entries = session.scalars(
+                select(EquipmentRequirementChange)
+                .where(EquipmentRequirementChange.equipment_requirement_id == line.id)
+                .order_by(
+                    EquipmentRequirementChange.changed_at.desc(),
+                    EquipmentRequirementChange.id.desc(),
+                )
+            ).all()
+            return jsonify(history=[_serialize_change(entry) for entry in entries])
 
 
 def _assigned_planning_event(session: Session, event_request_id: int) -> EventRequest:
@@ -129,14 +285,20 @@ def _assigned_planning_event(session: Session, event_request_id: int) -> EventRe
 
 def _locked_editable_requirement(
     session: Session, event: EventRequest, requirement_id: int
-) -> EquipmentRequirement:
+) -> tuple[EquipmentRequirement, EquipmentType | None]:
     """Lock an editable line on the same boundary used by Technical Support reservations.
 
     A coordinator edit and stock-mutation workflow must never validate an old quantity. All of
     them acquire a mapped catalogue type before its requirement line, then re-read the line after
     any wait. This avoids a cycle with release/unavailability while retaining the edit guard.
+
+    Returns the locked type as well, because SPL-91 hands it to SPL-98's release operation, which
+    requires the caller to hold that lock already. An unmapped line has no type and holds no stock.
     """
 
+    if requirement_id > MAX_REQUIREMENT_ID:
+        abort(404, "Equipment requirement not found.")
+    equipment_type: EquipmentType | None = None
     equipment_type_id = session.scalar(
         select(EquipmentRequirement.equipment_type_id).where(
             EquipmentRequirement.id == requirement_id,
@@ -164,10 +326,169 @@ def _locked_editable_requirement(
     if line is None:
         abort(404, "Equipment requirement not found.")
     if line.status not in EDITABLE_STATUSES:
-        abort(409, "Only unreserved equipment requirements can be changed or removed.")
+        # Reached by a second removal after the first, or a change racing a removal: the waiting
+        # request re-reads the line here, finds it gone, and stops before any release (AC3, AC4).
+        abort(409, "This equipment requirement can no longer be changed or removed.")
     if line.equipment_type_id != equipment_type_id:
         abort(409, "This equipment requirement changed while its edit was being prepared.")
-    return line
+    return line, equipment_type
+
+
+def _changed_values(
+    line: EquipmentRequirement, attributes: dict[str, Any]
+) -> dict[str, tuple[Any, Any]]:
+    """The fields whose value actually differs, as (old, new).
+
+    AC2 says "saving without changing anything releases nothing". That is about the values, not
+    about the request: resending a line's current quantity is not a change, so it must not cost
+    the line its reservation or leave a history entry.
+    """
+
+    return {
+        field: (getattr(line, field), value)
+        for field, value in attributes.items()
+        if getattr(line, field) != value
+    }
+
+
+def _apply_change(
+    session: Session,
+    line: EquipmentRequirement,
+    equipment_type: EquipmentType | None,
+    attributes: dict[str, Any],
+    changed: dict[str, tuple[Any, Any]],
+) -> int:
+    """Apply a validated change, releasing held stock if a reviewed field moved (AC2, AC4).
+
+    Returns how many units were released, which the response reports and the history records.
+    """
+
+    now = _now()
+    previous_status = line.status
+    reviewed = [field for field in REVIEWED_FIELDS if field in changed]
+    held = _held_quantity(session, line.id) if reviewed and equipment_type is not None else 0
+    # A line goes back to Technical Support when a reviewed field changes and either it still
+    # holds units, or it was already reserved or flagged (so a reviewer's earlier judgement on it
+    # no longer stands). A Requested line with nothing held keeps SPL-90's behaviour exactly.
+    needs_review = bool(reviewed) and (held > 0 or previous_status in HOLDING_STATUSES)
+    description = _describe_change(session, reviewed, changed) if needs_review else ""
+
+    released = 0
+    if needs_review and held:
+        _release_from_requirement(
+            session,
+            line,
+            equipment_type,
+            quantity=held,
+            reason=f"Released because the assigned coordinator changed the {description}.",
+            actor_id=g.user_id,
+            now=now,
+        )
+        released = held
+
+    old_values = {field: _json_value(old) for field, (old, _new) in changed.items()}
+    new_values = {field: _json_value(new) for field, (_old, new) in changed.items()}
+    for field, value in attributes.items():
+        setattr(line, field, value)
+
+    if needs_review:
+        line.status = REVIEW_REQUIRED
+        line.review_reason = f"The assigned coordinator changed the {description}. " + (
+            f"The {released} reserved unit(s) were released for Technical Support to review."
+            if released
+            else "Technical Support must review this line again."
+        )
+        line.review_flagged_at = now
+        if previous_status != REVIEW_REQUIRED:
+            old_values["status"] = previous_status
+            new_values["status"] = REVIEW_REQUIRED
+
+    _record_change(
+        session,
+        line,
+        action="changed",
+        old_values=old_values,
+        new_values=new_values,
+        released=released,
+        now=now,
+    )
+    return released
+
+
+def _describe_change(
+    session: Session, reviewed: list[str], changed: dict[str, tuple[Any, Any]]
+) -> str:
+    """A short, human description of the reviewed fields that moved, for the reviewer.
+
+    Notes are named but not quoted, because a note can be long and the full text is in the
+    history; every other field shows its old and new value.
+    """
+
+    parts = []
+    for field in reviewed:
+        old, new = changed[field]
+        label = FIELD_LABELS[field]
+        if field == "notes":
+            parts.append(label)
+        elif field == "equipment_type_id":
+            parts.append(f"{label} ({_type_name(session, old)} → {_type_name(session, new)})")
+        else:
+            parts.append(f"{label} ({_json_value(old)} → {_json_value(new)})")
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _type_name(session: Session, equipment_type_id: int | None) -> str:
+    if equipment_type_id is None:
+        return "no catalogue type"
+    item = session.get(EquipmentType, equipment_type_id)
+    return item.name if item else f"type {equipment_type_id}"
+
+
+def _record_change(
+    session: Session,
+    line: EquipmentRequirement,
+    *,
+    action: str,
+    old_values: dict[str, Any],
+    new_values: dict[str, Any],
+    released: int,
+    now: datetime,
+) -> None:
+    """Write one history row: what changed, from what to what, who, when, and what it released."""
+
+    session.add(
+        EquipmentRequirementChange(
+            equipment_requirement_id=line.id,
+            action=action,
+            old_values=old_values,
+            new_values=new_values,
+            released_quantity=released,
+            changed_by_account_id=g.user_id,
+            changed_at=now,
+        )
+    )
+
+
+def _json_value(value: Any) -> Any:
+    """Make a model value safe to store in the JSON history and to show in a reason."""
+
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
+
+
+def _serialize_change(entry: EquipmentRequirementChange) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "action": entry.action,
+        "old_values": entry.old_values,
+        "new_values": entry.new_values,
+        "released_quantity": entry.released_quantity,
+        "changed_by": _serialize_account(entry.changed_by) if entry.changed_by else None,
+        "changed_at": entry.changed_at.isoformat() if entry.changed_at else None,
+    }
 
 
 def _new_attributes(session: Session, event: EventRequest, data: dict[str, Any]) -> dict[str, Any]:

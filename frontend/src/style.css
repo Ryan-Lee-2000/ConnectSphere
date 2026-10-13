@@ -987,6 +987,7 @@ button { touch-action: manipulation; }
 .planned-return-date__note,
 .planned-return-date__history { margin: 0; color: var(--color-muted-slate); font-size: 0.85rem; }
 
+/* SPL-101: the personal notification inbox. */
 .notifications { max-width: 48rem; }
 .notifications h2 { margin: 0; font-size: clamp(1.75rem, 3.2vw, 2.5rem); line-height: 1.08; letter-spacing: -0.045em; }
 .notifications__heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-6); }
@@ -1005,3 +1006,13 @@ button { touch-action: manipulation; }
 @media (max-width: 42rem) {
   .notifications__item { flex-direction: column; }
 }
+
+/* SPL-91: before a coordinator changes a line Technical Support has already reserved stock for,
+   say what the change will cost. Informational rather than an error, so it uses the accent line
+   on a quiet surface instead of the refusal colours. */
+.equipment-requirements__release-warning {
+  margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-mineral-teal); border-radius: var(--radius-md);
+  background: var(--color-mist-surface); color: var(--color-ink-navy); font-size: 0.9rem;
+}
+.equipment-requirements__editor-error { margin: var(--space-2) 0 0; }
