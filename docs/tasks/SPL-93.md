@@ -27,7 +27,7 @@ coverage); it is not a measured code-coverage percentage.
   coordinator's existing equipment-requirements response includes that same audit history.
 - `s3_requirement_unavailability` adds
   `equipment_requirement_unavailability_records`, an append-only RLS-protected history table.
-  It follows `s3_equipment_return_dates`, the current main migration head.
+  It follows `s3_notifications`, the main migration head after SPL-101 merged.
 
 ## Integration boundary
 
@@ -48,3 +48,15 @@ npm run integration
 Run browser evidence and the manual workflow after the local stack is running. Record actual
 results in the published QA and DevOps reports; do not claim a passing CI or deployment before it
 is verified.
+
+## Verification after main integration — 2026-10-13
+
+Merged main at `d91f52c` into the existing SPL-93 branch. Conflict resolution retains both
+requirement-change and unavailable/restored histories; the unmerged SPL-93 migration now follows
+`s3_notifications`. Alembic reports exactly one head.
+
+- `nvm use` then `VITEST_POOL=vmThreads VITEST_MAX_WORKERS=1 VITEST_MIN_WORKERS=1 npm run verify`: passed; Ruff lint/format passed, 1,583 backend tests passed / 92 skipped, 385 frontend tests passed, type-check and production build passed.
+- `npm run integration` against a new empty disposable PostgreSQL 17.4 container: 90 passed. This includes migration rerunnability, product-table RLS and browser-role grant denial. Existing Supabase data was not used or reset.
+- Manual functional testing previously passed as reported by Daniel: blank-reason rejection, mark unavailable with reason/alternative, restore, and assigned-coordinator audit-history visibility. Not repeated during this integration.
+- Earlier repository E2E had three Daniel-reported SPL-90/SPL-95 failures caused by the missing `Northstar Leadership Retreat` fixture. E2E not rerun; no passing E2E claim.
+- Budget check returned UNKNOWN; live usage unverified. CI, review, merge and deployment remain separate evidence.

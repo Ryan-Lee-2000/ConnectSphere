@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "s3_requirement_unavailability"
-down_revision = "s3_equipment_releases"
+down_revision = "s3_notifications"
 branch_labels = None
 depends_on = None
 

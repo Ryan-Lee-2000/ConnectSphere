@@ -26,6 +26,7 @@ PRODUCT_TABLES = {
     "event_coordinator_history",
     "event_status_history",
     "clarification_requests",
+    "notifications",
     "venue_operational_blocks",
     "venue_bookings",
     "venue_booking_occupancy",
@@ -38,6 +39,8 @@ PRODUCT_TABLES = {
     "equipment_unavailability_records",
     # SPL-93: requirement-level unavailable/restored audit history.
     "equipment_requirement_unavailability_records",
+    # SPL-91: every coordinator change or removal of a requirement line.
+    "equipment_requirement_changes",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

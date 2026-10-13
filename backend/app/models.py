@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, time
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -711,6 +712,51 @@ class EquipmentReservationRelease(Base):
     released_by: Mapped[Account] = relationship(foreign_keys=[released_by_account_id])
 
 
+class EquipmentRequirementChange(Base):
+    """One coordinator change or removal of a requirement line, and what it released (SPL-91).
+
+    AC4 asks for "the old and new values, who made it and when" on every change or removal. The
+    values are stored as JSON because a change touches whichever fields the coordinator edited,
+    and a fixed column per field would make most of each row empty.
+
+    ``released_quantity`` records how many units this action gave back. The release rows
+    themselves live in SPL-98's ``equipment_reservation_releases``, which stays the only place
+    units are released; this column is the cross-reference that lets a reader see, from the line's
+    own history, that a change cost it its reservation.
+    """
+
+    __tablename__ = "equipment_requirement_changes"
+    __table_args__ = (
+        CheckConstraint(
+            "action in ('changed', 'removed')",
+            name="ck_equipment_requirement_changes_known_action",
+        ),
+        CheckConstraint(
+            "released_quantity >= 0",
+            name="ck_equipment_requirement_changes_released_not_negative",
+        ),
+        Index(
+            "ix_equipment_requirement_changes_requirement_changed",
+            "equipment_requirement_id",
+            "changed_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    old_values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    new_values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    released_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
+
+
 # SPL-92 AC3: a note is saved with its author and time. The longest a reviewer may write; the
 # same limit SPL-90 puts on a coordinator's technical notes, so the two read alike.
 MAX_REVIEW_NOTE_LENGTH = 2_000
@@ -919,3 +965,27 @@ class ClarificationRequest(Base):
     )
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     respondent: Mapped[Account | None] = relationship(foreign_keys=[respondent_account_id])
+
+
+class Notification(Base):
+    """One in-app notice for a single account (SPL-101); only its recipient may read it."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        # One notice per recipient per triggering change, so a retry cannot add a duplicate.
+        UniqueConstraint("recipient_account_id", "dedupe_key", name="uq_notifications_dedupe"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipient_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Null means unread.
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    event_request: Mapped[EventRequest] = relationship()
