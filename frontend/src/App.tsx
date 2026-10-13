@@ -653,7 +653,9 @@ function Workspace({
         ) : safePath === '/workspace/notifications' ? (
           <Notifications
             accessToken={session.access_token}
-            key={`${activeRole}:notifications`}
+            // Keyed by account as well as role: the inbox loads once on mount, so a different
+            // account with the same role must remount it rather than keep showing the last inbox.
+            key={`${session.user.id}:${activeRole}:notifications`}
             onNavigate={navigate}
           />
         ) : safePath === '/workspace/venue-calendar' ? (

@@ -241,3 +241,44 @@ describe('every role can reach its inbox from the workspace', () => {
     expect(await screen.findByText('You have been assigned to Harbour Summit.')).toBeTruthy();
   });
 });
+
+describe('AC4 - an inbox never outlives the account it was loaded for', () => {
+  function sessionFor(id: string): AuthSession {
+    return {
+      access_token: `token-${id}`,
+      user: { id, app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
+    } as AuthSession;
+  }
+
+  // QA-SPL-101-044 | AC4 | a different account with the same role is restored while the inbox is open
+  it('[QA-SPL-101-044] shows the new account\'s inbox, never the previous account\'s, after a same-role account change', async () => {
+    const getSession = vi.fn().mockResolvedValue({ session: sessionFor('account-a') });
+    const gateway: AuthGateway = { getSession, signInWithPassword: vi.fn(), signOut: vi.fn() };
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const token = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? '');
+      if (path === '/api/session') return Promise.resolve({ ok: true });
+      if (path === '/api/account/roles') return Promise.resolve(response({ roles: ['event_coordinator'] }));
+      if (path === '/api/notifications') {
+        requested.push(token);
+        const mine = token.includes('account-b')
+          ? { ...NEWER, id: 9, message: 'You have been assigned to B Private Gala.', event: { id: 9, name: 'B Private Gala' } }
+          : { ...NEWER, id: 3, message: 'You have been assigned to A Secret Summit.', event: { id: 3, name: 'A Secret Summit' } };
+        return Promise.resolve(response({ notifications: [mine], unread_count: 1 }));
+      }
+      return Promise.resolve(response({ error: 'Not found.' }, 404));
+    }));
+    render(<App authGateway={gateway} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Notifications' }));
+    expect(await screen.findByText('You have been assigned to A Secret Summit.')).toBeTruthy();
+
+    // Another tab signs in as account B (same role); this tab sees it on the next navigation event.
+    getSession.mockResolvedValue({ session: sessionFor('account-b') });
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await screen.findByText('You have been assigned to B Private Gala.')).toBeTruthy();
+    expect(screen.queryByText('You have been assigned to A Secret Summit.')).toBeNull();
+    expect(requested.length).toBe(2);
+  });
+});
