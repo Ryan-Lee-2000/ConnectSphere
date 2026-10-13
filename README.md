@@ -141,6 +141,14 @@ INTEGRATION_DATABASE_URL='postgresql+psycopg://USER:PASSWORD@127.0.0.1:PORT/EMPT
 The URL is a placeholder; provide a real disposable database. Do not start another database on
 Supabase's port 54322. Infrastructure smoke tests create no business records.
 
+### Equipment browser fixtures
+
+`npm run check:e2e` prepares and cleans up dedicated local equipment scenarios for SPL-90,
+SPL-95 and SPL-97 automatically. Run `npm run setup` first and keep the frontend/API running.
+No manually created Northstar or Civic Arts event is required. The fixtures use the configured
+local demo accounts and their trusted roles; they do not modify account permissions.
+See [fixture scope and checks](docs/development/equipment-e2e-fixtures.md).
+
 ### Event request and draft checks
 
 After setup, run `npm start` and sign in with a local Event Organiser fixture. Open **New event
