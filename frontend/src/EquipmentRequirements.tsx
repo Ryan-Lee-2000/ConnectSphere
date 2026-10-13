@@ -352,8 +352,10 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
                 status badge above already carries the flag; this says why it is there. The label
                 is deliberately neutral about who raised it: SPL-96 flags a line when Technical
                 Support takes units out of service, and SPL-91 when the coordinator changes it.
-                The reason text itself says which. */}
-            {requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
+                The reason text itself says which. It is shown only while the line is actually
+                Review Required: a reason arriving with any other status describes a review that
+                is already over, so it must not read as an active warning (TC-SPL-91-16). */}
+            {requirement.status === 'review_required' && requirement.review_reason && <p className="equipment-requirements__review-reason" role="status">
               Back with Technical Support for review: {requirement.review_reason}
             </p>}
             <dl className="equipment-requirements__facts">

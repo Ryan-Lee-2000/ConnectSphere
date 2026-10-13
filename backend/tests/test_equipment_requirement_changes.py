@@ -635,3 +635,100 @@ def test_tc_spl_91_12_recording_essentiality_keeps_the_reservation(app, client, 
     assert len(entries) == 1
     assert entries[0].new_values["essentiality"] == "essential"
     assert entries[0].released_quantity == 0
+
+
+# Review fix on PR #78 — re-reserving a line clears its review explanation
+
+
+def reserve_through_route(client, line_id, quantity):
+    """Reserve the way Technical Support really does, through SPL-97's reserve route.
+
+    ``reserve`` above writes rows directly; these cases need the route itself, because the
+    defect they pin lived in the route.
+    """
+
+    return client.post(
+        f"/api/equipment-requirements/{line_id}/reservations",
+        headers=headers("technical"),
+        json={"quantity": quantity},
+    )
+
+
+def review_fields(app, line_id):
+    with Session(app.extensions["engine"]) as session:
+        line = session.get(EquipmentRequirement, line_id)
+        return line.status, line.review_reason, line.review_flagged_at
+
+
+def coordinator_view(client, event_id, line_id):
+    """The line as the coordinator's requirements page receives it."""
+
+    listed = client.get(f"/api/event-requests/{event_id}/equipment-requirements", headers=headers())
+    assert listed.status_code == 200
+    return next(item for item in listed.json["requirements"] if item["id"] == line_id)
+
+
+def release_then_re_reserve(app, client, event_id, re_reserved):
+    """Reserve 4, have the coordinator change the quantity to 5, then reserve again.
+
+    Returns the line id once Technical Support has reserved ``re_reserved`` units of the 5.
+    Every step goes through a real route, and the review flag is proved to be set before the
+    re-reservation, so clearing it afterwards is a real change rather than a field that was
+    never written.
+    """
+
+    line_id = add_line(app, event_id, quantity=4)
+    assert reserve_through_route(client, line_id, 4).status_code == 201
+    assert review_fields(app, line_id)[0] == "reserved"
+
+    changed = change(client, event_id, line_id, json={"quantity": 5})
+    assert changed.json["released_quantity"] == 4
+    status, reason, flagged_at = review_fields(app, line_id)
+    assert status == "review_required"
+    assert reason is not None and "released" in reason
+    assert flagged_at is not None
+
+    assert reserve_through_route(client, line_id, re_reserved).status_code == 201
+    return line_id
+
+
+# TC-SPL-91-14
+# SPL-91 AC-2 / AC-4 Test-14 (added from review: a full re-reservation clears the flag)
+def test_tc_spl_91_14_re_reserving_in_full_clears_the_review_explanation(app, client, event_id):
+    line_id = release_then_re_reserve(app, client, event_id, re_reserved=5)
+
+    # The line is Reserved again, and nothing is left explaining a review that is over.
+    assert review_fields(app, line_id) == ("reserved", None, None)
+    assert held(app, line_id) == 5
+    seen = coordinator_view(client, event_id, line_id)
+    assert (seen["status"], seen["review_reason"], seen["review_flagged_at"]) == (
+        "reserved",
+        None,
+        None,
+    )
+
+    # The history is untouched: AC4's change record and SPL-98's release record both remain.
+    entries = change_rows(app, line_id)
+    assert [(item.action, item.released_quantity) for item in entries] == [("changed", 4)]
+    assert (entries[0].old_values["quantity"], entries[0].new_values["quantity"]) == (4, 5)
+    assert [item.quantity for item in release_rows(app, line_id)] == [4]
+
+
+# TC-SPL-91-15
+# SPL-91 AC-2 / AC-4 Test-15 (added from review: a partial re-reservation clears it too)
+def test_tc_spl_91_15_re_reserving_in_part_clears_the_review_explanation(app, client, event_id):
+    line_id = release_then_re_reserve(app, client, event_id, re_reserved=3)
+
+    # 3 of 5 takes the line to Partially Reserved: out of Review Required, so no explanation.
+    assert review_fields(app, line_id) == ("partially_reserved", None, None)
+    assert held(app, line_id) == 3
+    seen = coordinator_view(client, event_id, line_id)
+    assert (seen["status"], seen["review_reason"]) == ("partially_reserved", None)
+
+    # Reserving the remaining 2 completes it, and the explanation stays cleared.
+    assert reserve_through_route(client, line_id, 2).status_code == 201
+    assert review_fields(app, line_id) == ("reserved", None, None)
+
+    # The history is untouched.
+    assert [item.action for item in change_rows(app, line_id)] == ["changed"]
+    assert [item.quantity for item in release_rows(app, line_id)] == [4]

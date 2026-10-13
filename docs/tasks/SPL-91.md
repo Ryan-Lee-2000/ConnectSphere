@@ -78,7 +78,9 @@ released.
 releases the reserved units and sends the line back to Technical Support (not just afterwards).
 Removing such a line asks for confirmation and says its units will be released. After a save, the
 page reports how many units were released, and the line shows **Back with Technical Support for
-review** with the reason.
+review** with the reason. That warning shows only while the line is Review Required. Once Technical
+Support reserves units for it again, the warning and its reason are gone (see SPL-97 under
+Integration).
 
 **How we know it works.** The QA-SPL-91 cases were published on 10 October, before the code. On the
 branch without the code, all 8 server cases written then failed, each on SPL-90's refusal to touch
@@ -163,6 +165,14 @@ PostgreSQL race cases fail.
     (`backend/tests/test_equipment_reservations_postgres.py`). This race has no fixed winner, so
     both orderings were exercised: in 12 runs, the reservation won 8 times and the edit 4 times,
     and every run passed.
+- **SPL-97's reserve route now clears the review explanation** (a fix from review on PR #78). When
+  a reservation takes a line out of Review Required, to Reserved or Partially Reserved, it now
+  also clears `review_reason` and `review_flagged_at`, as SPL-97's revalidate route already did.
+  Before this, a coordinator whose changed line had been re-reserved still saw "Back with
+  Technical Support for review" and the old release explanation. The same gap affected SPL-96's
+  flags, so the fix covers both. The change and release history live in their own tables and are
+  untouched. The page also shows the warning only while the line is Review Required, so a stale
+  reason can never read as an active warning (TC-SPL-91-14 to -16).
 
 ## Test cases
 
@@ -180,6 +190,9 @@ PostgreSQL race cases fail.
 | TC-SPL-91-04 | 3, 4 | PostgreSQL | `backend/tests/test_equipment_requirement_changes_postgres.py` (two races) |
 | TC-SPL-91-13 | 4 | PostgreSQL | `backend/tests/test_equipment_requirement_changes_postgres.py` (added during implementation) |
 | TC-SPL-91-10 | 1, 2, 3 | Component | `frontend/src/EquipmentRequirements.test.tsx` (5 cases) |
+| TC-SPL-91-14 | 2, 4 | Server | `backend/tests/test_equipment_requirement_changes.py` (added from review: full re-reservation) |
+| TC-SPL-91-15 | 2, 4 | Server | `backend/tests/test_equipment_requirement_changes.py` (added from review: partial re-reservation) |
+| TC-SPL-91-16 | 2 | Component | `frontend/src/EquipmentRequirements.test.tsx` (added from review) |
 | TC-SPL-91-11 | 1, 2 | Browser | Not yet written: needs a reserved line on a planning event in the local stack |
 
 ```sh

@@ -178,7 +178,7 @@ describe('EquipmentRequirements — changing a reserved line (SPL-91)', () => {
     fireEvent.change(screen.getByLabelText('Quantity Required'), { target: { value: '6' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save requirement' }));
 
-    // The refusal is inside the form, beside the fields it is about, not at the top of the page.
+    // The refusal is inside the form, just above Save, not at the top of the page.
     const form = container.querySelector('form.equipment-requirements__editor') as HTMLElement;
     const refusal = await within(form).findByRole('alert');
     expect(refusal.textContent).toContain(refusalText);
@@ -219,5 +219,30 @@ describe('EquipmentRequirements — changing a reserved line (SPL-91)', () => {
     expect(alert.textContent).toContain('can no longer be changed or removed');
     const form = container.querySelector('form.equipment-requirements__editor') as HTMLElement;
     expect(within(form).queryByRole('alert')).toBeNull();
+  });
+
+  // TC-SPL-91-16 (added from review on PR #78)
+  it('[TC-SPL-91-16] shows the review warning only while a line is Review Required', async () => {
+    // Re-reserving a line now clears its explanation on the server. The page must not rely on
+    // that alone: a reason arriving with any other status is history, not an active warning.
+    const reservedAgain = {
+      ...reservedLine, id: 10, organiser_equipment_text: 'Portable speakers',
+      review_reason: 'Stale reason on a line that is Reserved again.',
+      review_flagged_at: '2026-10-13T10:00:00+08:00',
+    };
+    const partlyReservedAgain = {
+      ...reservedLine, id: 11, organiser_equipment_text: 'Lectern microphones', status: 'partially_reserved',
+      review_reason: 'Stale reason on a line that is Partially Reserved again.',
+      review_flagged_at: '2026-10-13T10:00:00+08:00',
+    };
+    const request = vi.fn(async () => response(payload([reservedAgain, partlyReservedAgain, flaggedLine])));
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    // The Review Required line still shows its warning, so the badge is genuinely rendered...
+    const warnings = await screen.findAllByText(/Back with Technical Support for review:/);
+    // ...but only for that line. Neither stale reason reaches the page.
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].textContent).toContain('quantity (4 → 5)');
+    expect(screen.queryByText(/Stale reason/)).toBeNull();
   });
 });
