@@ -3,13 +3,17 @@
 import os
 import subprocess
 import sys
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from time import monotonic, sleep
 from types import SimpleNamespace
 
 import pytest
 from app import equipment_requirement_unavailability as unavailability
-from app.models import EquipmentRequirement, EventRequest
+from app.models import EquipmentRequirement, EquipmentReservation, EventRequest
 from sqlalchemy import create_engine, select, text
+from sqlalchemy import event as sql_event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from test_equipment_requirement_unavailability import app as app
@@ -99,3 +103,99 @@ def test_event_closure_and_availability_decision_share_a_transaction_boundary(
             )
             assert history[: len(before)] == before
             assert len(history) == len(before) + 1
+
+
+# TC-SPL-93-013 — reservation inserts and decisions serialize without an event/stock deadlock.
+def test_reservation_insert_and_unavailability_decision_serialize_without_deadlock(app):
+    engine = app.extensions["engine"]
+    reservation_locked = threading.Event()
+    release_reservation = threading.Event()
+    event_locked = threading.Event()
+    thread_ids = {}
+    decision_pid = {}
+
+    def after_cursor_execute(conn, cursor, statement, params, context, many):
+        normalised = " ".join(statement.lower().split())
+        current = threading.get_ident()
+        if (
+            current == thread_ids.get("reservation")
+            and "from equipment_requirements" in normalised
+            and "for update" in normalised
+        ):
+            reservation_locked.set()
+            assert release_reservation.wait(10), "Race driver did not resume the reservation"
+        if (
+            current == thread_ids.get("decision")
+            and "from event_requests" in normalised
+            and "for " in normalised
+        ):
+            event_locked.set()
+
+    def before_cursor_execute(conn, cursor, statement, params, context, many):
+        normalised = " ".join(statement.lower().split())
+        if (
+            threading.get_ident() == thread_ids.get("decision")
+            and "from equipment_types" in normalised
+            and "for update" in normalised
+        ):
+            decision_pid["value"] = conn.connection.driver_connection.info.backend_pid
+
+    def reserve():
+        thread_ids["reservation"] = threading.get_ident()
+        return app.test_client().post(
+            "/api/equipment-requirements/1/reservations",
+            headers=headers(),
+            json={"quantity": 1},
+        )
+
+    def decide():
+        thread_ids["decision"] = threading.get_ident()
+        return app.test_client().post(
+            "/api/equipment-requirements/1/mark-unavailable",
+            headers=headers(),
+            json={"reason": "Supplier recall"},
+        )
+
+    sql_event.listen(engine, "after_cursor_execute", after_cursor_execute)
+    sql_event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reservation = pool.submit(reserve)
+            assert reservation_locked.wait(10), "Reservation never acquired its row locks"
+            decision = pool.submit(decide)
+            assert event_locked.wait(10), "Decision never acquired its event row lock"
+            deadline = monotonic() + 8
+            blocked = False
+            while monotonic() < deadline:
+                if "value" in decision_pid:
+                    with engine.connect() as connection:
+                        blocked = bool(
+                            connection.scalar(
+                                text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"),
+                                {"pid": decision_pid["value"]},
+                            )
+                        )
+                    if blocked:
+                        break
+                sleep(0.01)
+            assert blocked, "Decision did not wait for the reservation's stock-pool lock"
+            release_reservation.set()
+            reservation_response = reservation.result(timeout=10)
+            decision_response = decision.result(timeout=10)
+    finally:
+        release_reservation.set()
+        sql_event.remove(engine, "after_cursor_execute", after_cursor_execute)
+        sql_event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+    assert reservation_response.status_code == 201
+    assert decision_response.status_code == 409
+    with Session(engine) as session:
+        line = session.get(EquipmentRequirement, 1)
+        reservations = session.scalars(
+            select(EquipmentReservation).where(
+                EquipmentReservation.equipment_requirement_id == line.id
+            )
+        ).all()
+        assert line.status == "partially_reserved"
+        assert [(row.quantity, row.event_request_id) for row in reservations] == [(1, 1)]
+        assert unavailability.history_for(session, line.id) == []

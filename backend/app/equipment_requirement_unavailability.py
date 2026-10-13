@@ -108,8 +108,9 @@ def _locked_requirement(session: Session, requirement_id: int) -> EquipmentRequi
     """Lock the event, then stock pool and requirement, before validating a decision.
 
     Event-wide release locks the event before its pools, so use that order here too. The event
-    row lock serializes lifecycle updates with both decisions: after any wait, re-read its
-    current status, and hold the lock until the requirement and audit entry commit together.
+    NO KEY UPDATE lock serializes lifecycle updates with both decisions while remaining compatible
+    with the KEY SHARE lock taken by a reservation insert's event foreign key. After any wait,
+    re-read the event status and hold the lock until the requirement and audit entry commit.
     """
 
     event_id = session.scalar(
@@ -123,7 +124,7 @@ def _locked_requirement(session: Session, requirement_id: int) -> EquipmentRequi
         select(EventRequest)
         .where(EventRequest.id == event_id)
         .execution_options(populate_existing=True)
-        .with_for_update()
+        .with_for_update(key_share=True)
     )
     if event is None:
         abort(404, NOT_FOUND)

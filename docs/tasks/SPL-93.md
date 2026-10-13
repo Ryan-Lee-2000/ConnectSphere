@@ -34,11 +34,12 @@ coverage); it is not a measured code-coverage percentage.
 This story changes only `EquipmentRequirement.status` and writes its own history. It does not
 change an event, physical equipment stock, or any reservation. Both actions require the parent
 event to be Planning, Confirmed or Postponed, matching the Technical Support review queue.
-The transaction locks the event first, then the stock pool and requirement row. Holding the
-event lock through commit serializes decisions with concurrent lifecycle changes; re-reading
-after a wait refuses a newly closed event without changing the requirement or audit history.
-The event-first order matches event-wide release; the pool still precedes the requirement so
-the zero-held-unit rule remains protected against concurrent reservations.
+The transaction locks the event first, then the stock pool and requirement row. Its event
+`FOR NO KEY UPDATE` lock is held through commit: it serializes lifecycle changes while remaining
+compatible with the `KEY SHARE` lock required by a concurrent reservation insert's event foreign
+key. Re-reading after a wait refuses a newly closed event without changing the requirement or
+audit history. The event-first order matches event-wide release; the pool still precedes the
+requirement so the zero-held-unit rule remains protected against concurrent reservations.
 
 ## Focused checks
 
@@ -71,6 +72,10 @@ requirement-change and unavailable/restored histories; the unmerged SPL-93 migra
 [Review request](https://github.com/Ryan-Lee-2000/ConnectSphere/pull/80#discussion_r4259160490):
 refuse mark/restore actions on closed events, including concurrent lifecycle transitions.
 
+[Re-review request](https://github.com/Ryan-Lee-2000/ConnectSphere/pull/80#discussion_r4259413687):
+avoid the event/stock lock cycle with concurrent reservation inserts while retaining lifecycle
+serialization.
+
 - TC-SPL-93-010/011: both actions return 409 on Cancelled and Completed events and all other
   inactive event states, preserving the complete history, line status, sibling line and reservation.
 - Active-state checks retain mark/restore on Planning, Confirmed and Postponed events.
@@ -78,10 +83,14 @@ refuse mark/restore actions on closed events, including concurrent lifecycle tra
   transaction orderings. The shared race driver proves the competing writer waits on a row lock.
   Closure first refuses the decision without mutation; decision first commits one audit entry
   before closure proceeds. Included in `npm run integration`.
-- Focused tests passed: 31 API/lifecycle cases and eight PostgreSQL races. Initial fixture errors
+- TC-SPL-93-013: a real PostgreSQL reservation-versus-unavailability race pauses the reservation
+  after its stock-pool and requirement locks, then proves the availability decision holds the
+  compatible event lock while waiting for the pool. The reservation commits normally, the
+  decision returns 409 after observing the held quantity, and no availability history is written.
+- Focused tests passed: 31 API/lifecycle cases and nine PostgreSQL races. Initial fixture errors
   (required event times, foreign-key insert order, migration-seeded organisation ID) and import
   formatting were corrected before these passes.
 - No migration, frontend or API-payload changes. Earlier manual/E2E evidence remains as reported
   above; neither was repeated for this review fix.
 
-Final review-fix checks: full `npm run verify` passed (lint/format, backend tests, 385 frontend tests, type-check and production build); `npm run integration` passed all 98 cases, including the eight new races. Budget remained UNKNOWN. E2E and manual testing were not rerun.
+Final review-fix checks: full `npm run verify` passed (lint/format, 1,604 backend tests passed / 101 skipped, 385 frontend tests passed, type-check and production build); `npm run integration` passed all 99 cases, including the nine SPL-93 races. Budget remained UNKNOWN. E2E and manual testing were not rerun.
