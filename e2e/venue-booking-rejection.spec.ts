@@ -31,6 +31,9 @@ function isolatedDate() {
 
 // SPL-82 AC-5 Test-20
 test('TC-SPL-82-20: Venue Staff reject a pending request, and the coordinator sees the reason', async ({ page }) => {
+  // This journey includes five real Auth sign-ins plus the complete cross-role workflow.
+  // Keep individual assertion deadlines unchanged; budget for the whole journey.
+  test.setTimeout(60_000);
   const name = `E2E Rejection ${Date.now()}`;
   const reason = 'The requested slot conflicts with scheduled maintenance.';
   const suggestion = 'The Riverside Room is available the same afternoon.';
@@ -97,6 +100,9 @@ test('TC-SPL-82-20: Venue Staff reject a pending request, and the coordinator se
   // and history SPL-78/79 already built — no new UI was needed for this.
   await signIn(page, coordinator);
   await page.goto(eventUrl);
+  // A direct reload verifies Auth and loads event details before fetching booking history.
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   const panel = page.getByRole('region', { name: 'Venue booking request' });
   await expect(panel).toContainText('Status: Rejected');
   await expect(panel).toContainText(reason);

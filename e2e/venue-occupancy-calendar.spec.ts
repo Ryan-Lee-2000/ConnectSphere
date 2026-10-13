@@ -30,6 +30,8 @@ function isolatedDate() {
 }
 
 test('TC-SPL-88-24: the calendar shows a real booking, a real block and free slots', async ({ page }) => {
+  // Real Auth role changes and the complete booking workflow need a journey-level budget.
+  test.setTimeout(60_000);
   const name = `E2E Calendar ${Date.now()}`;
   const day = isolatedDate();
 

@@ -34,6 +34,9 @@ test('TC-SPL-69-14 an assigned coordinator records and retains a withdrawal', as
   await page.getByRole('radio', { name: /AM · 7am–12pm/ }).check();
   await page.getByLabel('Expected attendance').fill('40');
   await page.getByRole('button', { name: 'Submit event request' }).click();
+  // Wait for persisted submission before signing out and opening the manager's queue.
+  await expect(page).toHaveURL(/\/workspace\/my-requests$/);
+  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
   await signOut(page);
 
   await signIn(page, manager);
