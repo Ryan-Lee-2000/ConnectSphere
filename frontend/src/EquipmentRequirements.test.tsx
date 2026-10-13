@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EquipmentRequirements } from './EquipmentRequirements';
 
 function response(body: unknown, status = 200) {
@@ -96,5 +96,128 @@ describe('EquipmentRequirements', () => {
     expect(await screen.findByText('Equipment requirement removed from active planning.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Show removed requirements (1)' }));
     expect(await screen.findByText('Removed from active planning')).toBeTruthy();
+  });
+});
+
+// SPL-91 TC-SPL-91-10: revising a line Technical Support has already reserved stock for.
+describe('EquipmentRequirements — changing a reserved line (SPL-91)', () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  const reservedLine = {
+    ...unmappedRequirement, id: 8, equipment_type: microphone, status: 'reserved',
+    organiser_equipment_text: 'Wireless microphones',
+  };
+  const flaggedLine = {
+    ...reservedLine, status: 'review_required', quantity: 5,
+    review_reason: 'The assigned coordinator changed the quantity (4 → 5). The 4 reserved unit(s) were released for Technical Support to review.',
+  };
+
+  // TC-SPL-91-10
+  it('[TC-SPL-91-10] warns before saving, reports the release, and shows the line back with Technical Support', async () => {
+    let saved = false;
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path === '/api/event-requests/2/equipment-requirements' && !init) {
+        return response(payload([saved ? flaggedLine : reservedLine]));
+      }
+      if (path === '/api/event-requests/2/equipment-requirements/8' && init?.method === 'PATCH') {
+        saved = true;
+        return response({ requirement: flaggedLine, released_quantity: 4 });
+      }
+      return response({});
+    });
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit requirement' }));
+    // AC2, said before the coordinator commits to it rather than discovered afterwards.
+    const warning = screen.getByRole('note');
+    expect(warning.textContent).toContain('releases any units reserved for it');
+    expect(warning.textContent).toContain('back to Technical Support');
+
+    fireEvent.change(screen.getByLabelText('Quantity Required'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save requirement' }));
+
+    // The cost of the save is stated from the server's own count, not inferred.
+    // (The reason badge repeats the count, so the notice is matched by its own opening words.)
+    expect(await screen.findByText(/^Equipment requirement saved\. 4 reserved unit\(s\) were released/)).toBeTruthy();
+    // And the line now reads as back with Technical Support, with the reason why.
+    expect(await screen.findByText('review required')).toBeTruthy();
+    expect(screen.getByText(/Back with Technical Support for review:/).textContent).toContain('quantity (4 → 5)');
+  });
+
+  // TC-SPL-91-10
+  it('[TC-SPL-91-10] asks before removing a reserved line, and says its units will be released', async () => {
+    const calls: string[] = [];
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method) calls.push(`${init.method} ${path}`);
+      return response(payload([reservedLine]));
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    // The confirmation names the consequence for a line holding stock.
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0]).toContain('Any units reserved for it will be released.');
+    // Declining sends nothing at all.
+    expect(calls).toEqual([]);
+  });
+
+  // TC-SPL-91-10
+  it('[TC-SPL-91-10] shows a refusal inside the form being edited and keeps what was typed', async () => {
+    // A refusal only the server can make. A value the browser itself rejects (such as 0, below
+    // the input's min of 1) never reaches the server at all, so it cannot test this path.
+    const refusalText = 'This equipment requirement changed while its edit was being prepared.';
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return response({ error: refusalText }, 409);
+      return response(payload([reservedLine]));
+    });
+    const { container } = render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit requirement' }));
+    fireEvent.change(screen.getByLabelText('Quantity Required'), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save requirement' }));
+
+    // The refusal is inside the form, beside the fields it is about, not at the top of the page.
+    const form = container.querySelector('form.equipment-requirements__editor') as HTMLElement;
+    const refusal = await within(form).findByRole('alert');
+    expect(refusal.textContent).toContain(refusalText);
+    // The form stays open with the coordinator's input, so it can be corrected, not retyped.
+    expect((within(form).getByLabelText('Quantity Required') as HTMLInputElement).value).toBe('6');
+  });
+
+  // TC-SPL-91-10
+  it('[TC-SPL-91-10] gives no release warning on a line that holds no stock', async () => {
+    const requested = { ...reservedLine, status: 'requested' };
+    const request = vi.fn(async () => response(payload([requested])));
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit requirement' }));
+    // The editor is open (so this is not vacuous), but the warning is reserved for held stock.
+    expect(screen.getByRole('button', { name: 'Save requirement' })).toBeTruthy();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  // TC-SPL-91-10
+  it('[TC-SPL-91-10] never shows one line\'s refused removal inside another line\'s open form', async () => {
+    const otherLine = { ...reservedLine, id: 9, organiser_equipment_text: 'Portable speakers' };
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') return response({ error: 'This equipment requirement can no longer be changed or removed.' }, 409);
+      return response(payload([reservedLine, otherLine]));
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { container } = render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+
+    // Open line 8's form, then remove line 9 from its card.
+    const editButtons = await screen.findAllByRole('button', { name: 'Edit requirement' });
+    fireEvent.click(editButtons[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    // The removal's refusal belongs to the page, not to the unrelated form that happens to be open.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('can no longer be changed or removed');
+    const form = container.querySelector('form.equipment-requirements__editor') as HTMLElement;
+    expect(within(form).queryByRole('alert')).toBeNull();
   });
 });
