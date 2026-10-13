@@ -32,9 +32,13 @@ coverage); it is not a measured code-coverage percentage.
 ## Integration boundary
 
 This story changes only `EquipmentRequirement.status` and writes its own history. It does not
-change an event, physical equipment stock, or any reservation. The stock pool is still locked
-before the requirement row so this eligibility decision cannot race a reservation into violating
-the zero-held-unit rule.
+change an event, physical equipment stock, or any reservation. Both actions require the parent
+event to be Planning, Confirmed or Postponed, matching the Technical Support review queue.
+The transaction locks the event first, then the stock pool and requirement row. Holding the
+event lock through commit serializes decisions with concurrent lifecycle changes; re-reading
+after a wait refuses a newly closed event without changing the requirement or audit history.
+The event-first order matches event-wide release; the pool still precedes the requirement so
+the zero-held-unit rule remains protected against concurrent reservations.
 
 ## Focused checks
 
@@ -60,3 +64,24 @@ requirement-change and unavailable/restored histories; the unmerged SPL-93 migra
 - Manual functional testing previously passed as reported by Daniel: blank-reason rejection, mark unavailable with reason/alternative, restore, and assigned-coordinator audit-history visibility. Not repeated during this integration.
 - Earlier repository E2E had three Daniel-reported SPL-90/SPL-95 failures caused by the missing `Northstar Leadership Retreat` fixture. E2E not rerun; no passing E2E claim.
 - Budget check returned UNKNOWN; live usage unverified. CI, review, merge and deployment remain separate evidence.
+
+
+## Ryan review follow-up
+
+[Review request](https://github.com/Ryan-Lee-2000/ConnectSphere/pull/80#discussion_r4259160490):
+refuse mark/restore actions on closed events, including concurrent lifecycle transitions.
+
+- TC-SPL-93-010/011: both actions return 409 on Cancelled and Completed events and all other
+  inactive event states, preserving the complete history, line status, sibling line and reservation.
+- Active-state checks retain mark/restore on Planning, Confirmed and Postponed events.
+- TC-SPL-93-012: eight real PostgreSQL races cover both actions, both terminal states and both
+  transaction orderings. The shared race driver proves the competing writer waits on a row lock.
+  Closure first refuses the decision without mutation; decision first commits one audit entry
+  before closure proceeds. Included in `npm run integration`.
+- Focused tests passed: 31 API/lifecycle cases and eight PostgreSQL races. Initial fixture errors
+  (required event times, foreign-key insert order, migration-seeded organisation ID) and import
+  formatting were corrected before these passes.
+- No migration, frontend or API-payload changes. Earlier manual/E2E evidence remains as reported
+  above; neither was repeated for this review fix.
+
+Final review-fix checks: full `npm run verify` passed (lint/format, backend tests, 385 frontend tests, type-check and production build); `npm run integration` passed all 98 cases, including the eight new races. Budget remained UNKNOWN. E2E and manual testing were not rerun.

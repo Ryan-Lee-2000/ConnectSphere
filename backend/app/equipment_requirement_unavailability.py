@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
 from app.equipment_reservation_state import remaining_quantity
+from app.equipment_review_queue import ACTIVE_EVENT_STATUSES
 from app.event_requests import SINGAPORE
 from app.models import (
     EquipmentRequirement,
     EquipmentRequirementUnavailabilityRecord,
     EquipmentReservation,
     EquipmentType,
+    EventRequest,
     Role,
 )
 
@@ -103,12 +105,30 @@ def register_equipment_requirement_unavailability_routes(app: Flask) -> None:
 
 
 def _locked_requirement(session: Session, requirement_id: int) -> EquipmentRequirement:
-    """Lock in the stock-pool-first order used by reservation and release operations.
+    """Lock the event, then stock pool and requirement, before validating a decision.
 
-    Even though this workflow never changes stock, it changes whether the same line can be
-    reserved. Locking the mapped pool first prevents a deadlock with SPL-97/98 and re-reading the
-    line after any wait ensures the status and held quantity are current.
+    Event-wide release locks the event before its pools, so use that order here too. The event
+    row lock serializes lifecycle updates with both decisions: after any wait, re-read its
+    current status, and hold the lock until the requirement and audit entry commit together.
     """
+
+    event_id = session.scalar(
+        select(EquipmentRequirement.event_request_id).where(
+            EquipmentRequirement.id == requirement_id
+        )
+    )
+    if event_id is None:
+        abort(404, NOT_FOUND)
+    event = session.scalar(
+        select(EventRequest)
+        .where(EventRequest.id == event_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if event is None:
+        abort(404, NOT_FOUND)
+    if event.status not in ACTIVE_EVENT_STATUSES:
+        abort(409, "Equipment availability can only change on an active event.")
 
     equipment_type_id = session.scalar(
         select(EquipmentRequirement.equipment_type_id).where(

@@ -1,6 +1,6 @@
 """Acceptance coverage for SPL-93: unavailable event requirement decisions."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 import pytest
 from app import create_app
@@ -29,18 +29,27 @@ NOW = datetime(2026, 10, 12, 10, 15, tzinfo=unavailability.SINGAPORE)
 
 
 @pytest.fixture
-def app(tmp_path, monkeypatch):
-    database_url = f"sqlite:///{tmp_path}/requirement-unavailability.db"
+def database_url(tmp_path):
+    return f"sqlite:///{tmp_path}/requirement-unavailability.db"
+
+
+@pytest.fixture
+def app(database_url, monkeypatch):
     engine = create_engine(database_url)
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add(Organisation(id=1, name="Northstar Community Partners"))
+        session.add(Organisation(id=931, name="Northstar Community Partners"))
         session.add_all(
             [
                 Account(id=TECHNICAL_SUPPORT, display_name="Taylor Technical", is_active=True),
                 Account(id=COORDINATOR, display_name="Casey Coordinator", is_active=True),
                 Account(id=OTHER_COORDINATOR, display_name="Jordan Coordinator", is_active=True),
                 Account(id=ORGANISER, display_name="Olivia Organiser", is_active=True),
+            ]
+        )
+        session.flush()
+        session.add_all(
+            [
                 AccountRole(account_id=TECHNICAL_SUPPORT, role=Role.TECHNICAL_SUPPORT_STAFF.value),
                 AccountRole(account_id=COORDINATOR, role=Role.EVENT_COORDINATOR.value),
                 AccountRole(account_id=OTHER_COORDINATOR, role=Role.EVENT_COORDINATOR.value),
@@ -58,14 +67,17 @@ def app(tmp_path, monkeypatch):
         event = EventRequest(
             id=1,
             organiser_account_id=ORGANISER,
-            organisation_id=1,
+            organisation_id=931,
             name="Community Leadership Forum",
             purpose="Annual leadership programme",
             proposed_date=date(2026, 11, 20),
+            start_time=time(14),
+            end_time=time(17),
             expected_attendance=80,
             status="planning",
         )
         session.add(event)
+        session.flush()
         session.add(
             EventCoordinatorAssignment(
                 event_request_id=1,
@@ -270,3 +282,70 @@ def test_tc_spl_93_006_restore_rejects_wrong_state_or_role_without_erasing_histo
             (entry.action, entry.reason)
             for entry in session.scalars(select(EquipmentRequirementUnavailabilityRecord))
         ] == [("marked_unavailable", "Supplier recall")]
+
+
+# TC-SPL-93-010/011 — closed or pre-planning events cannot acquire availability decisions.
+@pytest.mark.parametrize(
+    "event_status",
+    [
+        "cancelled",
+        "completed",
+        "draft",
+        "submitted",
+        "under_review",
+        "returned_for_clarification",
+        "approved",
+        "rejected",
+        "withdrawn",
+    ],
+)
+@pytest.mark.parametrize("action", ["mark-unavailable", "restore-requested"])
+def test_closed_or_inactive_event_refuses_decision_without_mutating_history(
+    app, client, event_status, action
+):
+    if action == "restore-requested":
+        assert (
+            mark(client, reason="Supplier recall", alternative_suggestion="Use wired").status_code
+            == 201
+        )
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, 1).status = event_status
+        session.commit()
+        previous = [
+            unavailability.serialize_record(record)
+            for record in unavailability.history_for(session, 1)
+        ]
+        line_status = session.get(EquipmentRequirement, 1).status
+    response = client.post(
+        f"/api/equipment-requirements/1/{action}",
+        headers=headers(),
+        json={"reason": "New decision"} if action == "mark-unavailable" else None,
+    )
+    assert response.status_code == 409
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, 1).status == event_status
+        assert session.get(EquipmentRequirement, 1).status == line_status
+        assert [
+            unavailability.serialize_record(record)
+            for record in unavailability.history_for(session, 1)
+        ] == previous
+        assert session.get(EquipmentRequirement, 2).status == "requested"
+        assert session.query(EquipmentReservation).count() == 1
+
+
+@pytest.mark.parametrize("event_status", ["planning", "confirmed", "postponed"])
+def test_active_event_allows_mark_and_restore(app, client, event_status):
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, 1).status = event_status
+        session.commit()
+    assert mark(client, reason="Supplier recall").status_code == 201
+    assert (
+        client.post(
+            "/api/equipment-requirements/1/restore-requested", headers=headers()
+        ).status_code
+        == 200
+    )
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, 1).status == event_status
+        assert session.get(EquipmentRequirement, 1).status == "requested"
+        assert len(unavailability.history_for(session, 1)) == 2
