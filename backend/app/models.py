@@ -522,6 +522,11 @@ class EquipmentRequirement(Base):
     reservations: Mapped[list["EquipmentReservation"]] = relationship(
         back_populates="equipment_requirement", cascade="all, delete-orphan"
     )
+    review_notes: Mapped[list["EquipmentReviewNote"]] = relationship(
+        back_populates="equipment_requirement",
+        cascade="all, delete-orphan",
+        order_by="EquipmentReviewNote.id",
+    )
     # SPL-93 keeps a separate, append-only record of a line being unavailable and later restored.
     # The current status remains on this aggregate; the records preserve who made each decision
     # and why without overloading a stock-reservation or review-note history.
@@ -789,7 +794,9 @@ class EquipmentReviewNote(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    equipment_requirement: Mapped[EquipmentRequirement] = relationship()
+    equipment_requirement: Mapped[EquipmentRequirement] = relationship(
+        back_populates="review_notes"
+    )
     author: Mapped[Account] = relationship(foreign_keys=[author_account_id])
 
 

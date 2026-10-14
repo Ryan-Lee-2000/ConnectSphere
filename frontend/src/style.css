@@ -774,6 +774,24 @@ button { touch-action: manipulation; }
 .event-brief__requirements { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5) var(--space-6); }
 .event-brief__overview div, .event-brief__requirements div { display: grid; gap: var(--space-2); min-width: 0; }
 .event-brief__requirements div { padding-top: var(--space-4); border-top: 1px solid var(--color-blueprint-line); }
+
+.equipment-readiness { margin: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
+.equipment-readiness__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.equipment-readiness__header h2, .equipment-readiness__blockers h3 { margin: 0; color: var(--color-ink-navy); }
+.equipment-readiness__status { padding: var(--space-2) var(--space-3); border-radius: 999px; white-space: nowrap; }
+.equipment-readiness__status--ready { color: var(--color-mineral-teal-active); background: var(--color-mist-surface); }
+.equipment-readiness__status--blocked { color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.equipment-readiness__scope { max-width: 70ch; color: var(--color-muted-slate); }
+.equipment-readiness__blockers { margin: var(--space-4) 0; padding: var(--space-4); background: var(--color-refusal-surface); }
+.equipment-readiness__blockers ul, .equipment-readiness__evidence { margin-bottom: 0; }
+.equipment-readiness__empty { margin-bottom: 0; }
+.equipment-readiness__table-wrap { overflow-x: auto; }
+.equipment-readiness__table { width: 100%; border-collapse: collapse; }
+.equipment-readiness__table th, .equipment-readiness__table td { padding: var(--space-3); border-top: 1px solid var(--color-blueprint-line); text-align: left; vertical-align: top; }
+.equipment-readiness__table thead th { color: var(--color-muted-slate); font-size: .8125rem; }
+.equipment-readiness__table tbody th { min-width: 12rem; }
+.equipment-readiness__table small { display: block; margin-top: var(--space-1); color: var(--color-muted-slate); }
+.equipment-readiness__evidence { min-width: 18rem; padding-left: var(--space-4); }
 .venue-search-page .event-brief { margin: var(--space-6) 0 0; padding: var(--space-6); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }
 .venue-search-page .venue-availability { margin-top: var(--space-8); }
 
@@ -784,6 +802,8 @@ button { touch-action: manipulation; }
   .preparation-policy { padding: var(--space-2) var(--space-4); }
   .organisation-events__detail-header { padding: var(--space-6) var(--space-5); }
   .event-brief, .organisation-events__detail-shell .organisation-events__actions { margin-left: var(--space-5); margin-right: var(--space-5); }
+  .equipment-readiness { margin: var(--space-5); padding: var(--space-5); }
+  .equipment-readiness__header { flex-wrap: wrap; }
   .venue-search-page__layout { grid-template-columns: 1fr; gap: var(--space-6); }
   .venue-search-page__brief { position: static; }
 }

@@ -293,7 +293,10 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
     )
 
     assert response.status_code == 200
-    assert response.json["event"] == {
+    event = response.json["event"]
+    equipment = event.pop("equipment_requirements")
+    readiness = event.pop("equipment_readiness")
+    assert event == {
         "id": event_id,
         "name": "Harbour Summit",
         "status": SUBMITTED,
@@ -312,9 +315,6 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "accessibility_needs": ["Step-free access"],
         "location_preference": "Ground floor",
         "venue_notes": "Loading bay access",
-        "equipment_requirements": [
-            {"equipment_type": "Podium", "quantity": 2, "notes": "Lockable"}
-        ],
         "registration_required": True,
         "registration_notes": "Ticketed",
         "client_organisation": ORGANISATION_NAME,
@@ -330,6 +330,10 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "withdrawn_at": None,
         "withdrawal_note": None,
     }
+    assert equipment[0]["equipment_type"] == "Podium"
+    assert equipment[0]["quantity"] == 2
+    assert equipment[0]["notes"] == "Lockable"
+    assert readiness["has_equipment_blocker"] is True
 
 
 # SPL-64 AC-1 Test-02
@@ -457,7 +461,7 @@ def test_tc_spl_64_12_serializer_stamps_singapore_on_a_naive_submission_time():
 
 
 # SPL-64 AC-1 Test-13
-def test_tc_spl_64_13_serializer_omits_internal_identifiers_from_equipment_and_event():
+def test_tc_spl_64_13_serializer_omits_internal_event_identifiers():
     event = _serialize_assigned_event_detail(
         transient_event(
             equipment_requirements=[
@@ -466,9 +470,9 @@ def test_tc_spl_64_13_serializer_omits_internal_identifiers_from_equipment_and_e
         )
     )
 
-    assert event["equipment_requirements"] == [
-        {"equipment_type": "Podium", "quantity": 1, "notes": None}
-    ]
+    assert event["equipment_requirements"][0]["equipment_type"] == "Podium"
+    assert event["equipment_requirements"][0]["quantity"] == 1
+    assert event["equipment_requirements"][0]["notes"] is None
     for internal in ("organiser_account_id", "organisation_id", "venue_id"):
         assert internal not in event
 

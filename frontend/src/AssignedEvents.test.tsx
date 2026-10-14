@@ -185,6 +185,83 @@ it('[TC-SPL-64-18] exposes the detail as one accessible table with a caption and
   expect(screen.getByRole('button', { name: 'Find venues' })).toBeTruthy();
 });
 
+const readinessDetail = {
+  ...fullDetail,
+  status: 'planning', status_label: 'In planning',
+  equipment_requirements: [{
+    id: 41, equipment_type: 'Wireless Microphone', quantity: 4, notes: 'Use the main stage sockets.',
+    required_quantity: 4, reserved_quantity: 3, status: 'review_required', essentiality: 'essential',
+    needs_mapping: false, planned_return_date: '2026-11-23',
+    technical_support_notes: [{ id: 1, note: 'Confirm the replacement frequency.', author: { id: 't', name: 'Taylor Technical' }, created_at: '2026-10-14T09:30:00+08:00' }],
+    unavailability_history: [{ id: 2, action: 'marked_unavailable', reason: 'Supplier recall', alternative_suggestion: 'Use wired microphones', recorded_by: { id: 't', name: 'Taylor Technical' }, recorded_at: '2026-10-14T09:35:00+08:00' }],
+    outstanding_review_reasons: ['Dates changed after reservation.'],
+  }],
+  equipment_readiness: {
+    ready: false, has_equipment_blocker: true, active_requirement_count: 1,
+    blockers: [
+      { code: 'essential_not_fully_reserved', requirement_id: 41, message: 'Reserve 1 more unit(s) of Wireless Microphone.' },
+      { code: 'essential_review_outstanding', requirement_id: 41, message: 'Dates changed after reservation.' },
+    ],
+  },
+};
+
+it('[TC-SPL-99-009] shows each line state and the evidence behind its blockers', async () => {
+  renderDetail(readinessDetail);
+
+  const panel = within(await screen.findByRole('region', { name: 'Equipment readiness' }));
+  expect(panel.getByText('Equipment action required')).toBeTruthy();
+  expect(panel.getByText('Reserve 1 more unit(s) of Wireless Microphone.')).toBeTruthy();
+  expect(panel.getByText('3/4')).toBeTruthy();
+  expect(panel.getByText('Review required')).toBeTruthy();
+  expect(panel.getByText('Essential')).toBeTruthy();
+  expect(panel.getByText('23 Nov 2026')).toBeTruthy();
+  expect(panel.getByText(/Confirm the replacement frequency/)).toBeTruthy();
+  expect(panel.getByText(/Supplier recall/)).toBeTruthy();
+  expect(panel.getAllByText(/Dates changed after reservation/)).toHaveLength(2);
+});
+
+it('[TC-SPL-99-010] keeps a non-essential shortfall visible without blocking readiness', async () => {
+  renderDetail({
+    ...fullDetail,
+    equipment_requirements: [{
+      id: 42, equipment_type: 'Decorative lights', quantity: 3, notes: null,
+      required_quantity: 3, reserved_quantity: 0, status: 'requested', essentiality: 'non_essential',
+      needs_mapping: false, planned_return_date: null, technical_support_notes: [],
+      unavailability_history: [], outstanding_review_reasons: [],
+    }],
+    equipment_readiness: { ready: true, has_equipment_blocker: false, active_requirement_count: 1, blockers: [] },
+  });
+
+  const panel = within(await screen.findByRole('region', { name: 'Equipment readiness' }));
+  expect(panel.getByText('Equipment ready')).toBeTruthy();
+  expect(panel.getByText('0/3')).toBeTruthy();
+  expect(panel.getByText('Non-essential')).toBeTruthy();
+  expect(panel.queryByRole('heading', { name: 'What still blocks equipment readiness' })).toBeNull();
+});
+
+it('[TC-SPL-99-011] explains that no requirements create no equipment blocker only', async () => {
+  renderDetail({
+    ...fullDetail,
+    equipment_requirements: [],
+    equipment_readiness: { ready: true, has_equipment_blocker: false, active_requirement_count: 0, blockers: [] },
+  });
+
+  const panel = within(await screen.findByRole('region', { name: 'Equipment readiness' }));
+  expect(panel.getByText('No equipment blocker')).toBeTruthy();
+  expect(panel.getByText('No equipment requirements are recorded for this event.')).toBeTruthy();
+  expect(panel.getByText(/does not confirm the event/i)).toBeTruthy();
+});
+
+it('[TC-SPL-99-012] exposes the readiness result without any editing action', async () => {
+  renderDetail(readinessDetail);
+
+  const panel = within(await screen.findByRole('region', { name: 'Equipment readiness' }));
+  expect(panel.getByRole('table', { name: /Equipment readiness details/ })).toBeTruthy();
+  expect(panel.queryByRole('button')).toBeNull();
+  expect(panel.queryByRole('textbox')).toBeNull();
+  expect(panel.queryByRole('link')).toBeNull();
+});
+
 it('opens a dedicated event-scoped venue search instead of expanding search controls in the detail view', async () => {
   const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event: { ...assigned, status: 'planning', status_label: 'In planning' } }) });
   const onNavigate = vi.fn();

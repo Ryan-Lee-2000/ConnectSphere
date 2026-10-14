@@ -15,6 +15,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.authorization import require_roles
+from app.equipment_readiness import (
+    derive_equipment_readiness,
+    serialize_equipment_requirement,
+)
 from app.event_requests import (
     SINGAPORE,
     serialize_approval,
@@ -27,6 +31,10 @@ from app.models import (
     Account,
     AccountRole,
     ClarificationRequest,
+    EquipmentRequirement,
+    EquipmentRequirementUnavailabilityRecord,
+    EquipmentReservation,
+    EquipmentReviewNote,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
@@ -80,7 +88,18 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                     EventCoordinatorAssignment.coordinator_account_id == g.user_id,
                 )
                 .options(
-                    selectinload(EventRequest.equipment_requirements),
+                    selectinload(EventRequest.equipment_requirements).joinedload(
+                        EquipmentRequirement.catalogue_type
+                    ),
+                    selectinload(EventRequest.equipment_requirements)
+                    .selectinload(EquipmentRequirement.reservations)
+                    .selectinload(EquipmentReservation.releases),
+                    selectinload(EventRequest.equipment_requirements)
+                    .selectinload(EquipmentRequirement.review_notes)
+                    .joinedload(EquipmentReviewNote.author),
+                    selectinload(EventRequest.equipment_requirements)
+                    .selectinload(EquipmentRequirement.unavailability_records)
+                    .joinedload(EquipmentRequirementUnavailabilityRecord.recorded_by),
                     selectinload(EventRequest.clarification_requests).joinedload(
                         ClarificationRequest.author
                     ),
@@ -410,13 +429,9 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         "location_preference": event.location_preference,
         "venue_notes": event.venue_notes,
         "equipment_requirements": [
-            {
-                "equipment_type": line.equipment_type,
-                "quantity": line.quantity,
-                "notes": line.notes,
-            }
-            for line in event.equipment_requirements
+            serialize_equipment_requirement(line) for line in event.equipment_requirements
         ],
+        "equipment_readiness": derive_equipment_readiness(event.equipment_requirements),
         "registration_required": event.registration_required,
         "registration_notes": event.registration_notes,
         "client_organisation": event.organisation.name,

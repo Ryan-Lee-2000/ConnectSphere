@@ -117,6 +117,22 @@ contract only; they do not implement bookings, reservations, registration, draft
 transitions. Both tables use RLS with no browser-role grants; business access remains exclusively
 through Flask.
 
+## Equipment readiness projection
+
+SPL-99 adds a read-only equipment projection to the assigned Event Coordinator detail response.
+`derive_equipment_readiness()` is the single server-owned policy for this view and the later SPL-85
+event-confirmation gate. It returns stable blocker codes alongside display messages so server
+workflows can act on codes without parsing interface text.
+
+Only active requirement lines participate. Every active line must have an Essential or
+Non-essential decision and a catalogue mapping. Essential lines must be fully covered by retained
+reservation quantities and have no outstanding review; a Non-essential shortfall remains visible
+without blocking readiness. Releases are append-only, so the projection subtracts released units
+from reservations and reports the latest return date among reservations that still retain units.
+An event with no active requirements has no equipment blocker; this result says nothing about
+event, venue, registration or safety readiness. The endpoint retains SPL-64 assignment scoping and
+does not add a mutation or a migration.
+
 ## Client-organisation event isolation
 
 SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:
