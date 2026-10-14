@@ -35,6 +35,9 @@ async function submitRequest(page: Page, name: string) {
 test('[TC-SPL-66-01] responsible organiser answers and the coordinator resumes review', async ({
   page,
 }) => {
+  // Five real Auth sign-ins span assignment, clarification, response and retained history.
+  // Individual assertions keep their normal deadline.
+  test.setTimeout(60_000);
   const name = `E2E Clarification response ${Date.now()}`;
 
   await signIn(page, organiser, 'Event Organiser');
@@ -48,6 +51,8 @@ test('[TC-SPL-66-01] responsible organiser answers and the coordinator resumes r
   await queued.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
   await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
+  // Switching users before the save completes can invalidate the assignment request.
+  await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
 
   await signIn(page, coordinator);

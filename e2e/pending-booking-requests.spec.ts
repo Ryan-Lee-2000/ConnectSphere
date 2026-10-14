@@ -31,6 +31,8 @@ function isolatedDate() {
 
 // SPL-80 AC-1,2,3,6 Test-18
 test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens for review', async ({ page }) => {
+  // Six real Auth sign-ins, mobile reload and withdrawal make this a full workflow journey.
+  test.setTimeout(60_000);
   const name = `E2E Pending Requests ${Date.now()}`;
   const purpose = 'Pending booking queue end-to-end check';
 
@@ -95,6 +97,7 @@ test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens 
   // Responsive and keyboard check at phone width.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workspace/booking-requests');
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   const review = page.getByRole('row').filter({ hasText: name })
@@ -108,6 +111,8 @@ test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens 
   // empty — other specs leave their own pending requests behind in the same database.
   await signIn(page, coordinator);
   await page.goto(eventUrl);
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   const panel = page.getByRole('region', { name: 'Venue booking request' });
   await panel.getByRole('button', { name: 'Withdraw request' }).click();
   await panel.getByRole('button', { name: 'Confirm withdrawal' }).click();

@@ -28,6 +28,8 @@ function isolatedDate() {
 // SPL-79 AC-1,2,3,6 Test-21
 // SPL-79 AC-NA Test-22
 test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, history and earlier request', async ({ page }) => {
+  // Three real Auth sign-ins and three reloads cover current and historical bookings.
+  test.setTimeout(60_000);
   const name = `E2E Venue Status ${Date.now()}`;
 
   await signIn(page, organiser, 'Event Organiser');
@@ -62,6 +64,8 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
 
   // AC6 on screen: an event in Planning with nothing requested yet says so.
   await page.goto(eventUrl);
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   const eventPanel = page.getByRole('region', { name: 'Venue booking request' });
   await expect(eventPanel).toContainText('No venue-booking request has been made for this event yet.');
 
@@ -82,6 +86,8 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   // Return to the event before a replacement search. This is the normal coordinator flow and
   // remounts the details panel after withdrawal instead of retaining an in-flight layout lookup.
   await page.goto(eventUrl);
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Find venues', exact: true }).click();
   await page.getByRole('button', { name: 'Search venues', exact: true }).click();
   const replacementVenue = page.locator('.venue-availability__card').filter({ hasText: 'Suitable for this event' }).nth(1);
@@ -96,6 +102,8 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   // TC-SPL-79-22: the event page, at phone width.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(eventUrl);
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   await expect(eventPanel).toContainText('Status: Requested');
   const history = eventPanel.getByRole('list', { name: 'History' });
   await expect(history.getByRole('listitem')).toHaveCount(1);

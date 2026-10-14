@@ -12,8 +12,8 @@ function run(command, args) {
   });
 }
 
-// Rebuild only the named local SPL-97 evidence fixtures before browser journeys. This keeps the
-// review-required walkthrough repeatable without relying on a developer's prior manual database edits.
+// Rebuild the named local equipment fixtures before browser journeys, including the assigned
+// Planning event and stock scenarios required by SPL-90/95/97. No manual data preparation is needed.
 const preparationResult = await run('uv', ['run', '--frozen', 'python', 'scripts/prepare_e2e_equipment.py']);
 const testResult = preparationResult === 0
   ? await run(process.execPath, [playwrightCli, 'test', ...process.argv.slice(2)])

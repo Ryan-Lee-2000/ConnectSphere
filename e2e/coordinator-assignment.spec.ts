@@ -45,6 +45,9 @@ async function submitRequest(page: Page, name: string) {
 test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted request is queued, assigned, searched, and shown to its organiser', async ({
   page,
 }) => {
+  // This journey includes five real Auth sign-ins plus the complete cross-role workflow.
+  // Keep individual assertion deadlines unchanged; budget for the whole journey.
+  test.setTimeout(60_000);
   const name = `E2E Assignment ${Date.now()}`;
 
   // The organiser submits, and sees nobody is responsible yet.

@@ -28,6 +28,8 @@ function isolatedDate() {
 // SPL-78 AC-1,3,5 Test-24
 // SPL-78 AC-NA Test-25
 test('TC-SPL-78-24 and TC-SPL-78-25: a coordinator withdraws a Requested booking, frees the venue and requests it again', async ({ page }) => {
+  // Real Auth role changes and the complete booking workflow need a journey-level budget.
+  test.setTimeout(60_000);
   const name = `E2E Venue Withdrawal ${Date.now()}`;
 
   await signIn(page, organiser, 'Event Organiser');

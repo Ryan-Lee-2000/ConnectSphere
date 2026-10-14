@@ -1,34 +1,24 @@
-"""Prepare repeatable local-only equipment states for the SPL-97 browser walkthrough.
-
-The application has no user action that creates a ``review_required`` line: it is a state left by
-an earlier stock review.  These clearly labelled, disposable rows let the browser test demonstrate
-both successful and refused revalidation without adding a production-only shortcut.
-"""
+"""Prepare repeatable local-only equipment data for the SPL-90/95/97 browser journeys."""
 
 import os
 import sys
-from datetime import date, datetime, time, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.models import (  # noqa: E402
-    Account,
-    AccountRole,
-    EquipmentRequirement,
-    EquipmentReservation,
-    EquipmentType,
-    EventRequest,
-    Role,
-)
+from app.models import Account, AccountRole, Role  # noqa: E402
+
+from scripts.equipment_e2e_fixtures import prepare_equipment_fixtures  # noqa: E402
 
 load_dotenv(ROOT / ".env")
+load_dotenv(ROOT / "frontend/.env.local")
 database_url = os.environ["DATABASE_URL"]
 if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
     raise SystemExit("E2E fixture preparation is local-only and refuses a non-local database.")
@@ -36,108 +26,65 @@ if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
 engine = create_engine(database_url)
 
 
-def account_with_role(session: Session, role: Role) -> Account:
-    """Return a locally seeded actor whose server-owned role can own the fixture."""
+def fixture_account(session: Session, email: str, role: Role) -> Account:
+    """Resolve the browser's exact local Auth fixture, then verify its trusted application role.
 
-    account = session.scalar(
-        select(Account).join(AccountRole).where(AccountRole.role == role.value).order_by(Account.id)
+    This script uses the local migration connection, never exposes Auth data to a browser, and
+    never chooses a different developer's account merely because it sorts first by UUID.
+    """
+    account_id = session.scalar(
+        text("SELECT id FROM auth.users WHERE email = :email"), {"email": email}
     )
-    if account is None:
-        raise SystemExit(f"Run npm run setup first: no local {role.value} account exists.")
+    account = session.get(Account, str(account_id)) if account_id is not None else None
+    if (
+        account is None
+        or not account.is_active
+        or session.scalar(
+            select(AccountRole.account_id).where(
+                AccountRole.account_id == account.id,
+                AccountRole.role == role.value,
+            )
+        )
+        is None
+    ):
+        raise SystemExit(
+            f"Run npm run setup first: the local {role.value} Auth fixture is missing or inactive."
+        )
     return account
 
 
-with Session(engine) as session, session.begin():
-    organiser = account_with_role(session, Role.EVENT_ORGANISER)
-    technician = account_with_role(session, Role.TECHNICAL_SUPPORT_STAFF)
-    if organiser.organisation_id is None:
-        raise SystemExit("Local Event Organiser fixture needs an organisation.")
-
-    # Re-running a browser suite replaces only its own clearly marked fixture rows.
-    for event in session.scalars(
-        select(EventRequest).where(EventRequest.name.like("E2E SPL-97 %"))
-    ):
-        session.delete(event)
-    session.flush()
-    for equipment_type in session.scalars(
-        select(EquipmentType).where(EquipmentType.name.like("E2E SPL-97 %"))
-    ):
-        session.delete(equipment_type)
-    session.flush()
-
-    feasible_type = EquipmentType(
-        name="E2E SPL-97 Feasible Microphone",
-        normalised_name="e2e spl-97 feasible microphone",
-        total_stock=5,
-        location="Equipment Store",
-    )
-    infeasible_type = EquipmentType(
-        name="E2E SPL-97 Infeasible Presentation Kit",
-        normalised_name="e2e spl-97 infeasible presentation kit",
-        total_stock=4,
-        location="Equipment Store",
-    )
-    partial_type = EquipmentType(
-        name="E2E SPL-97 Partial Display Plinth",
-        normalised_name="e2e spl-97 partial display plinth",
-        total_stock=10,
-        location="Civic Store",
-    )
-    session.add_all([feasible_type, infeasible_type, partial_type])
-    session.flush()
-
-    def add_requirement(
-        name: str,
-        equipment_type: EquipmentType,
-        quantity: int,
-        status: str,
-        reserved: int = 0,
-    ):
-        """Create one planning event and its mapped line, optionally with retained units."""
-
-        event = EventRequest(
-            organiser_account_id=organiser.id,
-            organisation_id=organiser.organisation_id,
-            name=name,
-            purpose="Local browser evidence only",
-            proposed_date=date(2030, 10, 20),
-            start_time=time(9),
-            end_time=time(12),
-            expected_attendance=20,
-            status="planning",
+try:
+    with Session(engine) as session, session.begin():
+        organiser = fixture_account(
+            session,
+            os.getenv("VITE_LOCAL_DEMO_EMAIL", "developer@example.test"),
+            Role.EVENT_ORGANISER,
         )
-        session.add(event)
-        session.flush()
-        requirement = EquipmentRequirement(
-            event_request_id=event.id,
-            equipment_type=equipment_type.name,
-            equipment_type_id=equipment_type.id,
-            quantity=quantity,
-            required_start_date=date(2030, 10, 20),
-            required_end_date=date(2030, 10, 20),
-            status=status,
-            notes="E2E SPL-97 browser evidence fixture",
+        technician = fixture_account(
+            session,
+            os.getenv("VITE_LOCAL_DEMO_TECHNICAL_SUPPORT_EMAIL", "technical.support@example.test"),
+            Role.TECHNICAL_SUPPORT_STAFF,
         )
-        session.add(requirement)
-        session.flush()
-        if reserved:
-            session.add(
-                EquipmentReservation(
-                    event_request_id=event.id,
-                    equipment_requirement_id=requirement.id,
-                    equipment_type_id=equipment_type.id,
-                    commitment_start_date=date(2030, 10, 20),
-                    commitment_end_date=date(2030, 10, 20),
-                    quantity=reserved,
-                    reserved_by_account_id=technician.id,
-                    reserved_at=datetime.now(timezone.utc),
-                )
-            )
-
-    add_requirement("E2E SPL-97 Feasible review", feasible_type, 5, "review_required", reserved=5)
-    add_requirement(
-        "E2E SPL-97 Infeasible review", infeasible_type, 5, "review_required", reserved=5
-    )
-    add_requirement("E2E SPL-97 Partial reservation", partial_type, 12, "requested")
-
-engine.dispose()
+        coordinator = fixture_account(
+            session,
+            os.getenv("VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL", "event.coordinator@example.test"),
+            Role.EVENT_COORDINATOR,
+        )
+        manager = fixture_account(
+            session,
+            os.getenv(
+                "VITE_LOCAL_DEMO_OPERATIONS_MANAGER_EMAIL", "operations.manager@example.test"
+            ),
+            Role.EVENT_OPERATIONS_MANAGER,
+        )
+        if organiser.organisation_id is None:
+            raise SystemExit("Local Event Organiser fixture needs an organisation.")
+        prepare_equipment_fixtures(
+            session,
+            organiser=organiser,
+            technician=technician,
+            coordinator=coordinator,
+            manager=manager,
+        )
+finally:
+    engine.dispose()

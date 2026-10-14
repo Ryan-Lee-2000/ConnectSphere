@@ -7,7 +7,7 @@ if (existsSync('frontend/.env.local')) loadEnvFile('frontend/.env.local');
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinatorEmail =
   process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
-const planningFixtureName = 'Northstar Leadership Retreat';
+const planningFixtureName = 'E2E SPL-90 Northstar Leadership Retreat';
 
 // Keep recorded runs readable: reviewers should have time to see each major UI state.
 const visiblePause = (page: import('@playwright/test').Page) => page.waitForTimeout(1_000);

@@ -7,7 +7,7 @@ if (existsSync('frontend/.env.local')) loadEnvFile('frontend/.env.local');
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinatorEmail =
   process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
-const planningFixtureName = 'Northstar Leadership Retreat';
+const planningFixtureName = 'E2E SPL-90 Northstar Leadership Retreat';
 
 // A one-second pause after each observable step makes the video usable as UAT evidence,
 // instead of racing through the actions faster than a reviewer can inspect them.
@@ -46,7 +46,7 @@ test('TC-SPL-90-UAT-01 records a readable equipment-planning walkthrough', async
   await evidencePause(page);
 
   const catalogue = page.getByLabel('Catalogue equipment Required');
-  await catalogue.selectOption({ index: 1 });
+  await catalogue.selectOption({ label: 'E2E SPL-95 Wireless Microphone \u2014 Equipment E2E Store' });
   await page.getByLabel('Technical notes Optional').fill(marker);
   const quantity = page.getByLabel('Quantity Required');
   await expect(page.getByLabel('Required from Event date')).toBeDisabled();
