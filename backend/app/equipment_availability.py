@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
+from app.equipment_requirement_unavailability import history_for, serialize_record
 from app.equipment_reservation_state import released_quantity, remaining_quantity
 from app.models import (
     EquipmentRequirement,
@@ -379,6 +380,12 @@ def _serialize_requirement(session: Session, requirement: EquipmentRequirement) 
         "available_to_reserve": assessment.available_to_reserve,
         "shortfall": assessment.shortfall,
         "overcommitted_units": assessment.overcommitted_units,
+        # SPL-93: a line-level unavailable decision is separate from unavailable physical stock.
+        # The history makes the Technical Support view able to restore a line with its original
+        # explanation still visible, rather than treating an Unavailable badge as a dead end.
+        "unavailability_history": [
+            serialize_record(record) for record in history_for(session, requirement.id)
+        ],
     }
 
 
