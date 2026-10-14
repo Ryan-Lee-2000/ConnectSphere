@@ -22,7 +22,44 @@ type AssignedEvent = {
   location_preference?: string | null;
 };
 
-type EquipmentLine = { equipment_type: string; quantity: number; notes: string | null };
+type EquipmentNote = {
+  id: number;
+  note: string;
+  author: { id: string; name: string };
+  created_at: string;
+};
+
+type EquipmentUnavailabilityRecord = {
+  id: number;
+  action: 'marked_unavailable' | 'restored_to_requested';
+  reason: string | null;
+  alternative_suggestion: string | null;
+  recorded_by: { id: string; name: string | null };
+  recorded_at: string;
+};
+
+type EquipmentLine = {
+  equipment_type: string;
+  quantity: number;
+  notes: string | null;
+  id?: number;
+  required_quantity?: number;
+  reserved_quantity?: number;
+  status?: string;
+  essentiality?: string;
+  needs_mapping?: boolean;
+  planned_return_date?: string | null;
+  technical_support_notes?: EquipmentNote[];
+  unavailability_history?: EquipmentUnavailabilityRecord[];
+  outstanding_review_reasons?: string[];
+};
+
+type EquipmentReadiness = {
+  ready: boolean;
+  has_equipment_blocker: boolean;
+  active_requirement_count: number;
+  blockers: { code: string; requirement_id: number; message: string }[];
+};
 
 // Begin review answers with the summary shape only, so the full detail fields are optional here.
 type AssignedEventDetail = AssignedEvent & Partial<{
@@ -39,6 +76,7 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   location_preference: string | null;
   venue_notes: string | null;
   equipment_requirements: EquipmentLine[];
+  equipment_readiness: EquipmentReadiness;
   registration_required: boolean;
   registration_notes: string | null;
   client_organisation: string;
@@ -154,6 +192,70 @@ function EventBrief({ event }: { event: AssignedEventDetail }) {
       <div><dt>Location preference</dt><dd>{event.location_preference || 'No preference recorded'}</dd></div>
     </dl>
   </section>;
+}
+
+const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
+  unmapped: 'Needs mapping',
+  requested: 'Requested',
+  partially_reserved: 'Partially reserved',
+  reserved: 'Reserved',
+  review_required: 'Review required',
+  unavailable: 'Unavailable',
+  removed: 'Removed',
+};
+
+const ESSENTIALITY_LABELS: Record<string, string> = {
+  undecided: 'Undecided',
+  essential: 'Essential',
+  non_essential: 'Non-essential',
+};
+
+function EquipmentReadinessPanel({ event }: { event: AssignedEventDetail }) {
+  const readiness = event.equipment_readiness;
+  if (!readiness) return null;
+  const requirements = event.equipment_requirements ?? [];
+  const headline = readiness.active_requirement_count === 0
+    ? 'No equipment blocker'
+    : readiness.ready ? 'Equipment ready' : 'Equipment action required';
+  return <section className="equipment-readiness" aria-labelledby="equipment-readiness-title">
+    <header className="equipment-readiness__header">
+      <div><p className="eyebrow">Read-only readiness</p><h2 id="equipment-readiness-title">Equipment readiness</h2></div>
+      <strong className={`equipment-readiness__status equipment-readiness__status--${readiness.ready ? 'ready' : 'blocked'}`}>{headline}</strong>
+    </header>
+    <p className="equipment-readiness__scope">This summary covers equipment only. It does not confirm the event or assess venue, registration, or safety arrangements.</p>
+    {readiness.blockers.length > 0 && <div className="equipment-readiness__blockers">
+      <h3>What still blocks equipment readiness</h3>
+      <ul>{readiness.blockers.map(blocker => <li key={`${blocker.requirement_id}-${blocker.code}`}>{blocker.message}</li>)}</ul>
+    </div>}
+    {requirements.length === 0
+      ? <p className="equipment-readiness__empty">No equipment requirements are recorded for this event.</p>
+      : <div className="equipment-readiness__table-wrap"><table className="equipment-readiness__table">
+        <caption className="visually-hidden">Equipment readiness details for {event.name}</caption>
+        <thead><tr><th scope="col">Requirement</th><th scope="col">Quantity</th><th scope="col">State</th><th scope="col">Latest return</th><th scope="col">Notes and reasons</th></tr></thead>
+        <tbody>{requirements.map((line, index) => <tr key={line.id ?? `${line.equipment_type}-${index}`}>
+          <th scope="row"><strong>{line.equipment_type}</strong>{line.needs_mapping && <small>Catalogue mapping required</small>}</th>
+          <td><strong>{line.reserved_quantity ?? 0}/{line.required_quantity ?? line.quantity}</strong><small>reserved / required</small></td>
+          <td><span>{EQUIPMENT_STATUS_LABELS[line.status ?? ''] ?? formatText(line.status)}</span><small>{ESSENTIALITY_LABELS[line.essentiality ?? ''] ?? formatText(line.essentiality)}</small></td>
+          <td>{formatDate(line.planned_return_date ?? null)}</td>
+          <td><EquipmentEvidence line={line} /></td>
+        </tr>)}</tbody>
+      </table></div>}
+  </section>;
+}
+
+function EquipmentEvidence({ line }: { line: EquipmentLine }) {
+  const unavailability = (line.unavailability_history ?? []).filter(record => record.reason);
+  const hasEvidence = Boolean(line.notes)
+    || (line.technical_support_notes?.length ?? 0) > 0
+    || unavailability.length > 0
+    || (line.outstanding_review_reasons?.length ?? 0) > 0;
+  if (!hasEvidence) return <span>None recorded</span>;
+  return <ul className="equipment-readiness__evidence">
+    {line.notes && <li><strong>Requirement note:</strong> {line.notes}</li>}
+    {(line.technical_support_notes ?? []).map(note => <li key={`note-${note.id}`}><strong>Technical Support:</strong> {note.note} <small>{note.author.name}, {formatTimestamp(note.created_at)}</small></li>)}
+    {unavailability.map(record => <li key={`unavailable-${record.id}`}><strong>Unavailability:</strong> {record.reason}{record.alternative_suggestion ? ` Alternative: ${record.alternative_suggestion}.` : ''} <small>{record.recorded_by.name ?? 'Technical Support'}, {formatTimestamp(record.recorded_at)}</small></li>)}
+    {(line.outstanding_review_reasons ?? []).map((reason, index) => <li key={`review-${index}`}><strong>Outstanding review:</strong> {reason}</li>)}
+  </ul>;
 }
 
 export function AssignedEvents({ accessToken, eventId, onNavigate, request, view = 'detail' }: {
@@ -402,6 +504,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <h1 id="assigned-events-title">{event.name}</h1>
       </header>
       <EventBrief event={event} />
+      <EquipmentReadinessPanel event={event} />
       {/* SPL-79: the event's venue-booking request, its status and history. A request can only be
           made once the event is in Planning (SPL-77), so earlier stages have nothing to show. The
           panel follows the event as loaded, so approving on this page performs no booking read. */}
