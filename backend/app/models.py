@@ -522,6 +522,14 @@ class EquipmentRequirement(Base):
     reservations: Mapped[list["EquipmentReservation"]] = relationship(
         back_populates="equipment_requirement", cascade="all, delete-orphan"
     )
+    # SPL-93 keeps a separate, append-only record of a line being unavailable and later restored.
+    # The current status remains on this aggregate; the records preserve who made each decision
+    # and why without overloading a stock-reservation or review-note history.
+    unavailability_records: Mapped[list["EquipmentRequirementUnavailabilityRecord"]] = relationship(
+        back_populates="equipment_requirement",
+        cascade="all, delete-orphan",
+        order_by="EquipmentRequirementUnavailabilityRecord.id",
+    )
 
 
 # SPL-96 AC1: the unavailable total can never exceed total stock or fall below zero. The rule
@@ -585,6 +593,43 @@ class EquipmentUnavailabilityRecord(Base):
     )
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     equipment_type: Mapped[EquipmentType] = relationship()
+
+
+class EquipmentRequirementUnavailabilityRecord(Base):
+    """One Technical Support decision to make an event requirement unavailable or restore it.
+
+    This is deliberately distinct from ``EquipmentUnavailabilityRecord``. That table records
+    physical stock taken out of service (SPL-96); this one records a workflow decision on one
+    event line (SPL-93), and must never change the stock pool or a reservation.
+    """
+
+    __tablename__ = "equipment_requirement_unavailability_records"
+    __table_args__ = (
+        CheckConstraint(
+            "action in ('marked_unavailable', 'restored_to_requested')",
+            name="ck_equipment_requirement_unavailability_records_known_action",
+        ),
+        CheckConstraint(
+            "action != 'marked_unavailable' OR (reason IS NOT NULL AND length(trim(reason)) > 0)",
+            name="ck_equipment_requirement_unavailability_records_mark_reason",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    alternative_suggestion: Mapped[str | None] = mapped_column(Text)
+    recorded_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    equipment_requirement: Mapped[EquipmentRequirement] = relationship(
+        back_populates="unavailability_records"
+    )
+    recorded_by: Mapped[Account] = relationship(foreign_keys=[recorded_by_account_id])
 
 
 class EquipmentReservation(Base):

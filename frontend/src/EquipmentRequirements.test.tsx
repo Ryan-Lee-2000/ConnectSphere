@@ -29,6 +29,23 @@ function payload(requirements: unknown[] = [unmappedRequirement], removed_requir
 }
 
 describe('EquipmentRequirements', () => {
+  // TC-SPL-93-009 — AC2/AC3: the coordinator receives and can read the immutable support history.
+  it('[TC-SPL-93-009] shows an unavailable reason, suggestion and later restoration on its own line', async () => {
+    const unavailable = {
+      ...unmappedRequirement, equipment_type: microphone, status: 'requested',
+      unavailability_history: [
+        { id: 1, action: 'marked_unavailable', reason: 'Supplier recall', alternative_suggestion: 'Use wired microphones', recorded_at: '2026-10-12T10:15:00+08:00', recorded_by: { id: 'technical-1', name: 'Taylor Technical' } },
+        { id: 2, action: 'restored_to_requested', reason: null, alternative_suggestion: null, recorded_at: '2026-10-12T11:15:00+08:00', recorded_by: { id: 'technical-1', name: 'Taylor Technical' } },
+      ],
+    };
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={async () => response(payload([unavailable]))} />);
+
+    expect(await screen.findByText('Technical Support availability history')).toBeTruthy();
+    expect(screen.getByText('Reason: Supplier recall')).toBeTruthy();
+    expect(screen.getByText('Alternative suggestion: Use wired microphones')).toBeTruthy();
+    expect(screen.getByText(/Restored to requested/)).toBeTruthy();
+  });
+
   // SPL-90 AC-1 / TC-SPL-90-009: the page preserves organiser wording until the coordinator maps it.
   it('maps a retained organiser request to a catalogue item without changing its original wording', async () => {
     let mapped = false;

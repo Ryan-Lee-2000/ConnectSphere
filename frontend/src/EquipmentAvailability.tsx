@@ -15,6 +15,14 @@ type Assessment = {
   available_to_reserve: number;
   shortfall: number;
   overcommitted_units: number;
+  unavailability_history?: Array<{
+    id: number;
+    action: 'marked_unavailable' | 'restored_to_requested';
+    reason: string | null;
+    alternative_suggestion: string | null;
+    recorded_at: string;
+    recorded_by: { id: string; name: string | null };
+  }>;
 };
 
 function formatDate(value: string | null) {
@@ -45,6 +53,8 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({});
   const [releaseQuantityDrafts, setReleaseQuantityDrafts] = useState<Record<number, string>>({});
   const [releaseReasonDrafts, setReleaseReasonDrafts] = useState<Record<number, string>>({});
+  const [unavailableReasonDrafts, setUnavailableReasonDrafts] = useState<Record<number, string>>({});
+  const [alternativeSuggestionDrafts, setAlternativeSuggestionDrafts] = useState<Record<number, string>>({});
   const [actionError, setActionError] = useState<Record<number, string>>({});
   const [busyRequirement, setBusyRequirement] = useState<number | null>(null);
 
@@ -150,6 +160,40 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
     } finally { setBusyRequirement(null); }
   }
 
+  async function markUnavailable(item: Assessment) {
+    const reason = (unavailableReasonDrafts[item.requirement_id] || '').trim();
+    const alternative_suggestion = (alternativeSuggestionDrafts[item.requirement_id] || '').trim();
+    if (!reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: 'Enter a reason this requirement is unavailable.' }));
+      return;
+    }
+    setBusyRequirement(item.requirement_id);
+    setActionError(current => ({ ...current, [item.requirement_id]: '' }));
+    try {
+      const response = await api(`/api/equipment-requirements/${item.requirement_id}/mark-unavailable`, {
+        method: 'POST', body: JSON.stringify({ reason, alternative_suggestion: alternative_suggestion || undefined }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'The requirement could not be marked unavailable.'));
+      setUnavailableReasonDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      setAlternativeSuggestionDrafts(current => ({ ...current, [item.requirement_id]: '' }));
+      await reload();
+    } catch (reason_) {
+      setActionError(current => ({ ...current, [item.requirement_id]: reason_ instanceof Error ? reason_.message : 'The requirement could not be marked unavailable.' }));
+    } finally { setBusyRequirement(null); }
+  }
+
+  async function restoreRequested(item: Assessment) {
+    setBusyRequirement(item.requirement_id);
+    setActionError(current => ({ ...current, [item.requirement_id]: '' }));
+    try {
+      const response = await api(`/api/equipment-requirements/${item.requirement_id}/restore-requested`, { method: 'POST' });
+      if (!response.ok) throw new Error(await responseError(response, 'The requirement could not be restored.'));
+      await reload();
+    } catch (reason) {
+      setActionError(current => ({ ...current, [item.requirement_id]: reason instanceof Error ? reason.message : 'The requirement could not be restored.' }));
+    } finally { setBusyRequirement(null); }
+  }
+
   if (error) return <section className="equipment-availability"><p className="error" role="alert">{error}</p></section>;
   if (!items) return <p role="status">Loading equipment availability…</p>;
 
@@ -185,11 +229,17 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
           onReleaseAll={() => void releaseAllForEvent(item)}
           onReleaseQuantityChange={value => setReleaseQuantityDrafts(current => ({ ...current, [item.requirement_id]: value }))}
           onReleaseReasonChange={value => setReleaseReasonDrafts(current => ({ ...current, [item.requirement_id]: value }))}
+          onUnavailableReasonChange={value => setUnavailableReasonDrafts(current => ({ ...current, [item.requirement_id]: value }))}
+          onAlternativeSuggestionChange={value => setAlternativeSuggestionDrafts(current => ({ ...current, [item.requirement_id]: value }))}
+          onMarkUnavailable={() => void markUnavailable(item)}
+          onRestoreRequested={() => void restoreRequested(item)}
           onRevalidate={() => void revalidate(item)}
           onReserve={() => void reserve(item)}
           quantity={quantityDrafts[item.requirement_id] || ''}
           releaseQuantity={releaseQuantityDrafts[item.requirement_id] || ''}
           releaseReason={releaseReasonDrafts[item.requirement_id] || ''}
+          unavailableReason={unavailableReasonDrafts[item.requirement_id] || ''}
+          alternativeSuggestion={alternativeSuggestionDrafts[item.requirement_id] || ''}
         />
       </article>;
       })}
@@ -197,11 +247,14 @@ export function EquipmentAvailability({ accessToken, request }: { accessToken: s
   </section>;
 }
 
-function EquipmentReservationAction({ busy, error, firstForEvent, item, onQuantityChange, onRelease, onReleaseAll, onReleaseQuantityChange, onReleaseReasonChange, onRevalidate, onReserve, quantity, releaseQuantity, releaseReason }: {
+function EquipmentReservationAction({ busy, error, firstForEvent, item, onQuantityChange, onRelease, onReleaseAll, onReleaseQuantityChange, onReleaseReasonChange, onUnavailableReasonChange, onAlternativeSuggestionChange, onMarkUnavailable, onRestoreRequested, onRevalidate, onReserve, quantity, releaseQuantity, releaseReason, unavailableReason, alternativeSuggestion }: {
   busy: boolean; error?: string; item: Assessment; onQuantityChange: (value: string) => void;
   firstForEvent: boolean; onRelease: () => void; onReleaseAll: () => void;
   onReleaseQuantityChange: (value: string) => void; onReleaseReasonChange: (value: string) => void;
+  onUnavailableReasonChange: (value: string) => void; onAlternativeSuggestionChange: (value: string) => void;
+  onMarkUnavailable: () => void; onRestoreRequested: () => void;
   onRevalidate: () => void; onReserve: () => void; quantity: string; releaseQuantity: string; releaseReason: string;
+  unavailableReason: string; alternativeSuggestion: string;
 }) {
   const remaining = item.required_quantity - item.reserved_quantity;
   const maximum = Math.min(remaining, item.available_to_reserve);
@@ -227,13 +280,32 @@ function EquipmentReservationAction({ busy, error, firstForEvent, item, onQuanti
   </footer>;
   if (item.overcommitted_units > 0 && item.reserved_quantity > 0) return <footer className="equipment-availability__action"><p><strong>Stock overcommitted.</strong> {item.overcommitted_units} {item.overcommitted_units === 1 ? 'unit is' : 'units are'} committed beyond current stock. The {item.reserved_quantity} retained {item.reserved_quantity === 1 ? 'unit remains' : 'units remain'} held while Technical Support resolves the stock conflict.</p>{releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}</footer>;
   if (item.requirement_status === 'reserved') return <footer className="equipment-availability__action"><p><strong>Reservation complete.</strong> All required units are held for this event’s commitment period.</p>{releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}</footer>;
-  if (item.requirement_status === 'unavailable') return <footer className="equipment-availability__action"><p><strong>Unavailable requirement.</strong> Return this requirement to Requested before reserving units.</p></footer>;
+  if (item.requirement_status === 'unavailable') {
+    const original = [...(item.unavailability_history || [])].reverse().find(entry => entry.action === 'marked_unavailable');
+    return <footer className="equipment-availability__action">
+      <p><strong>Unavailable requirement.</strong> {original?.reason || 'A reason was recorded.'}</p>
+      {original?.alternative_suggestion && <p><strong>Suggested alternative:</strong> {original.alternative_suggestion}</p>}
+      <p>Restoring makes this requirement Requested again. Its unavailable decision remains in history.</p>
+      <button className="button button--secondary" disabled={busy} onClick={onRestoreRequested} type="button">{busy ? 'Restoring…' : 'Restore to requested'}</button>
+      {error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
+    </footer>;
+  }
+  const unavailableControl = item.requirement_status === 'requested' && item.reserved_quantity === 0 ? <section className="equipment-availability__unavailable-control" aria-label={`Mark ${item.equipment_type.name} unavailable`}>
+    <div className="equipment-availability__action-copy"><h3>Mark requirement unavailable</h3><p>Use this when this event requirement cannot currently be fulfilled. This does not remove physical stock or alter other reservations.</p></div>
+    <label htmlFor={`unavailable-reason-${item.requirement_id}`}>Reason
+      <input id={`unavailable-reason-${item.requirement_id}`} maxLength={2000} onChange={event => onUnavailableReasonChange(event.target.value)} value={unavailableReason} />
+    </label>
+    <label htmlFor={`alternative-suggestion-${item.requirement_id}`}>Alternative suggestion (optional)
+      <input id={`alternative-suggestion-${item.requirement_id}`} maxLength={2000} onChange={event => onAlternativeSuggestionChange(event.target.value)} value={alternativeSuggestion} />
+    </label>
+    <button className="button button--secondary" disabled={busy} onClick={onMarkUnavailable} type="button">{busy ? 'Saving…' : 'Mark unavailable'}</button>
+  </section> : null;
   return <footer className="equipment-availability__action">
     <div className="equipment-availability__action-copy"><h3>Reserve units</h3><p>{maximum > 0 ? `Up to ${maximum} additional ${maximum === 1 ? 'unit is' : 'units are'} available to reserve now.` : 'No additional units are available for this full commitment period.'}</p></div>
     {isReservable && <div className="equipment-availability__reserve-control">
       <label htmlFor={`reserve-${item.requirement_id}`}>Units to reserve<input disabled={maximum === 0} id={`reserve-${item.requirement_id}`} max={Math.max(1, maximum)} min="1" onChange={event => onQuantityChange(event.target.value)} step="1" type="number" value={quantity} /></label>
       <button className="button button--primary" disabled={busy || maximum === 0} onClick={onReserve} type="button">{busy ? 'Reserving…' : maximum === 0 ? 'No units available' : 'Reserve units'}</button>
     </div>}
-    {releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
+    {unavailableControl}{releaseControl}{error && <p className="error equipment-availability__action-error" role="alert">{error}</p>}
   </footer>;
 }

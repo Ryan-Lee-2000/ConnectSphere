@@ -359,6 +359,10 @@ button { touch-action: manipulation; }
 .equipment-requirements__facts dd { font-size: .925rem; overflow-wrap: anywhere; }
 .equipment-requirements__notes, .equipment-requirements__decision { display: grid; gap: var(--space-1); margin: 0 var(--space-5) var(--space-4); padding: var(--space-3) 0 0; border-top: 1px solid var(--color-blueprint-line); color: var(--color-muted-slate); font-size: .875rem; }
 .equipment-requirements__notes strong, .equipment-requirements__decision strong { color: var(--color-ink-navy); font-size: .8rem; }
+.equipment-requirements__unavailability { display: grid; gap: var(--space-2); margin: 0 var(--space-5) var(--space-4); padding: var(--space-4); border: 1px solid color-mix(in oklch, var(--color-refusal-red) 28%, var(--color-blueprint-line)); border-radius: var(--radius-md); background: var(--color-refusal-surface); }
+.equipment-requirements__unavailability > strong { color: var(--color-refusal-red); font-size: .8rem; }
+.equipment-requirements__unavailability ul { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.equipment-requirements__unavailability li { display: grid; gap: .15rem; color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.45; }
 .equipment-requirements__card footer, .equipment-requirements__editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--color-blueprint-line); background: var(--color-mist-surface); }
 .equipment-requirements__editor-actions { margin-top: var(--space-1); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); }
 .equipment-requirements__remove { padding: var(--space-2); border: 0; color: var(--color-refusal-red); background: transparent; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: .18em; }
@@ -881,6 +885,9 @@ button { touch-action: manipulation; }
 .equipment-availability__release-control { display: grid; flex-basis: 100%; grid-template-columns: minmax(12rem, 1fr) minmax(8rem, .45fr) minmax(14rem, .8fr) auto auto; align-items: end; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-blueprint-line); }
 .equipment-availability__release-control > label { display: grid; gap: var(--space-1); color: var(--color-muted-slate); font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .equipment-availability__release-control input { min-height: 48px; }
+.equipment-availability__unavailable-control { display: grid; flex-basis: 100%; grid-template-columns: minmax(12rem, 1fr) minmax(12rem, .8fr) minmax(12rem, .8fr) auto; align-items: end; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-blueprint-line); }
+.equipment-availability__unavailable-control > label { display: grid; gap: var(--space-1); color: var(--color-muted-slate); font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.equipment-availability__unavailable-control input { min-height: 48px; }
 .equipment-availability__release-control .equipment-availability__action-copy { min-width: 0; }
 .equipment-availability__action .button { min-height: 48px; white-space: nowrap; }
 .equipment-availability__action-error { flex-basis: 100%; color: var(--color-refusal-red) !important; }
@@ -905,6 +912,8 @@ button { touch-action: manipulation; }
   .equipment-availability__reserve-control label, .equipment-availability__reserve-control .button { width: 100%; }
   .equipment-availability__release-control { grid-template-columns: 1fr; }
   .equipment-availability__release-control .button { width: 100%; }
+  .equipment-availability__unavailable-control { grid-template-columns: 1fr; }
+  .equipment-availability__unavailable-control .button { width: 100%; }
 }
 
 /* SPL-117: an attendee's own registrations. Each entry wraps so its details and SPL-118's
