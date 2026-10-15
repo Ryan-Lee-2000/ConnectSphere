@@ -893,6 +893,22 @@ def test_qa_spl_134_047_each_recipient_sees_their_notice_in_their_inbox(app, cli
     )
 
 
+# QA-SPL-134-053 | AC5 | BB (review finding): each notice links to a page its recipient can open
+def test_qa_spl_134_053_each_notice_links_to_the_recipients_own_event_page(app, client):
+    event_id = add_request(app, "Harbour Summit")
+    assert assign(client, event_id, ALICE).status_code == 201
+    assert reassign(client, event_id, BOB).status_code == 200
+
+    def links(token):
+        body = client.get("/api/notifications", headers=headers(token)).get_json()
+        return [n["link"] for n in body["notifications"]]
+
+    # The organiser has no coordinator page, so both of their notices open the organisation page.
+    assert links("organiser") == [f"/workspace/organisation-events/{event_id}"] * 2
+    assert links("coordinator-b") == [f"/workspace/assigned-events/{event_id}"]
+    assert links("coordinator") == [f"/workspace/assigned-events/{event_id}"] * 2
+
+
 # QA-SPL-134-048 | AC5 | BB boundary: awkward event names stay intact in every notice
 @pytest.mark.parametrize(
     "name",

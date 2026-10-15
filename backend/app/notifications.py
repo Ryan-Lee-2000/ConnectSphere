@@ -166,9 +166,19 @@ def _serialize(notice: Notification) -> dict[str, Any]:
         "id": notice.id,
         "message": notice.message,
         "event": {"id": notice.event_request_id, "name": notice.event_request.name},
+        "link": _event_link(notice),
         "created_at": _timestamp(notice.created_at),
         "read": notice.read_at is not None,
     }
+
+
+def _event_link(notice: Notification) -> str:
+    # The notice kind is the dedupe key's prefix. Notices written for the organiser open the
+    # organisation event page; the coordinator-only page would send them back to the workspace.
+    # Both pages stay behind their own role and ownership checks on the server.
+    kind = notice.dedupe_key.split(":", 1)[0]
+    page = "organisation-events" if kind.startswith("organiser_") else "assigned-events"
+    return f"/workspace/{page}/{notice.event_request_id}"
 
 
 def _timestamp(value: datetime) -> str:

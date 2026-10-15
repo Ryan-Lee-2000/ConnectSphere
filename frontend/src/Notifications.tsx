@@ -5,6 +5,8 @@ type Notice = {
   id: number;
   message: string;
   event: { id: number; name: string };
+  // Chosen by the server for the recipient; older payloads may not carry it.
+  link?: string;
   created_at: string;
   read: boolean;
 };
@@ -16,6 +18,17 @@ function formatWhen(value: string) {
     : parsed.toLocaleString('en-GB', {
       day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
+}
+
+const EVENT_LINK = /^\/workspace\/(?:assigned|organisation)-events\/\d+$/;
+
+// The server picks the page for this recipient (SPL-134: organisers have their own event page).
+// Anything that is not a known event page falls back to the coordinator page, which is what every
+// notice opened before the server sent a link.
+function eventPath(notice: Notice) {
+  return notice.link && EVENT_LINK.test(notice.link)
+    ? notice.link
+    : `/workspace/assigned-events/${notice.event.id}`;
 }
 
 // SPL-101. The signed-in account's own notifications, newest first. The server decides whose
@@ -77,7 +90,7 @@ export function Notifications({
 
   function open(click: MouseEvent<HTMLAnchorElement>, notice: Notice) {
     click.preventDefault();
-    onNavigate(`/workspace/assigned-events/${notice.event.id}`);
+    onNavigate(eventPath(notice));
   }
 
   if (notices === null && !error) {
@@ -120,7 +133,7 @@ export function Notifications({
               </p>
               <p className="notifications__meta">
                 <a
-                  href={`/workspace/assigned-events/${notice.event.id}`}
+                  href={eventPath(notice)}
                   onClick={click => open(click, notice)}
                 >{notice.event.name}</a>
                 <span>{formatWhen(notice.created_at)}</span>
