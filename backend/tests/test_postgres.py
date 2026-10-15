@@ -43,6 +43,9 @@ PRODUCT_TABLES = {
     "equipment_requirement_unavailability_records",
     # SPL-91: every coordinator change or removal of a requirement line.
     "equipment_requirement_changes",
+    # SPL-111: organiser change requests and their items.
+    "event_change_requests",
+    "event_change_request_items",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

@@ -18,6 +18,7 @@ from .equipment_requirements import register_equipment_requirement_routes
 from .equipment_return_dates import register_equipment_return_date_routes
 from .equipment_review_queue import register_equipment_review_queue_routes
 from .equipment_unavailability import register_equipment_unavailability_routes
+from .event_change_requests import register_event_change_request_routes
 from .event_registrations import register_event_registration_routes
 from .event_requests import register_event_request_routes
 from .event_review import register_event_review_routes
@@ -146,6 +147,7 @@ def create_app(test_config=None):
     register_open_registration_routes(app)
     register_my_registration_routes(app)
     register_notification_routes(app)
+    register_event_change_request_routes(app)
 
     @app.get("/")
     @app.get("/<path:path>")

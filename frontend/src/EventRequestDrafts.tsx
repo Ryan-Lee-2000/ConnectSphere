@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
+import { ChangeRequestsPanel } from './ChangeRequests';
 import { EventRequestForm } from './EventRequestForm';
 
 const LOAD_FAILURE_MESSAGE =
@@ -53,6 +54,8 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
   const [responding, setResponding] = useState<{ id: number; name: string; clarifications: Clarification[] } | null>(null);
   const [responseText, setResponseText] = useState('');
   const [sendingResponse, setSendingResponse] = useState(false);
+  // SPL-111: the submitted request whose change requests are open.
+  const [changing, setChanging] = useState<RequestSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const api: ApiRequest = request || ((path, init = {}) => fetch(path, {
     ...init,
@@ -140,6 +143,16 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
     onCancel={() => { setEditing(null); onUnsavedChanges?.(false); void refresh(); }}
     onSubmitted={() => { setEditing(null); onUnsavedChanges?.(false); void refresh(); }}
   />;
+
+  if (changing !== null) return <div className="event-request-status">
+    <p className="eyebrow">My requests</p>
+    <h1>Change request</h1>
+    <ChangeRequestsPanel api={api} eventId={changing.id} eventStatus={changing.status}
+      eventName={changing.name} canSubmit />
+    <button className="button button--secondary" type="button" onClick={() => setChanging(null)}>
+      Back to my requests
+    </button>
+  </div>;
 
   if (responding !== null) {
     const outstanding = responding.clarifications.find(item => !item.response);
@@ -241,6 +254,10 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
               {item.status === 'returned_for_clarification' &&
                 <button className="button button--secondary" onClick={() => void openClarification(item)} type="button">
                   Respond to clarification
+                </button>}
+              {['under_review', 'planning', 'confirmed'].includes(item.status) &&
+                <button className="button button--secondary" onClick={() => setChanging(item)} type="button">
+                  Change requests
                 </button>}
             </td>
             <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>

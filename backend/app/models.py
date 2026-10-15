@@ -1055,3 +1055,69 @@ class Notification(Base):
     # Null means unread.
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship()
+
+
+# SPL-111 (CS-E18-S1): a change request is Pending until a later story resolves it. Shared with the
+# migration so the model and the database cannot drift apart.
+CHANGE_REQUEST_STATUSES = ("pending",)
+ONE_PENDING_CHANGE_REQUEST = "status = 'pending'"
+
+
+class EventChangeRequest(Base):
+    """An organiser's request to change an event they already submitted (SPL-111).
+
+    A request holds one or more items (``EventChangeRequestItem``). At most one request per event
+    may be Pending at a time; the partial unique index enforces that even if two submissions race.
+    """
+
+    __tablename__ = "event_change_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status in (" + ", ".join(repr(status) for status in CHANGE_REQUEST_STATUSES) + ")",
+            name="ck_event_change_requests_known_status",
+        ),
+        Index(
+            "uq_event_change_requests_one_pending",
+            "event_request_id",
+            unique=True,
+            postgresql_where=text(ONE_PENDING_CHANGE_REQUEST),
+            sqlite_where=text(ONE_PENDING_CHANGE_REQUEST),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # Always the signed-in organiser; the browser never chooses who submitted.
+    submitted_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    items: Mapped[list["EventChangeRequestItem"]] = relationship(
+        back_populates="change_request",
+        order_by="EventChangeRequestItem.id",
+        cascade="all, delete-orphan",
+    )
+
+
+class EventChangeRequestItem(Base):
+    """One field an organiser wants changed: its value when asked, the new value and why."""
+
+    __tablename__ = "event_change_request_items"
+    __table_args__ = (
+        UniqueConstraint("change_request_id", "field", name="uq_event_change_request_items_field"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    change_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_change_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    field: Mapped[str] = mapped_column(String(40), nullable=False)
+    # The event's value at submission, so the coordinator sees what is being replaced even if the
+    # event is edited afterwards.
+    current_value: Mapped[Any] = mapped_column(JSON)
+    requested_value: Mapped[Any] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    change_request: Mapped[EventChangeRequest] = relationship(back_populates="items")
