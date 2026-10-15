@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "s3_booking_review_findings"
-down_revision = "s3_requirement_unavailability"
+down_revision = "s3_event_change_requests"
 branch_labels = None
 depends_on = None
 
