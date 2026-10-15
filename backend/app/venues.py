@@ -67,7 +67,8 @@ def register_venue_routes(app: Flask) -> None:
         layouts = _layout_list(data["layouts"]) if "layouts" in data else None
         with Session(app.extensions["engine"]) as session:
             venue = _find_venue(session, venue_id, lock=True)
-            if "setup_minutes" in attributes:
+            timing_changed = "setup_minutes" in attributes
+            if timing_changed:
                 venue.timing_revision += 1
             for name, value in attributes.items():
                 setattr(venue, name, value)
@@ -76,10 +77,20 @@ def register_venue_routes(app: Flask) -> None:
                     session.delete(layout)
                 session.flush()
                 session.add_all(VenueLayout(venue_id=venue.id, **layout) for layout in layouts)
+            affected_booking_count = 0
+            if timing_changed:
+                from app.venue_booking_assessment import assess_venue_bookings
+
+                affected_booking_count = assess_venue_bookings(
+                    session, venue, assessed_by_account_id=g.user_id
+                )
             session.commit()
             session.refresh(venue)
             session.expire(venue, ["layouts"])
-            return jsonify(venue=_serialize_venue(venue))
+            return jsonify(
+                venue=_serialize_venue(venue),
+                affected_booking_count=affected_booking_count,
+            )
 
     @app.post("/api/venues/<int:venue_id>/layouts")
     @require_roles(Role.VENUE_STAFF)
@@ -255,7 +266,7 @@ def _find_venue(session: Session, venue_id: int, *, lock=False) -> Venue:
         select(Venue)
         .where(Venue.id == venue_id)
         .options(selectinload(Venue.layouts))
-        .with_for_update(key_share=True)
+        .with_for_update()
         if lock
         else select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
     )

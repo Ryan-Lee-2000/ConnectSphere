@@ -96,8 +96,12 @@ def _review(session: Session, booking: VenueBooking) -> dict[str, Any]:
     from app.venue_operational_blocks import exact_block_interval
 
     reasons = exact_review_reasons(session, booking)
+    from app.venue_booking_assessment import serialize_review
+
+    persisted = serialize_review(session, booking)
     return {
-        "requires_review": booking.requires_review or bool(reasons),
+        "requires_review": booking.requires_review or bool(reasons) or persisted["requires_review"],
+        **({"findings": persisted["findings"]} if persisted["findings"] else {}),
         "marked_at": _timestamp(booking.review_marked_at),
         "trigger_block": (
             {

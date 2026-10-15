@@ -19,6 +19,7 @@ import { OrganisationEvents } from './OrganisationEvents';
 import { MyRegistrations } from './MyRegistrations';
 import { AssignedEvents } from './AssignedEvents';
 import { PendingBookingRequests } from './PendingBookingRequests';
+import { BookingTimingReviews } from './BookingTimingReviews';
 import { VenueBookingReview } from './VenueBookingReview';
 import { VenueOccupancyCalendarPage } from './VenueOccupancyCalendarPage';
 import { EquipmentCatalogue } from './EquipmentCatalogue';
@@ -77,6 +78,7 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   }
   // SPL-80. Venue Staff's queue of booking requests awaiting review.
   if (requestedPath === '/workspace/booking-requests') return role === 'venue_staff';
+  if (requestedPath === '/workspace/timing-reviews') return role === 'venue_staff';
   // SPL-81. Venue Staff review and approve one venue-booking request.
   if (/^\/workspace\/venue-bookings\/\d+$/.test(requestedPath)) return role === 'venue_staff';
   // SPL-88. The operational calendar, for the three roles that schedule venues.
@@ -431,6 +433,8 @@ function Workspace({
       ? 'Venue occupancy calendar workspace'
     : safePath === '/workspace/booking-requests'
       ? 'Booking requests workspace'
+    : safePath === '/workspace/timing-reviews'
+      ? 'Booking timing reviews workspace'
     : safePath === '/workspace/my-registrations'
       ? 'My registrations workspace'
     : safePath === '/workspace/assignments'
@@ -512,6 +516,11 @@ function Workspace({
           href="/workspace/booking-requests"
           onClick={event => { event.preventDefault(); navigate('/workspace/booking-requests'); }}
         >Booking requests</a>}
+        {activeRole === 'venue_staff' && <a
+          aria-current={safePath === '/workspace/timing-reviews' ? 'page' : undefined}
+          href="/workspace/timing-reviews"
+          onClick={event => { event.preventDefault(); navigate('/workspace/timing-reviews'); }}
+        >Timing reviews</a>}
         {venueRole && <a
           aria-current={safePath === '/workspace/venues' ? 'page' : undefined}
           href="/workspace/venues"
@@ -626,6 +635,12 @@ function Workspace({
           <PendingBookingRequests
             accessToken={session.access_token}
             key={`${activeRole}:booking-requests`}
+            onOpen={bookingId => navigate(`/workspace/venue-bookings/${bookingId}`)}
+          />
+        ) : safePath === '/workspace/timing-reviews' ? (
+          <BookingTimingReviews
+            accessToken={session.access_token}
+            key={`${activeRole}:timing-reviews`}
             onOpen={bookingId => navigate(`/workspace/venue-bookings/${bookingId}`)}
           />
         ) : venueSearchEventId !== undefined ? (

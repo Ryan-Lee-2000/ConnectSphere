@@ -12,6 +12,7 @@ export function VenueTimingSettings({ venue, api, onSaved }: { venue: TimingVenu
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [affected, setAffected] = useState<number | null>(null);
   const valid = setup !== '' && turnaround !== '' && [setup, turnaround].every(value => Number.isInteger(Number(value)) && Number(value) >= 0)
     && hours.every(([a, b]) => /^([01]\d|2[0-3]):[0-5]\d$/.test(a) && (/^([01]\d|2[0-3]):[0-5]\d$/.test(b) || b === '24:00') && minutes(b) > minutes(a));
   async function save() {
@@ -21,7 +22,7 @@ export function VenueTimingSettings({ venue, api, onSaved }: { venue: TimingVenu
       const response = await api(`/api/venues/${venue.id}`, { method: 'PATCH', body: JSON.stringify({ setup_minutes: Number(setup), turnaround_minutes: Number(turnaround), operating_intervals: hours.map(pair => pair.map(minutes)) }) });
       const body = await response.json();
       if (!response.ok) { setError(body.error || 'Could not save timing.'); return; }
-      setSaved(true); onSaved();
+      setSaved(true); setAffected(typeof body.affected_booking_count === 'number' ? body.affected_booking_count : 0); onSaved();
     } catch { setError('Could not save timing. Your entries are retained; try again.'); }
     finally { setSaving(false); }
   }
@@ -40,7 +41,7 @@ export function VenueTimingSettings({ venue, api, onSaved }: { venue: TimingVenu
       <button className="button button--secondary" type="button" onClick={() => setHours(current => [...current, ['', '']])}>Add opening interval</button>
     </fieldset>
     {error && <p className="error" role="alert">{error}</p>}
-    {saved && <p role="status">Timing saved.</p>}
+    {saved && <p role="status">Timing saved. {affected === 0 ? 'No active bookings need review.' : `${affected} active ${affected === 1 ? 'booking needs' : 'bookings need'} review.`}</p>}
     <button className="button button--primary" disabled={!valid || saving}>{saving ? 'Saving…' : 'Save timing'}</button>
   </form>;
 }

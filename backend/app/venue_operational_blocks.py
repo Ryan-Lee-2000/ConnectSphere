@@ -208,6 +208,9 @@ def _mark_overlapping_bookings_for_review(
         booking.review_trigger_block_id = block.id
         booking.review_marked_at = marked_at
         booking.review_marked_by_account_id = marked_by_account_id
+        from app.venue_booking_assessment import record_operational_finding
+
+        record_operational_finding(session, booking, block, assessed_at=marked_at)
     session.flush()
     return len(bookings)
 
