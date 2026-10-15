@@ -262,6 +262,8 @@ def main():
             "backend/tests/test_equipment_return_dates_postgres.py",
             "backend/tests/test_equipment_requirement_changes_postgres.py",
             "backend/tests/test_equipment_requirement_unavailability_postgres.py",
+            # SPL-111: simultaneous change-request submissions, the one-pending index and grants.
+            "backend/tests/test_event_change_requests_postgres.py",
             "-q",
         )
     elif cmd == "dev":
