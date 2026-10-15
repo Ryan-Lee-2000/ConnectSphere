@@ -10,6 +10,7 @@ export type QueueEvent = {
   proposed_date: string | null;
   submitted_at: string | null;
 };
+type BasicInformation = { purpose: string | null; start_time: string | null; end_time: string | null; expected_attendance: number | null; status_label: string };
 type CoordinatorOption = { id: string; name: string };
 type CoordinatorOptions = { coordinators: CoordinatorOption[]; unavailable_reason: string | null };
 
@@ -33,7 +34,7 @@ function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(`${value}T00:00:00Z`)) : 'Not provided';
 }
 
-export function CoordinatorAssignmentQueue({ accessToken, request }: { accessToken: string; request?: ApiRequest }) {
+export function CoordinatorAssignmentQueue({ accessToken, request, onAssigned }: { accessToken: string; request?: ApiRequest; onAssigned?: () => void }) {
   const api = useMemo(() => request || authorisedRequest(accessToken), [request, accessToken]);
   const [events, setEvents] = useState<QueueEvent[]>([]);
   const [count, setCount] = useState(0);
@@ -46,7 +47,7 @@ export function CoordinatorAssignmentQueue({ accessToken, request }: { accessTok
     setError(null);
     try {
       const response = await api('/api/event-requests/awaiting-assignment');
-      // Only Event Operations Managers work this queue; other roles never see the section.
+      // Only Event Coordinator Leads work this queue; other roles never see the section.
       if (response.status === 403) {
         setView('hidden');
         return;
@@ -103,6 +104,7 @@ export function CoordinatorAssignmentQueue({ accessToken, request }: { accessTok
         setSelected(null);
         setNotice(`${coordinatorName} is now responsible for ${selected.name}.`);
         void loadQueue();
+        onAssigned?.();
       }}
     />}
   </section>;
@@ -113,9 +115,26 @@ function AssignCoordinatorPanel({ api, event, onCancel, onAssigned }: { api: Api
   const [choice, setChoice] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [details, setDetails] = useState<BasicInformation | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => { heading.current?.focus(); }, []);
+
+  // SPL-134 AC1. Basic information is supplementary, so a failure to load it never blocks assignment.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const response = await api(`/api/event-requests/${event.id}/basic-information`);
+        if (!response.ok) return;
+        const body = await response.json() as { event?: BasicInformation };
+        if (active && body.event?.status_label) setDetails(body.event);
+      } catch {
+        // Left out of the panel.
+      }
+    })();
+    return () => { active = false; };
+  }, [api, event.id]);
 
   useEffect(() => {
     let active = true;
@@ -158,7 +177,14 @@ function AssignCoordinatorPanel({ api, event, onCancel, onAssigned }: { api: Api
   const canAssign = Boolean(options?.coordinators.length) && Boolean(choice) && !saving;
 
   return <form className="assignment-panel" onSubmit={submit} aria-labelledby="assign-coordinator-heading">
-    <div><p className="eyebrow">Assign Event Coordinator</p><h3 id="assign-coordinator-heading" ref={heading} tabIndex={-1}>{event.name}</h3><p className="hint">The coordinator becomes responsible immediately. The event remains Submitted until they begin their review.</p></div>
+    <div><p className="eyebrow">Assign Event Coordinator</p><h3 id="assign-coordinator-heading" ref={heading} tabIndex={-1}>{event.name}</h3><p className="hint">The coordinator becomes responsible immediately. The event remains Submitted until they begin their review.</p>
+      <dl className="assignment-details">
+        {details?.purpose && <><dt>Purpose</dt><dd>{details.purpose}</dd></>}
+        <dt>Client organisation</dt><dd>{event.organisation_name}</dd>
+        {details?.start_time && details.end_time && <><dt>Time</dt><dd>{formatDate(event.proposed_date)}, {details.start_time}–{details.end_time}</dd></>}
+        {details?.expected_attendance != null && <><dt>Expected attendance</dt><dd>{details.expected_attendance}</dd></>}
+        {details && <><dt>Status</dt><dd>{details.status_label}</dd></>}
+      </dl></div>
     {error && <p className="error" role="alert">{error}</p>}
     {!options && !error && <p role="status">Loading Event Coordinators…</p>}
     {options?.unavailable_reason && <p className="error" role="alert">{options.unavailable_reason}</p>}

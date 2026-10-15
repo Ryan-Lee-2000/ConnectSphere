@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
 from app.event_requests import SINGAPORE
-from app.models import EventRequest, Notification, Role
+from app.models import Account, EventRequest, Notification, Role
 
 # Event, role and organisation permissions are enforced where the linked record is opened, so a
 # notice never grants access on its own.
@@ -41,6 +41,59 @@ def add_coordinator_assigned_notice(
             created_at=datetime.now(SINGAPORE),
         )
     )
+
+
+def add_assignment_change_notices(
+    session: Session,
+    event: EventRequest,
+    *,
+    history_id: int,
+    new_coordinator: Account,
+    previous_coordinator: Account | None,
+    already_notified: set[str],
+) -> None:
+    """Notify everyone else affected by an assignment or reassignment (SPL-134 AC5).
+
+    Runs in the caller's transaction, after the new coordinator's own notice. Each account gets
+    one notice per change: ``already_notified`` and the set grown here skip an account that holds
+    more than one part in it (an organiser who is also the former coordinator, say), and the
+    history row id in the dedupe key stops a retry adding a second.
+    """
+
+    notified = set(already_notified)
+    now = datetime.now(SINGAPORE)
+
+    def notify(recipient_id: str, message: str, kind: str) -> None:
+        if recipient_id in notified:
+            return
+        notified.add(recipient_id)
+        session.add(
+            Notification(
+                recipient_account_id=recipient_id,
+                event_request_id=event.id,
+                message=message,
+                dedupe_key=f"{kind}:{history_id}",
+                created_at=now,
+            )
+        )
+
+    if previous_coordinator is not None:
+        notify(
+            previous_coordinator.id,
+            f"You are no longer responsible for {event.name}. "
+            f"It has been reassigned to {new_coordinator.display_name}.",
+            "coordinator_removed",
+        )
+        organiser_message = (
+            f"{new_coordinator.display_name} has taken over {event.name} from "
+            f"{previous_coordinator.display_name} as the Event Coordinator responsible for it."
+        )
+    else:
+        organiser_message = (
+            f"{new_coordinator.display_name} is now the Event Coordinator responsible for "
+            f"{event.name}."
+        )
+    notify(event.organiser_account_id, organiser_message, "organiser_coordinator_changed")
 
 
 def register_notification_routes(app: Flask) -> None:

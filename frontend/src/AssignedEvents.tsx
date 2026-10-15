@@ -615,7 +615,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     </article>}
     {events?.length === 0 && <div className="organisation-events__empty" role="status">
       <strong>No events assigned to you yet.</strong>
-      <span>Events appear here when an Event Operations Manager assigns them to you.</span>
+      <span>Events appear here when an Event Coordinator Lead assigns them to you.</span>
     </div>}
     {events && events.length > 0 && <div className="organisation-events__table-wrap">
       <table className="organisation-events__table">

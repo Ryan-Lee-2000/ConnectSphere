@@ -262,6 +262,8 @@ def main():
             "backend/tests/test_equipment_return_dates_postgres.py",
             "backend/tests/test_equipment_requirement_changes_postgres.py",
             "backend/tests/test_equipment_requirement_unavailability_postgres.py",
+            # SPL-134: assignment/reassignment notices under real concurrent requests.
+            "backend/tests/test_qa_spl134_postgres.py",
             "-q",
         )
     elif cmd == "dev":

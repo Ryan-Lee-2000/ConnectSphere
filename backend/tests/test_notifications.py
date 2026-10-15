@@ -28,6 +28,7 @@ from test_coordinator_assignment import (
     ALICE,
     BOB,
     INACTIVE_COORDINATOR,
+    ORGANISER,
     VENUE_STAFF,
     add_request,
     assign,
@@ -303,7 +304,7 @@ def test_qa_spl_101_020_ids_that_cannot_name_a_notice_change_nothing(app, client
 
 
 # QA-SPL-101-025 | AC3 | BB happy path
-def test_qa_spl_101_025_assignment_notifies_only_the_assigned_coordinator(app, client):
+def test_qa_spl_101_025_assignment_notifies_the_coordinator_and_the_organiser(app, client):
     event_id = add_request(app, "Harbour Summit")
 
     assert assign(client, event_id, ALICE).status_code == 201
@@ -313,8 +314,11 @@ def test_qa_spl_101_025_assignment_notifies_only_the_assigned_coordinator(app, c
     assert [n["event"]["name"] for n in notices["notifications"]] == ["Harbour Summit"]
     assert "Harbour Summit" in notices["notifications"][0]["message"]
     assert "assigned" in notices["notifications"][0]["message"]
-    assert notice_count(app) == 1
-    for other in ("coordinator-b", "manager", "organiser", "venue-staff"):
+    # SPL-134 AC5 also notifies the organiser, once; nobody else hears of it.
+    assert notice_count(app) == 2
+    assert notice_count(app, ALICE) == 1
+    assert len(inbox(client, "organiser").get_json()["notifications"]) == 1
+    for other in ("coordinator-b", "manager", "venue-staff"):
         assert inbox(client, other).get_json()["notifications"] == []
 
 
@@ -340,7 +344,7 @@ def test_qa_spl_101_027_repeating_the_assignment_adds_no_second_notice(app, clie
         assert assign(client, event_id, ALICE).status_code == 409
     assert assign(client, event_id, BOB).status_code == 409
 
-    assert notice_count(app) == 1
+    assert notice_count(app) == 2  # the coordinator's and the organiser's, each once
     assert inbox(client, "coordinator-b").get_json()["notifications"] == []
 
 
@@ -448,15 +452,18 @@ def test_qa_spl_101_031_a_failure_writing_the_notice_rolls_the_assignment_back(
     assert notice_count(app) == 0
 
 
-# QA-SPL-101-032 | AC3 | BB scope guard: reassignment is not part of this story
-def test_qa_spl_101_032_reassignment_adds_and_moves_no_notice(app, client):
+# QA-SPL-101-032 | AC3 | BB: SPL-134 AC5 now notifies on reassignment; nothing existing moves
+def test_qa_spl_101_032_reassignment_adds_notices_and_moves_none(app, client):
     event_id = add_request(app)
     assert assign(client, event_id, ALICE).status_code == 201
     assert reassign(client, event_id, BOB).status_code == 200
 
-    assert notice_count(app, ALICE) == 1
-    assert notice_count(app, BOB) == 0
-    assert notice_count(app) == 1
+    # Alice keeps her assignment notice and gains a removal notice; Bob and the organiser are
+    # each told once. The organiser's assignment notice stays, so they hold two.
+    assert notice_count(app, ALICE) == 2
+    assert notice_count(app, BOB) == 1
+    assert notice_count(app, ORGANISER) == 2
+    assert notice_count(app) == 5
 
 
 # ---------------------------------------------------------------------------------------------
@@ -471,7 +478,7 @@ def test_qa_spl_101_033_old_notice_does_not_open_an_event_after_reassignment(app
     assert open_event(client, event_id, "coordinator").status_code == 200
     assert reassign(client, event_id, BOB).status_code == 200
 
-    assert inbox(client, "coordinator").get_json()["unread_count"] == 1
+    assert inbox(client, "coordinator").get_json()["unread_count"] == 2
     assert open_event(client, event_id, "coordinator").status_code == 404
     assert open_event(client, event_id, "coordinator-b").status_code == 200
 
@@ -495,8 +502,8 @@ def test_qa_spl_101_035_reassignment_does_not_leak_notices_between_accounts(app,
     assert reassign(client, event_id, BOB).status_code == 200
 
     alice = inbox(client, "coordinator").get_json()["notifications"]
-    assert [n["event"]["id"] for n in alice] == [event_id]
-    for other in ("coordinator-b", "organiser", "manager", "venue-staff"):
+    assert [n["event"]["id"] for n in alice] == [event_id, event_id]
+    for other in ("manager", "venue-staff"):
         assert inbox(client, other).get_json()["notifications"] == []
 
 
