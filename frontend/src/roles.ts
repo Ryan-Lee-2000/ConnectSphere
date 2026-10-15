@@ -11,7 +11,7 @@ export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export const ROLE_LABELS: Record<AccountRole, string> = {
   event_organiser: 'Event Organiser',
-  event_operations_manager: 'Event Operations Manager',
+  event_operations_manager: 'Event Coordinator Lead',
   event_coordinator: 'Event Coordinator',
   venue_staff: 'Venue Staff',
   technical_support_staff: 'Technical Support Staff',
@@ -20,7 +20,7 @@ export const ROLE_LABELS: Record<AccountRole, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<AccountRole, string> = {
   event_organiser: 'Plan and follow your client organisation’s events.',
-  event_operations_manager: 'Coordinate operational ownership and event delivery.',
+  event_operations_manager: 'Assign coordinators and oversee every active event.',
   event_coordinator: 'Review venue information for the events you coordinate.',
   venue_staff: 'Maintain venue profiles, room layouts, and operating details.',
   technical_support_staff: 'Coordinate equipment and technical support responsibilities.',

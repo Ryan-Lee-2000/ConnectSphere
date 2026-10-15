@@ -6,7 +6,7 @@ product
 
 ## Users
 
-ConnectSphere serves six roles participating in the planning and delivery of client events: Event Organisers, Event Operations Managers, Event Coordinators, Venue Staff, Technical Support Staff, and Attendees. Internal users coordinate time-sensitive work across organisations, venues, equipment, approvals, and event status. Attendees interact with a narrower public-facing registration experience.
+ConnectSphere serves six roles participating in the planning and delivery of client events: Event Organisers, Event Coordinator Leads, Event Coordinators, Venue Staff, Technical Support Staff, and Attendees. Internal users coordinate time-sensitive work across organisations, venues, equipment, approvals, and event status. Attendees interact with a narrower public-facing registration experience.
 
 Users need to understand their current role, responsibilities, permitted actions, and the state of an event without deciphering the underlying system. The interface should support focused work during an ordinary office day, including periods of deadline pressure, without feeling stressful or bureaucratic.
 

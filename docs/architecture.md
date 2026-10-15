@@ -45,9 +45,9 @@ not define booking availability.
 
 ## Coordinator assignment
 
-CS-E05-S1 to S3 (SPL-59 to SPL-61) let Event Operations Managers find submitted requests without a
+CS-E05-S1 to S3 (SPL-59 to SPL-61) let the Event Coordinator Lead (stored role `event_operations_manager`) find submitted requests without a
 coordinator, assign one and reassign later, on top of SPL-51's `event_requests` aggregate. Every
-operation requires the Event Operations Manager role through `require_roles`.
+operation requires that role through `require_roles`.
 
 - `event_coordinator_assignments` holds one row per request, keyed by `event_request_id`. The key
   rejects a
@@ -79,6 +79,16 @@ operation requires the Event Operations Manager role through `require_roles`.
   SQLite disagree on where NULLs fall.
 - **Client organisation.** SPL-45 now supplies `organisations` and a non-null
   `event_requests.organisation_id`, so the queue names the requesting client organisation.
+
+SPL-134 adapts this for the Event Coordinator Lead without adding a role or a migration. The role
+keeps the stored name `event_operations_manager`; only its display title changed, so permissions
+are not duplicated. `GET /api/event-requests/supervision` returns, organisation-wide, every active
+event (any status except Draft, Completed, Cancelled, Rejected and Withdrawn) plus any assignment
+that remains on a closed event, with name, purpose, client, date and time, attendance, status and
+coordinator, and a `reassignable` flag. Private notes and attendee data are never included.
+Assignment and reassignment share `notifications.add_coordinator_assigned_notice` and
+`add_assignment_change_notices`, written in the same transaction: the new coordinator, the
+organiser and, on reassignment, the former coordinator are each notified once per history row.
 
 ## Event review transitions
 

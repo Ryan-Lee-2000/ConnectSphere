@@ -62,7 +62,7 @@ Open http://127.0.0.1:5173 and sign in with a local fixture. Every fixture's pas
 | `attendee@example.test` | Attendee only |
 | `venue.staff@example.test` | Venue Staff |
 | `event.coordinator@example.test` | Event Coordinator |
-| `operations.manager@example.test` | Event Operations Manager |
+| `operations.manager@example.test` | Event Coordinator Lead |
 | `technical.support@example.test` | Technical Support Staff |
 
 The browser checks use `venue.staff@example.test` and `event.coordinator@example.test` to verify
