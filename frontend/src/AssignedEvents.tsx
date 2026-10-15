@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
+import { ChangeRequestsPanel } from './ChangeRequests';
 import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { VenueBookingPanel } from './VenueBookingWithdrawal';
@@ -275,6 +276,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [rejecting, setRejecting] = useState<'closed' | 'reason' | 'confirm'>('closed');
   const [rejectionReason, setRejectionReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+  // SPL-111: change requests are read on demand, so opening an event costs no extra request.
+  const [showChangeRequests, setShowChangeRequests] = useState(false);
   const [withdrawalNote, setWithdrawalNote] = useState('');
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
@@ -512,6 +515,14 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
+      {/* SPL-111: the organiser's change requests, read-only here. Reviewing them is a later story. */}
+      {showChangeRequests
+        ? <ChangeRequestsPanel api={api} eventId={event.id} eventStatus={event.status} />
+        : <div className="organisation-events__actions">
+          <button className="button button--secondary" type="button" onClick={() => setShowChangeRequests(true)}>
+            View change requests
+          </button>
+        </div>}
       <div className="organisation-events__table-wrap">
         <table className="organisation-events__table organisation-events__detail-table">
           <caption className="visually-hidden">Submitted request details for {event.name}</caption>
