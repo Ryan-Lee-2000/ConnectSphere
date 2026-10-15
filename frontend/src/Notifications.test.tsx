@@ -201,6 +201,36 @@ describe('AC4 - opening a related record', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('/workspace/assigned-events/7');
   });
+
+  // SPL-134 review finding | an organiser's notice opens the organisation event page
+  it('opens an organiser notice on the organisation event page, not the coordinator page', async () => {
+    const onNavigate = vi.fn();
+    const notice = {
+      ...NEWER,
+      message: 'Casey Lim is now the Event Coordinator responsible for Harbour Summit.',
+      link: '/workspace/organisation-events/7',
+    };
+    render(<Notifications accessToken="token" onNavigate={onNavigate} request={inbox([notice], 1)} />);
+
+    const link = await screen.findByRole('link', { name: 'Harbour Summit' });
+    expect(link.getAttribute('href')).toBe('/workspace/organisation-events/7');
+    fireEvent.click(link);
+
+    expect(onNavigate).toHaveBeenCalledWith('/workspace/organisation-events/7');
+  });
+
+  // SPL-134 review finding | the client only follows known event pages
+  it.each(['/workspace/admin', 'https://example.test/x', '/workspace/assigned-events/7/../..'])(
+    'ignores an unexpected link %s and uses the coordinator page',
+    async link => {
+      const onNavigate = vi.fn();
+      render(<Notifications accessToken="token" onNavigate={onNavigate} request={inbox([{ ...NEWER, link }], 1)} />);
+
+      fireEvent.click(await screen.findByRole('link', { name: 'Harbour Summit' }));
+
+      expect(onNavigate).toHaveBeenCalledWith('/workspace/assigned-events/7');
+    },
+  );
 });
 
 describe('every role can reach its inbox from the workspace', () => {

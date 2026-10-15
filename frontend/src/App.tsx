@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createAuthGateway, type AuthGateway, type AuthSession } from './auth';
-import { CoordinatorAssignmentQueue } from './CoordinatorAssignmentQueue';
+import { CoordinatorLeadWorkspace } from './CoordinatorSupervision';
 import {
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
@@ -672,7 +672,7 @@ function Workspace({
             onUnsavedChanges={setHasUnsavedChanges}
           />
         ) : safePath === '/workspace/assignments' ? (
-          <CoordinatorAssignmentQueue
+          <CoordinatorLeadWorkspace
             accessToken={session.access_token}
             key={`${activeRole}:assignments`}
           />

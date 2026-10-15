@@ -10,7 +10,7 @@ from datetime import date, datetime
 from typing import Any
 
 from flask import Flask, abort, g, jsonify, request
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -40,7 +40,7 @@ from app.models import (
     EventRequest,
     Role,
 )
-from app.notifications import add_coordinator_assigned_notice
+from app.notifications import add_assignment_change_notices, add_coordinator_assigned_notice
 from app.slots import slots_for_range
 
 SUBMITTED = "submitted"
@@ -48,9 +48,12 @@ UNDER_REVIEW = "under_review"
 # event_requests.id is a 32-bit integer; a larger path id cannot name a request, and binding it
 # would overflow the driver instead of answering "not found".
 MAX_EVENT_REQUEST_ID = 2**31 - 1
+DRAFT = "draft"
 NON_REASSIGNABLE_STATUSES = frozenset({"completed", "cancelled", "rejected", "withdrawn"})
+# SPL-134 AC2: an event is active unless it is a draft or in one of the closed statuses.
+INACTIVE_STATUSES = NON_REASSIGNABLE_STATUSES | {DRAFT}
 # CS-E07-S1 owns the vocabulary; fail at import if a value used here ever leaves it.
-assert {SUBMITTED, UNDER_REVIEW} | NON_REASSIGNABLE_STATUSES <= set(EVENT_REQUEST_STATUSES)
+assert {SUBMITTED, UNDER_REVIEW} | INACTIVE_STATUSES <= set(EVENT_REQUEST_STATUSES)
 
 ALREADY_ASSIGNED = "This event already has an Event Coordinator. Reassign it instead."
 NO_COORDINATOR_AVAILABLE = (
@@ -138,6 +141,74 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                 events=[_serialize_queue_event(event) for event in events], count=len(events)
             )
 
+    @app.get("/api/event-requests/supervision")
+    @require_roles(Role.EVENT_OPERATIONS_MANAGER)
+    def list_supervised_events():
+        """Every active submitted event and every coordinator assignment, organisation-wide.
+
+        SPL-134 AC2. The Lead's view has no supervision partition. Drafts never appear; an
+        event that has left the active set stays listed only while it still has an assignment.
+        """
+
+        with Session(app.extensions["engine"]) as session:
+            rows = session.execute(
+                select(EventRequest, EventCoordinatorAssignment)
+                .outerjoin(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.status != DRAFT,
+                    or_(
+                        EventRequest.status.not_in(sorted(INACTIVE_STATUSES)),
+                        EventCoordinatorAssignment.event_request_id.is_not(None),
+                    ),
+                )
+                .options(joinedload(EventRequest.organisation))
+                .order_by(
+                    EventRequest.proposed_date.is_(None),
+                    EventRequest.proposed_date,
+                    EventRequest.id,
+                )
+            ).all()
+            names = {
+                account.id: account.display_name
+                for account in session.scalars(
+                    select(Account).where(
+                        Account.id.in_([a.coordinator_account_id for _, a in rows if a is not None])
+                    )
+                )
+            }
+            return jsonify(
+                events=[
+                    {
+                        **_serialize_basic_event(event),
+                        "coordinator": (
+                            {
+                                "id": assignment.coordinator_account_id,
+                                "name": names[assignment.coordinator_account_id],
+                            }
+                            if assignment
+                            else None
+                        ),
+                        "reassignable": assignment is not None
+                        and event.status not in NON_REASSIGNABLE_STATUSES,
+                    }
+                    for event, assignment in rows
+                ],
+                count=len(rows),
+            )
+
+    @app.get("/api/event-requests/<int:event_request_id>/basic-information")
+    @require_roles(Role.EVENT_OPERATIONS_MANAGER)
+    def get_basic_information(event_request_id: int):
+        """The Lead's basic information for one non-draft request (SPL-134 AC1)."""
+
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Event request not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = _find_event_request(session, event_request_id)
+            if event.status == DRAFT:
+                abort(404, "Event request not found.")
+            return jsonify(event=_serialize_basic_event(event))
+
     @app.get("/api/event-requests/<int:event_request_id>/coordinator-options")
     @require_roles(Role.EVENT_OPERATIONS_MANAGER)
     def list_coordinator_options(event_request_id: int):
@@ -194,6 +265,14 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
                 session.flush()
                 # SPL-101. Saved with the assignment, so a refused assignment leaves no notice.
                 add_coordinator_assigned_notice(session, event, coordinator.id, history.id)
+                add_assignment_change_notices(
+                    session,
+                    event,
+                    history_id=history.id,
+                    new_coordinator=coordinator,
+                    previous_coordinator=None,
+                    already_notified={coordinator.id},
+                )
                 session.commit()
             except IntegrityError:
                 session.rollback()
@@ -233,14 +312,24 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
             if reassigned.rowcount != 1:
                 session.rollback()
                 abort(409, _reassignment_refusal(session, event_request_id))
-            session.add(
-                EventCoordinatorHistory(
-                    event_request_id=event_request_id,
-                    previous_coordinator_account_id=previous_id,
-                    new_coordinator_account_id=coordinator.id,
-                    changed_by_account_id=g.user_id,
-                    changed_at=now,
-                )
+            history = EventCoordinatorHistory(
+                event_request_id=event_request_id,
+                previous_coordinator_account_id=previous_id,
+                new_coordinator_account_id=coordinator.id,
+                changed_by_account_id=g.user_id,
+                changed_at=now,
+            )
+            session.add(history)
+            session.flush()
+            # SPL-134. Saved with the reassignment, so a refused one leaves no notices.
+            add_coordinator_assigned_notice(session, event, coordinator.id, history.id)
+            add_assignment_change_notices(
+                session,
+                event,
+                history_id=history.id,
+                new_coordinator=coordinator,
+                previous_coordinator=session.get(Account, previous_id),
+                already_notified={coordinator.id},
             )
             session.commit()
             return jsonify(assignment=_serialize_assignment(session, event_request_id))
@@ -372,6 +461,24 @@ def _chosen_coordinator(
         if candidate.id == coordinator_id:
             return candidate
     abort(400, "Choose an active Event Coordinator from the list.")
+
+
+def _serialize_basic_event(event: EventRequest) -> dict[str, Any]:
+    """The Lead's basic information (SPL-134): no private notes or attendee data."""
+
+    return {
+        "id": event.id,
+        "name": event.name,
+        "purpose": event.purpose,
+        "organisation_id": event.organisation_id,
+        "organisation_name": event.organisation.name,
+        "proposed_date": _date(event.proposed_date),
+        "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
+        "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
+        "expected_attendance": event.expected_attendance,
+        "status": event.status,
+        "status_label": status_label(event.status),
+    }
 
 
 def _serialize_queue_event(event: EventRequest) -> dict[str, Any]:
