@@ -154,7 +154,74 @@ it('[QA-SPL-111-106] a refused submission (409) shows the reason and the true st
   await fill(0, 'expected_attendance', '50', 'Fewer guests.');
   fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
   expect(await screen.findByRole('group', { name: 'Pending change request' })).toBeTruthy();
-  expect(request).toHaveBeenCalledTimes(3); // read, submit, re-read
+  expect(screen.getByText(/already has a pending change request/)).toBeTruthy();
+  expect(request).toHaveBeenCalledTimes(4); // read, submit, re-read, event status re-read
+});
+
+// QA-SPL-111-117 | AC1 | BB | review finding 1
+it('[QA-SPL-111-117] a status-change refusal stays visible and the form is not offered again', async () => {
+  const request = scripted(
+    list(),
+    { status: 409, body: { error: 'A change request can only be made while the event is under review, in planning or confirmed.' } },
+    list(),
+    { body: { event_request: { id: 12, status: 'cancelled' } } },
+  );
+  panel(request);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a change' }));
+  await fill(0, 'expected_attendance', '50', 'Fewer guests.');
+  fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toMatch(/can only be made while the event is under review/);
+  // The refreshed status is ineligible, so the stale "Request a change" is not offered again.
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Request a change' })).toBeNull());
+  expect(screen.getByText(/Change requests can be made while the event is under review/)).toBeTruthy();
+  expect(request).toHaveBeenCalledWith('/api/event-requests/12');
+});
+
+// QA-SPL-111-118 | AC1 | BB | review finding 1
+it('[QA-SPL-111-118] after a refusal that leaves the event eligible, the typed values are kept', async () => {
+  const request = scripted(
+    list(),
+    { status: 409, body: { error: 'This event already has a pending change request. Wait until it is resolved.' } },
+    list(),
+    { body: { event_request: { id: 12, status: 'planning' } } },
+  );
+  panel(request);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a change' }));
+  await fill(0, 'expected_attendance', '50', 'Fewer guests.');
+  fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/already has a pending change request/);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a change' }));
+  expect((screen.getByLabelText(/New value/) as HTMLInputElement).value).toBe('50');
+  expect((screen.getByLabelText('Reason') as HTMLTextAreaElement).value).toBe('Fewer guests.');
+});
+
+// QA-SPL-111-119 | AC2 | BB | review finding 2
+it('[QA-SPL-111-119] a list field can be cleared: an empty value sends an empty list', async () => {
+  const request = scripted(list(), { status: 201, body: { change_request: PENDING } }, list(PENDING));
+  panel(request);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a change' }));
+  await fill(0, 'required_facilities', '', 'No facilities are needed any more.');
+  fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
+  await screen.findByRole('group', { name: 'Pending change request' });
+  const post = request.mock.calls.find(call => (call as unknown[])[1] && (call as { method?: string }[])[1].method === 'POST') as unknown as [string, { body: string }];
+  expect(JSON.parse(post[1].body).items).toEqual([
+    { field: 'required_facilities', requested_value: [], reason: 'No facilities are needed any more.' },
+  ]);
+});
+
+// QA-SPL-111-120 | AC2 | BB | review finding 2
+it('[QA-SPL-111-120] a text field and a reason are still required even though a list may be empty', async () => {
+  const request = scripted(list());
+  panel(request);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a change' }));
+  await fill(0, 'description', '', 'Reason given.');
+  fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Complete every item/);
+  await fill(0, 'accessibility_needs', '', '');
+  fireEvent.click(screen.getByRole('button', { name: 'Submit change request' }));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Complete every item/);
+  expect(request).toHaveBeenCalledTimes(1); // only the initial read: nothing was submitted
 });
 
 // QA-SPL-111-107 | AC2 | BB

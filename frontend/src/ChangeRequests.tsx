@@ -87,6 +87,13 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
   const [nextKey, setNextKey] = useState(2);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // The status the panel offers the form for. It starts as the one the parent knew and is re-read
+  // after the server refuses a submission, so a stale status can never offer the form again.
+  const [status, setStatus] = useState(eventStatus);
+  // True after a refusal closed the form: the next opening keeps what the organiser typed.
+  const [keepDrafts, setKeepDrafts] = useState(false);
+
+  useEffect(() => { setStatus(eventStatus); }, [eventStatus]);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -100,8 +107,16 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
 
   useEffect(() => { void load(); }, [load]);
 
+  const refreshStatus = useCallback(async () => {
+    try {
+      const response = await api(`/api/event-requests/${eventId}`);
+      const body = await response.json().catch(() => null);
+      if (response.ok && typeof body?.event_request?.status === 'string') setStatus(body.event_request.status);
+    } catch { /* keep the status we have; the server still refuses an ineligible submission */ }
+  }, [api, eventId]);
+
   const pending = requests?.find(item => item.status === 'pending') ?? null;
-  const canStart = canSubmit && CHANGEABLE_STATUSES.includes(eventStatus) && requests !== null && !pending;
+  const canStart = canSubmit && CHANGEABLE_STATUSES.includes(status) && requests !== null && !pending;
 
   function update(key: number, change: Partial<Draft>) {
     setDrafts(current => current.map(draft => draft.key === key ? { ...draft, ...change } : draft));
@@ -114,8 +129,11 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
   }
 
   function open() {
-    setDrafts([{ key: nextKey, field: '', value: '', reason: '' }]);
-    setNextKey(nextKey + 1);
+    if (!keepDrafts) {
+      setDrafts([{ key: nextKey, field: '', value: '', reason: '' }]);
+      setNextKey(nextKey + 1);
+    }
+    setKeepDrafts(false);
     setFormError(null);
     setFormOpen(true);
   }
@@ -125,7 +143,12 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
     if (saving) return;
     // AC2 in the interface: every item needs a field, a new value and a reason. The server checks
     // the values again; this only avoids a round trip for the obvious omissions.
-    if (drafts.some(draft => !draft.field || !draft.value.trim() || !draft.reason.trim())) {
+    // A list field may be left empty on purpose: that asks for every entry to be removed.
+    const incomplete = drafts.some(draft => {
+      const kind = FIELDS.find(field => field.value === draft.field)?.kind;
+      return !draft.field || !draft.reason.trim() || (kind !== 'list' && !draft.value.trim());
+    });
+    if (incomplete) {
       setFormError('Complete every item: choose a field and give the new value and a reason.');
       return;
     }
@@ -143,10 +166,18 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
       });
       if (!response.ok) {
         setFormError(await responseError(response, SUBMIT_FAILURE));
-        // A refusal can mean the world changed (a request is now pending); show the true state.
-        if (response.status === 409) { setFormOpen(false); void load(); }
+        // A refusal can mean the world changed (a request is now pending, or the event left an
+        // allowed status). Close the form so the true state shows, keep the typed values for the
+        // next opening, and render the refusal outside the form so it stays visible.
+        if (response.status === 409) {
+          setKeepDrafts(true);
+          setFormOpen(false);
+          void load();
+          void refreshStatus();
+        }
         return;
       }
+      setKeepDrafts(false);
       setFormOpen(false);
       await load();
     } catch { setFormError(SUBMIT_FAILURE); }
@@ -162,6 +193,7 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
       <button className="button button--secondary" type="button" onClick={() => { void load(); }}>Try again</button>
     </div>}
     {!loadError && requests === null && <p role="status">Loading change requests…</p>}
+    {formError && !formOpen && <p className="error" role="alert">{formError}</p>}
 
     {!loadError && requests !== null && !formOpen && <>
       {pending ? <div role="group" aria-label="Pending change request">
@@ -174,7 +206,7 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
       {canStart && <button className="button button--primary" type="button" onClick={open}>
         Request a change
       </button>}
-      {canSubmit && !CHANGEABLE_STATUSES.includes(eventStatus) && <p role="status">
+      {canSubmit && !CHANGEABLE_STATUSES.includes(status) && <p role="status">
         Change requests can be made while the event is under review, in planning or confirmed.
       </p>}
     </>}
@@ -196,7 +228,7 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
             </select>
           </label>
           <label className="field">
-            <span>New value{kind === 'list' ? ' (separate items with commas)' : ''}</span>
+            <span>New value{kind === 'list' ? ' (separate items with commas; leave empty to remove them all)' : ''}</span>
             <input type={inputType} min={kind === 'number' ? 1 : undefined} step={kind === 'number' ? 1 : undefined}
               value={draft.value} onChange={e => update(draft.key, { value: e.target.value })} />
           </label>
