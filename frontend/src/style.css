@@ -820,6 +820,14 @@ button { touch-action: manipulation; }
 .venue-booking-review__decision > .button { justify-self: start; }
 .venue-booking-review__outcome { display: flex; gap: var(--space-2); align-items: flex-start; margin: 0; line-height: 1.5; }
 .venue-booking-review .error { margin: 0; }
+.booking-review-findings { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-refusal-red); border-radius: var(--radius-md); background: var(--color-refusal-surface); }
+.booking-review-findings h2 { margin: 0; font-size: 1rem; }
+.booking-review-findings > ul, .timing-review-list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.booking-review-findings li, .timing-review-list li { display: grid; gap: var(--space-1); }
+.booking-review-findings dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); margin: 0; }
+.booking-review-findings dl div { display: grid; gap: 2px; }
+.booking-review-findings dt, .timing-review-list span { color: var(--color-muted-slate); font-size: .78rem; }
+.timing-review-event-time { display: block; margin-top: var(--space-1); color: var(--color-muted-slate); font-size: .78rem; font-weight: 400; }
 
 /* SPL-80 (CS-E10-S2): Venue Staff's queue of booking requests awaiting review. */
 .venue-booking-review__subheading { margin: var(--space-5) 0 var(--space-3); font-size: 1rem; }

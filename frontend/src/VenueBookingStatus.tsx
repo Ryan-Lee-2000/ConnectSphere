@@ -2,6 +2,7 @@ import { bookingInterval } from './ExactBookingTiming';
 import { useEffect, useState } from 'react';
 import { CircleAlert } from 'lucide-react';
 import type { ApiRequest } from './api';
+import { BookingReviewFindings, type BookingReviewFinding } from './BookingReviewFindings';
 
 // SPL-79 (CS-E10-S1): the recorded history of the event's latest venue-booking request, its stored
 // review marker (SPL-89) and the event's earlier requests. Read-only; rendered inside the panel.
@@ -9,7 +10,7 @@ import type { ApiRequest } from './api';
 type Actor = { id: string; name: string };
 type HistoryEntry = { action: string; status: string; status_label: string; actor: Actor; changed_at: string; note: string | null };
 type TriggerBlock = { id: number; start_date: string; end_date: string; slots: string[]; reason: string; timing?: { start: string; end: string } };
-type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
+type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null; findings?: BookingReviewFinding[] };
 type EarlierRequest = { id: number; venue: { id: number; name: string }; date: string | null; status: string; status_label: string };
 export type VenueBookingStatusBody = {
   venue_booking_request: object | null; current_status: { status: string; label: string } | null;
@@ -50,6 +51,7 @@ export function VenueBookingHistory({ api, eventId, refreshKey = 0 }: { api: Api
         </span>
       </p>
     )}
+    <BookingReviewFindings findings={body.review?.findings || []} />
     <p className="venue-booking-history__heading" id={`venue-booking-history-${eventId}`}>History</p>
     <ol className="venue-booking-history__list" aria-label="History">
       {body.history.map((entry, index) => <li key={`${entry.changed_at}-${index}`}>

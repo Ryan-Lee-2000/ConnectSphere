@@ -243,6 +243,7 @@ def main():
             "backend/tests/test_equipment_reservations_postgres.py",
             "backend/tests/test_exact_venue_bookings_postgres.py",
             "backend/tests/test_timed_venue_closures_postgres.py",
+            "backend/tests/test_venue_booking_assessment_postgres.py",
             "backend/tests/test_coordinator_concurrency_postgres.py",
             "backend/tests/test_venue_conflicts_postgres.py",
             "backend/tests/test_qa_spl65_postgres.py",

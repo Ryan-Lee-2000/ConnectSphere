@@ -720,7 +720,7 @@ def test_tc_spl_81_21_others_cannot_read_a_request_for_review(
 
 # TC-SPL-81-22
 # SPL-81 AC-2 Test-22
-def test_tc_spl_81_22_review_marker_kept_when_block_removed(app, client, requested):
+def test_tc_spl_81_22_review_marker_resolved_when_block_removed(app, client, requested):
     booking_id = requested["booking"]["id"]
     blocked = block(client, requested["venue"], EVENT_DATE, "PM")
     marked = stored(app, booking_id)
@@ -738,11 +738,9 @@ def test_tc_spl_81_22_review_marker_kept_when_block_removed(app, client, request
 
     assert response.status_code == 200, response.json
     after = stored(app, booking_id)
-    for column in (
-        "requires_review",
-        "review_trigger_block_id",
-        "review_marked_at",
-        "review_marked_by_account_id",
-    ):
+    assert after["requires_review"] is False
+    assert after["review_trigger_block_id"] is None
+    # The marker's original actor/time stay as audit evidence after its cause is resolved.
+    for column in ("review_marked_at", "review_marked_by_account_id"):
         assert after[column] == marked[column], column
-    assert response.json["booking"]["requires_review"] is True
+    assert response.json["booking"]["requires_review"] is False
