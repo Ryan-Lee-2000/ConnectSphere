@@ -193,7 +193,7 @@ def test_tc_spl_77_13_concurrent_requests_for_two_venues_create_two_bookings(eng
         ).all()
         assert [booking.status for booking in bookings] == ["requested", "requested"]
         occupied_venues = set(session.scalars(select(VenueBookingOccupancy.venue_id)))
-        assert occupied_venues == {bookings[0].venue_id}
+        assert occupied_venues == {venue_ids["Venue A"], venue_ids["Venue B"]}
 
 
 # TC-SPL-77-18
