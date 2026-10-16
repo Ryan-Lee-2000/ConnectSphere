@@ -31,6 +31,8 @@ PRODUCT_TABLES = {
     "venue_bookings",
     "venue_booking_occupancy",
     "venue_booking_status_history",
+    # SPL-130: one persisted, independently resolvable cause per affected booking.
+    "venue_booking_review_findings",
     "registration_settings_history",
     "event_registrations",
     # SPL-92: Technical Support's notes and questions on requirement lines.

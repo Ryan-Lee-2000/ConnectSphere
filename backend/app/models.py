@@ -412,6 +412,65 @@ class VenueBooking(Base):
         cascade="all, delete-orphan",
         order_by="VenueBookingOccupancy.id",
     )
+    review_findings: Mapped[list["VenueBookingReviewFinding"]] = relationship(
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="VenueBookingReviewFinding.id",
+    )
+
+
+BOOKING_REVIEW_REASON_TYPES = (
+    "overlap",
+    "operational_block",
+    "outside_operating_hours",
+    "unresolved_historical_timing",
+)
+
+
+class VenueBookingReviewFinding(Base):
+    """One persisted reason an active booking needs timing review (SPL-130).
+
+    ``finding_key`` is stable for the underlying cause. Reassessment updates that row instead of
+    duplicating it, while the resolution fields make every explicit clearance auditable.
+    """
+
+    __tablename__ = "venue_booking_review_findings"
+    __table_args__ = (
+        CheckConstraint(
+            "reason_type in ("
+            + ", ".join(repr(reason) for reason in BOOKING_REVIEW_REASON_TYPES)
+            + ")",
+            name="ck_venue_booking_review_findings_known_reason",
+        ),
+        UniqueConstraint("booking_id", "finding_key", name="uq_venue_booking_review_findings_key"),
+        Index(
+            "ix_venue_booking_review_findings_active",
+            "booking_id",
+            "resolved_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("venue_bookings.id", ondelete="CASCADE"), nullable=False
+    )
+    finding_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    reason_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    original_occupancy: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
+    current_occupancy: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
+    venue_timing_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    booking: Mapped[VenueBooking] = relationship(back_populates="review_findings")
 
 
 class VenueBookingStatusHistory(Base):

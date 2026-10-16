@@ -49,7 +49,7 @@ def test_tc_spl_107_01_all_venues_and_exact_periods(app, client):
 
 
 # TC-SPL-107-04
-def test_tc_spl_107_04_review_marker_survives_removal_and_dynamic_edits(app, client):
+def test_tc_spl_107_04_review_marker_tracks_block_removal_and_dynamic_edits(app, client):
     from datetime import time
 
     from app.models import EventRequest
@@ -75,7 +75,7 @@ def test_tc_spl_107_04_review_marker_survives_removal_and_dynamic_edits(app, cli
             )
         rows = overview(client).json["venues"][0]["intervals"]
         event_row = next(r for r in rows if r["status"] == "booked")
-        assert event_row["requires_review"] is True
+        assert event_row["requires_review"] is (not remove)
         assert event_row["start"].endswith("10:00:00+08:00")
         assert event_row["end"].endswith("12:00:00+08:00")
     # A separate unmarked booking acquires a dynamic review requirement after a saved-event edit.
@@ -94,7 +94,7 @@ def test_tc_spl_107_04_review_marker_survives_removal_and_dynamic_edits(app, cli
         r["requires_review"] for r in per_venue["days"][0]["intervals"]
     ]
     detail = client.get(f"/api/event-requests/{event}/venue-booking-status", headers=headers()).json
-    assert detail["review"]["requires_review"] is True
+    assert detail["review"]["requires_review"] is False
 
 
 # TC-SPL-107-05, TC-SPL-107-06

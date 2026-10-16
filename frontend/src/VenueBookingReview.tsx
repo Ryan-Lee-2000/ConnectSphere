@@ -4,6 +4,7 @@ import { CircleAlert, Check, X } from 'lucide-react';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
 import { ExactBookingTiming, BookingReviewReasons } from './ExactBookingTiming';
+import { BookingReviewFindings, type BookingReviewFinding } from './BookingReviewFindings';
 
 // SPL-81 (CS-E10-S3): Venue Staff review one venue-booking request and approve it with an optional
 // note. SPL-80's pending list links here. SPL-82 (CS-E10-S4) adds Reject beside Approve, with a
@@ -18,7 +19,7 @@ type ReviewedBooking = VenueBooking & {
   rejection_alternative_suggestion: string | null;
 };
 type TriggerBlock = { start_date: string; end_date: string; slots: string[]; reason: string; timing?: { start: string; end: string } };
-type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null };
+type Review = { requires_review: boolean; marked_at: string | null; trigger_block: TriggerBlock | null; findings?: BookingReviewFinding[] };
 // SPL-80 (CS-E10-S2 AC3) widens this with what Venue Staff need in order to decide. The server
 // sends an allowlist, so there is deliberately no registration or organiser field to render (AC4).
 type DecisionEvent = {
@@ -60,6 +61,7 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
   const [reason, setReason] = useState('');
   const [suggestion, setSuggestion] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [resolvingTiming, setResolvingTiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -114,6 +116,19 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     finally { setRejecting(false); setRejectingForm(false); }
   }
 
+  async function resolveTiming() {
+    if (!body || resolvingTiming) return;
+    setResolvingTiming(true); setError(null);
+    try {
+      const response = await api(`/api/venue-bookings/${bookingId}/timing-review`, { method: 'POST', body: '{}' });
+      if (!response.ok) { setError(await responseError(response, 'Could not clear the timing review.')); return; }
+      const next = await response.json() as { review?: Review };
+      if (!next.review) throw new Error('Invalid response');
+      setBody({ ...body, review: { ...body.review, ...next.review } });
+    } catch { setError('Could not clear the timing review.'); }
+    finally { setResolvingTiming(false); }
+  }
+
   if (!body) {
     return <section className="venue-booking-review" aria-labelledby="venue-booking-review-title">
       <h1 id="venue-booking-review-title">Review venue-booking request</h1>
@@ -158,6 +173,11 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     <h1 id="venue-booking-review-title">Review venue-booking request</h1>
     {booking.timing && <ExactBookingTiming timing={booking.timing} />}
     <BookingReviewReasons reasons={booking.review_reasons} />
+    <BookingReviewFindings findings={review.findings || []} />
+    {(review.findings || []).some(finding => finding.reason_type !== 'operational_block') && <div className="venue-booking-review__decision">
+      <p>Confirming review saves trusted event and venue times, then clears timing reasons only when current checks pass. Operational reasons remain.</p>
+      <button className="button button--primary" disabled={resolvingTiming} onClick={() => void resolveTiming()} type="button">{resolvingTiming ? 'Checking…' : 'Confirm timing reviewed'}</button>
+    </div>}
     {booking.reviewed_requirements && <section aria-label="Requirements at request">
       <h2>Requirements at request</h2>
       <dl>
