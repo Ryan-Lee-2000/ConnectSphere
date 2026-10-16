@@ -43,6 +43,8 @@ jobs:
       - run: npm run coverage:spl85
       # SPL-131: report several-venue booking branch coverage (same aim; diagnostic, not a gate).
       - run: npm run coverage:spl131
+      # SPL-86: report event-cancellation branch coverage (same aim; diagnostic, not a gate).
+      - run: npm run coverage:spl86
       - run: npm run integration
         env:
           INTEGRATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/integration

@@ -49,25 +49,44 @@ ARRANGEMENT_HALL = "E2E SPL-131 Grand Hall"
 ARRANGEMENT_STUDIO = "E2E SPL-131 Breakout Studio"
 ARRANGEMENT_DATE = date(2030, 10, 21)
 
+# SPL-86 recorded UAT: a Planning event holding an Approved hall, a Requested studio and a lighting
+# line with 2 of 4 units reserved, so cancelling the event visibly frees all three.
+CANCELLATION_EVENT = "E2E SPL-86 Riverside Gala"
+CANCELLATION_HALL = "E2E SPL-86 Riverside Hall"
+CANCELLATION_STUDIO = "E2E SPL-86 Riverside Studio"
+CANCELLATION_TYPE = "E2E SPL-86 Stage Lighting Kit"
+CANCELLATION_DATE = date(2030, 10, 22)
+
 
 def remove_equipment_fixtures(session: Session) -> None:
     """Delete parents first; database cascades retain no dangling assignments or reservations."""
     session.execute(
         delete(EventRequest).where(
             EventRequest.name.in_(
-                [row[0] for row in SCENARIOS] + [CONFIRMATION_EVENT, ARRANGEMENT_EVENT]
+                [row[0] for row in SCENARIOS]
+                + [CONFIRMATION_EVENT, ARRANGEMENT_EVENT, CANCELLATION_EVENT]
             )
         )
     )
     session.execute(
         delete(EquipmentType).where(
-            EquipmentType.name.in_([row[1] for row in SCENARIOS] + [CONFIRMATION_TYPE])
+            EquipmentType.name.in_(
+                [row[1] for row in SCENARIOS] + [CONFIRMATION_TYPE, CANCELLATION_TYPE]
+            )
         )
     )
     # The event (and so its booking) is gone, so the owned venue can be removed safely.
     session.execute(
         delete(Venue).where(
-            Venue.name.in_([CONFIRMATION_VENUE, ARRANGEMENT_HALL, ARRANGEMENT_STUDIO])
+            Venue.name.in_(
+                [
+                    CONFIRMATION_VENUE,
+                    ARRANGEMENT_HALL,
+                    ARRANGEMENT_STUDIO,
+                    CANCELLATION_HALL,
+                    CANCELLATION_STUDIO,
+                ]
+            )
         )
     )
 
@@ -118,6 +137,112 @@ def prepare_arrangement_fixture(
             coordinator_account_id=coordinator.id,
             assigned_by_account_id=manager.id,
             assigned_at=datetime.now(timezone.utc),
+        )
+    )
+
+
+def prepare_cancellation_fixture(
+    session: Session,
+    *,
+    organiser: Account,
+    technician: Account,
+    coordinator: Account,
+    manager: Account,
+    venue_staff: Account,
+) -> None:
+    """Reset the SPL-86 scenario: Approved hall, Requested studio, lighting reserved 2 of 4."""
+    now = datetime.now(timezone.utc)
+    venues = []
+    for name in (CANCELLATION_HALL, CANCELLATION_STUDIO):
+        venue = Venue(
+            name=name,
+            location="E2E Test Location",
+            operating_slots=["AM", "PM", "NIGHT"],
+            setup_buffer_slots=0,
+            turnaround_buffer_slots=0,
+        )
+        venue.layouts = [VenueLayout(layout="theatre", capacity=150)]
+        venues.append(venue)
+    equipment_type = EquipmentType(
+        name=CANCELLATION_TYPE,
+        normalised_name=CANCELLATION_TYPE.lower(),
+        total_stock=10,
+        location="Equipment E2E Store",
+    )
+    event = EventRequest(
+        organiser_account_id=organiser.id,
+        organisation_id=organiser.organisation_id,
+        name=CANCELLATION_EVENT,
+        purpose="Local browser evidence only",
+        proposed_date=CANCELLATION_DATE,
+        start_time=time(14),
+        end_time=time(17),
+        expected_attendance=100,
+        preferred_room_layout="theatre",
+        status="planning",
+    )
+    session.add_all([*venues, equipment_type, event])
+    session.flush()
+    session.add(
+        EventCoordinatorAssignment(
+            event_request_id=event.id,
+            coordinator_account_id=coordinator.id,
+            assigned_by_account_id=manager.id,
+            assigned_at=now,
+        )
+    )
+    hall, studio = venues
+    session.add_all(
+        [
+            VenueBooking(
+                event_request_id=event.id,
+                venue_id=hall.id,
+                status="approved",
+                layout="theatre",
+                expected_attendance=100,
+                booking_date=CANCELLATION_DATE,
+                event_slots=["PM"],
+                requested_by_account_id=coordinator.id,
+                requested_at=now,
+                approved_by_account_id=venue_staff.id,
+                approved_at=now,
+            ),
+            VenueBooking(
+                event_request_id=event.id,
+                venue_id=studio.id,
+                status="requested",
+                layout="theatre",
+                expected_attendance=40,
+                booking_date=CANCELLATION_DATE,
+                event_slots=["PM"],
+                requested_by_account_id=coordinator.id,
+                requested_at=now,
+            ),
+        ]
+    )
+    requirement = EquipmentRequirement(
+        event_request_id=event.id,
+        equipment_type=CANCELLATION_TYPE,
+        equipment_type_id=equipment_type.id,
+        quantity=4,
+        required_start_date=CANCELLATION_DATE,
+        required_end_date=CANCELLATION_DATE,
+        status="partially_reserved",
+        essentiality="essential",
+        notes="SPL-86 cancellation E2E fixture",
+    )
+    session.add(requirement)
+    session.flush()
+    session.add(
+        EquipmentReservation(
+            event_request_id=event.id,
+            equipment_requirement_id=requirement.id,
+            equipment_type_id=equipment_type.id,
+            quantity=2,
+            commitment_start_date=CANCELLATION_DATE - timedelta(days=1),
+            commitment_end_date=CANCELLATION_DATE,
+            reserved_by_account_id=technician.id,
+            reserved_at=now,
         )
     )
 

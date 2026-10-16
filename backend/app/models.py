@@ -52,6 +52,12 @@ CONFIRMATION_COMPLETE = (
     "(confirmed_by_account_id is null and confirmed_at is null)"
     " or (confirmed_by_account_id is not null and confirmed_at is not null)"
 )
+# CS-E07-S5 (SPL-86). Who cancelled the event, when and why are recorded together or not at all.
+CANCELLATION_COMPLETE = (
+    "(cancelled_by_account_id is null and cancelled_at is null and cancellation_reason is null)"
+    " or (cancelled_by_account_id is not null and cancelled_at is not null"
+    " and cancellation_reason is not null)"
+)
 
 
 class Role(StrEnum):
@@ -234,6 +240,7 @@ class EventRequest(Base):
             REGISTRATION_CAPACITY_POSITIVE, name="ck_event_requests_registration_capacity"
         ),
         CheckConstraint(CONFIRMATION_COMPLETE, name="ck_event_requests_confirmation_complete"),
+        CheckConstraint(CANCELLATION_COMPLETE, name="ck_event_requests_cancellation_complete"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -297,6 +304,12 @@ class EventRequest(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # CS-E07-S5 (SPL-86). Who cancelled the event, when and why; all three stay null until then.
+    cancelled_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
     organiser: Mapped[Account] = relationship(
         back_populates="event_requests", foreign_keys=[organiser_account_id]
     )
@@ -304,6 +317,7 @@ class EventRequest(Base):
     rejecter: Mapped[Account | None] = relationship(foreign_keys=[rejected_by_account_id])
     withdrawer: Mapped[Account | None] = relationship(foreign_keys=[withdrawn_by_account_id])
     confirmer: Mapped[Account | None] = relationship(foreign_keys=[confirmed_by_account_id])
+    canceller: Mapped[Account | None] = relationship(foreign_keys=[cancelled_by_account_id])
     venue: Mapped["Venue | None"] = relationship()
     organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(

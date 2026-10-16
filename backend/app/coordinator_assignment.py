@@ -19,6 +19,7 @@ from app.equipment_readiness import (
     derive_equipment_readiness,
     serialize_equipment_requirement,
 )
+from app.event_cancellation import serialize_cancellation
 from app.event_confirmation import confirmation_readiness_for, serialize_confirmation
 from app.event_requests import (
     SINGAPORE,
@@ -479,6 +480,8 @@ def _serialize_basic_event(event: EventRequest) -> dict[str, Any]:
         "expected_attendance": event.expected_attendance,
         "status": event.status,
         "status_label": status_label(event.status),
+        # SPL-86 AC6: the Lead's supervision view shows who cancelled the event, when and why.
+        **serialize_cancellation(event),
     }
 
 
@@ -552,6 +555,8 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         **serialize_rejection(event),
         **serialize_withdrawal(event),
         **serialize_confirmation(event),
+        # SPL-86 AC6: who cancelled the event, when and why.
+        **serialize_cancellation(event),
     }
 
 

@@ -85,6 +85,9 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   confirmation_readiness: ConfirmationReadiness;
   confirmed_by: { id: string; name: string } | null;
   confirmed_at: string | null;
+  cancelled_by: { id: string; name: string } | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
   registration_required: boolean;
   registration_notes: string | null;
   client_organisation: string;
@@ -140,6 +143,10 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
       ] : []),
       ...(event.approved_by ? [['Approved by', `${event.approved_by.name}, ${formatTimestamp(event.approved_at)}`] as [string, ReactNode]] : []),
       ...(event.confirmed_by ? [['Confirmed by', `${event.confirmed_by.name}, ${formatTimestamp(event.confirmed_at)}`] as [string, ReactNode]] : []),
+      ...(event.cancelled_by ? [
+        ['Cancelled by', `${event.cancelled_by.name}, ${formatTimestamp(event.cancelled_at)}`] as [string, ReactNode],
+        ['Cancellation reason', formatText(event.cancellation_reason)] as [string, ReactNode],
+      ] : []),
       ...(event.withdrawn_by ? [
         ['Withdrawal recorded by', `${event.withdrawn_by.name}, ${formatTimestamp(event.withdrawn_at)}`] as [string, ReactNode],
         ['Withdrawal note', formatText(event.withdrawal_note)] as [string, ReactNode],
@@ -292,6 +299,48 @@ function EventConfirmationPanel({ readiness, confirming, transitioning, onStart,
   </section>;
 }
 
+// SPL-86 (CS-E07-S5): the assigned coordinator cancels the whole event with a reason. The server
+// owns which statuses can be cancelled and releases every venue booking and equipment unit.
+const CANCELLABLE_STATUSES = ['submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'postponed'];
+const MAX_CANCELLATION_REASON = 2000;
+
+function EventCancellationPanel({ open, reason, error, transitioning, onStart, onReason, onKeep, onCancel }: {
+  open: boolean;
+  reason: string;
+  // Shown inside the form, next to the button, so a refusal is seen on a phone screen.
+  error: string | null;
+  transitioning: boolean;
+  onStart: () => void;
+  onReason: (value: string) => void;
+  onKeep: () => void;
+  onCancel: () => void;
+}) {
+  return <section className="equipment-readiness event-cancellation" aria-labelledby="event-cancellation-title">
+    <header className="equipment-readiness__header">
+      <div><p className="eyebrow">Event cancellation</p><h2 id="event-cancellation-title">Cancel this event</h2></div>
+    </header>
+    <p className="equipment-readiness__scope">Cancelling frees every Requested or Approved venue booking and every reserved equipment unit for other events. The event and its history are kept, and it cannot be reopened.</p>
+    {!open && <div className="organisation-events__actions">
+      <button type="button" className="button button--secondary" disabled={transitioning} onClick={onStart}>Cancel event</button>
+    </div>}
+    {open && <form className="rejection-form" aria-label="Cancel the event" onSubmit={submit => { submit.preventDefault(); onCancel(); }}>
+      <div className="field">
+        <label htmlFor="cancellation-reason">Cancellation reason</label>
+        <textarea id="cancellation-reason" rows={3} maxLength={MAX_CANCELLATION_REASON} required value={reason}
+          onChange={change => onReason(change.target.value)} />
+      </div>
+      <p><strong>Cancel this event?</strong> Its venues and equipment are released straight away. This cannot be undone.</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="organisation-events__actions">
+        <button type="button" className="button button--secondary" disabled={transitioning} onClick={onKeep}>Keep event</button>
+        <button type="submit" className="button button--primary" disabled={transitioning}>
+          {transitioning ? 'Cancelling…' : 'Confirm cancellation'}
+        </button>
+      </div>
+    </form>}
+  </section>;
+}
+
 function EquipmentEvidence({ line }: { line: EquipmentLine }) {
   const unavailability = (line.unavailability_history ?? []).filter(record => record.reason);
   const hasEvidence = Boolean(line.notes)
@@ -329,6 +378,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [withdrawalNote, setWithdrawalNote] = useState('');
   // SPL-85: whether the second confirmation step is showing.
   const [confirmingEvent, setConfirmingEvent] = useState(false);
+  // SPL-86: whether the cancellation form is open, and its reason.
+  const [cancellingEvent, setCancellingEvent] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationError, setCancellationError] = useState<string | null>(null);
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
 
@@ -445,6 +498,38 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       }
     } catch {
       setError('Could not confirm the event. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  async function cancelEvent() {
+    if (!event || transitioning) return;
+    if (!cancellationReason.trim()) {
+      setCancellationError('Give a reason for cancelling this event.');
+      return;
+    }
+    setTransitioning(true);
+    setCancellationError(null);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: cancellationReason.trim() }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setCancellationError(body?.error || 'Could not cancel the event. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event, confirmation_readiness: undefined }));
+        setCancellingEvent(false);
+        setCancellationReason('');
+        setNotice(body.message || 'Event cancelled.');
+      } else {
+        setCancellationError('Could not cancel the event. Try again.');
+      }
+    } catch {
+      setCancellationError('Could not cancel the event. Try again.');
     } finally {
       setTransitioning(false);
     }
@@ -593,6 +678,12 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         onStart={() => { setError(null); setConfirmingEvent(true); }}
         onCancel={() => setConfirmingEvent(false)}
         onConfirm={() => { void confirmEvent(); }} />}
+      {CANCELLABLE_STATUSES.includes(event.status) && <EventCancellationPanel open={cancellingEvent}
+        reason={cancellationReason} error={cancellationError} transitioning={transitioning}
+        onStart={() => { setError(null); setNotice(null); setCancellationError(null); setCancellingEvent(true); }}
+        onReason={setCancellationReason}
+        onKeep={() => { setCancellingEvent(false); setCancellationReason(''); setCancellationError(null); }}
+        onCancel={() => { void cancelEvent(); }} />}
       {/* SPL-79/SPL-131: every venue booking of the event, each with its status and history. A
           request can only be made once the event is in Planning (SPL-77), so earlier stages have
           nothing to show. The panel follows the event as loaded, so approving on this page

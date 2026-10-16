@@ -1067,3 +1067,6 @@ button { touch-action: manipulation; }
   background: var(--color-mist-surface); color: var(--color-ink-navy); font-size: 0.9rem;
 }
 .equipment-requirements__editor-error { margin: var(--space-2) 0 0; }
+/* SPL-86 event cancellation */
+.event-cancellation .rejection-form textarea { width: 100%; }
+.supervision__cancellation { display: block; margin-top: var(--space-1); color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.4; }
