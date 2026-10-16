@@ -26,6 +26,7 @@ from app.models import (
     Role,
     Venue,
     VenueBooking,
+    VenueBookingReviewFinding,
     VenueLayout,
     VenueOperationalBlock,
 )
@@ -560,6 +561,36 @@ def test_tc_spl_85_12_a_booking_marked_for_review_blocks(app, client):
             "message": "Resolve the review flagged on the Harbour Hall booking.",
         }
     ]
+
+
+# TC-SPL-85-12 — AC4: an unresolved SPL-130 timing finding blocks; a resolved one does not.
+@pytest.mark.parametrize(("resolved", "expected_status"), [(False, 409), (True, 200)])
+def test_tc_spl_85_12_an_unresolved_timing_finding_blocks(app, client, resolved, expected_status):
+    event_id = add_event(app)
+    booking_id = add_booking(app, event_id)
+    line_id = add_line(app, event_id)
+    reserve(app, event_id, line_id, 4)
+    with Session(app.extensions["engine"]) as session:
+        session.add(
+            VenueBookingReviewFinding(
+                booking_id=booking_id,
+                finding_key="hours:2026-11-20",
+                reason_type="outside_operating_hours",
+                detail="Harbour Hall now closes before the event's turnaround ends.",
+                venue_timing_revision=2,
+                first_assessed_at=NOW,
+                last_assessed_at=NOW,
+                resolved_at=NOW if resolved else None,
+                resolved_by_account_id=VENUE_STAFF if resolved else None,
+            )
+        )
+        session.commit()
+
+    response = confirm(client, event_id)
+
+    assert response.status_code == expected_status, response.json
+    if not resolved:
+        assert blocker_codes(response) == ["venue_booking_review_required"]
 
 
 # TC-SPL-85-13 — AC4: SPL-137's current review reasons count, not only the stored marker.

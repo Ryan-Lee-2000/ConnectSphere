@@ -1,7 +1,7 @@
 """Record who confirmed an event and when (SPL-85, CS-E07-S3).
 
 Revision ID: s3_event_confirmation
-Revises: s3_event_change_requests
+Revises: s3_booking_review_findings
 
 Two nullable columns on ``event_requests``, filled together when the assigned coordinator confirms
 the event, and a check constraint so one is never stored without the other. The predicate is
@@ -16,7 +16,7 @@ from alembic import op
 from app.models import CONFIRMATION_COMPLETE
 
 revision = "s3_event_confirmation"
-down_revision = "s3_event_change_requests"
+down_revision = "s3_booking_review_findings"
 branch_labels = None
 depends_on = None
 

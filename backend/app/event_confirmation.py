@@ -217,6 +217,7 @@ def serialize_confirmed_arrangements(event: EventRequest) -> dict[str, Any] | No
 
 def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict[str, Any]]:
     from app.exact_venue_bookings import exact_review_reasons
+    from app.venue_booking_assessment import active_findings
 
     active = [booking for booking in bookings if booking.status in ACTIVE_BOOKING_STATUSES]
     blockers = []
@@ -238,7 +239,13 @@ def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict
                     "message": f"{name} is still waiting for a Venue Staff decision.",
                 }
             )
-        if booking.requires_review or exact_review_reasons(session, booking):
+        # Review comes from the SPL-89 marker, an unresolved SPL-130 timing finding, or SPL-137's
+        # current reasons, matching how the booking status view decides "requires review".
+        if (
+            booking.requires_review
+            or active_findings(session, booking.id)
+            or exact_review_reasons(session, booking)
+        ):
             blockers.append(
                 {
                     "code": "venue_booking_review_required",
