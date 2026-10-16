@@ -35,6 +35,7 @@ APPROVE = "approve"
 REJECT = "reject"
 WITHDRAW = "withdraw"
 CONFIRM = "confirm"
+CANCEL = "cancel"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
@@ -84,6 +85,20 @@ TRANSITION_RULES = {
     CONFIRM: TransitionRule(
         previous_status=PLANNING,
         resulting_status=CONFIRMED,
+    ),
+    # SPL-86: the assigned coordinator can cancel at any stage from assignment onwards (Q68);
+    # a Draft has no coordinator, and Rejected, Withdrawn, Completed and Cancelled are final.
+    CANCEL: TransitionRule(
+        previous_status=(
+            SUBMITTED,
+            UNDER_REVIEW,
+            RETURNED_FOR_CLARIFICATION,
+            "approved",
+            PLANNING,
+            CONFIRMED,
+            "postponed",
+        ),
+        resulting_status="cancelled",
     ),
 }
 

@@ -72,6 +72,10 @@ BASIC_KEYS = {
     "expected_attendance",
     "status",
     "status_label",
+    # SPL-86: who cancelled the event, when and why (empty until cancelled).
+    "cancelled_by",
+    "cancelled_at",
+    "cancellation_reason",
 }
 
 
@@ -174,6 +178,9 @@ def test_qa_spl_134_002_basic_information_is_the_agreed_fields_only(app, client)
         "expected_attendance": 120,
         "status": "submitted",
         "status_label": "Submitted",
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "cancellation_reason": None,
     }
     assert "PRIVATE" not in response.get_data(as_text=True)
 

@@ -168,6 +168,16 @@ lock. `POST .../venue-bookings/<id>/cancel` cancels one Approved booking with a 
 SPL-137's `cancel_booking`; the status read adds `bookings`, every booking oldest first.
 See [SPL-131](tasks/SPL-131.md).
 
+## Event cancellation (SPL-86)
+
+`POST /api/event-requests/<id>/cancel` lets the assigned coordinator cancel an event at any stage
+from assignment onwards (Q68, Q132) with a reason, recorded as `cancelled_by_account_id`,
+`cancelled_at` and `cancellation_reason` plus a `cancel` status-history row. One transaction locks
+event and assignment → active bookings' venues → bookings → equipment types → lines (the shared
+orders), cancels every Requested/Approved booking through `transition_booking_status` with a
+history row, and releases every held unit through SPL-98's `_release_from_requirement`. Records
+are kept (Q20); existing queues already exclude cancelled work. See [SPL-86](tasks/SPL-86.md).
+
 ## Client-organisation event isolation
 
 SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:

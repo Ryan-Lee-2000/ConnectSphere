@@ -333,6 +333,9 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "withdrawal_note": None,
         "confirmed_by": None,
         "confirmed_at": None,
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "cancellation_reason": None,
     }
     assert confirmation["ready"] is False
     assert equipment[0]["equipment_type"] == "Podium"

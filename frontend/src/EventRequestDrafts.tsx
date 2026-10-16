@@ -33,6 +33,10 @@ type RequestSummary = {
   confirmed_by?: { id: string; name: string } | null;
   confirmed_at?: string | null;
   confirmed_arrangements?: ConfirmedArrangements | null;
+  // CS-E07-S5 (SPL-86): who cancelled the event, when and why; null unless it is cancelled.
+  cancelled_by?: { id: string; name: string } | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
 };
 
 type ConfirmedArrangements = {
@@ -276,6 +280,12 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
                 Confirmed by {item.confirmed_by.name}{item.confirmed_at ? ` on ${new Date(item.confirmed_at).toLocaleString()}` : ''}
               </span>}
               {item.confirmed_arrangements && <ConfirmedArrangementsList arrangements={item.confirmed_arrangements} />}
+              {item.cancelled_by && <span className="event-request-status__explanation">
+                Cancelled by {item.cancelled_by.name}{item.cancelled_at ? ` on ${new Date(item.cancelled_at).toLocaleString()}` : ''}
+              </span>}
+              {item.cancelled_by && item.cancellation_reason && <span className="event-request-status__explanation">
+                Reason: {item.cancellation_reason}
+              </span>}
               {item.rejected_by && <span className="event-request-status__explanation">
                 Rejected by {item.rejected_by.name}{item.rejected_at ? ` on ${new Date(item.rejected_at).toLocaleString()}` : ''}
               </span>}

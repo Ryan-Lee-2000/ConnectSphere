@@ -16,6 +16,9 @@ export type SupervisedEvent = {
   status_label: string;
   coordinator: { id: string; name: string } | null;
   reassignable: boolean;
+  // SPL-86: who cancelled the event and why; null unless it is cancelled.
+  cancelled_by?: { id: string; name: string } | null;
+  cancellation_reason?: string | null;
 };
 type CoordinatorOption = { id: string; name: string };
 type CoordinatorOptions = { coordinators: CoordinatorOption[]; unavailable_reason: string | null };
@@ -96,7 +99,7 @@ export function CoordinatorSupervision({ accessToken, request, refreshKey = 0, o
           <td>{event.organisation_name}</td>
           <td>{formatWhen(event)}</td>
           <td>{event.expected_attendance ?? 'Not provided'}</td>
-          <td>{event.status_label}</td>
+          <td>{event.status_label}{event.cancelled_by && <small className="supervision__cancellation">Cancelled by {event.cancelled_by.name}{event.cancellation_reason ? `: ${event.cancellation_reason}` : ''}</small>}</td>
           <td>{event.coordinator ? event.coordinator.name : 'Awaiting assignment'}</td>
           <td>{event.reassignable && <button type="button" className="button button--secondary" aria-label={`Reassign coordinator for ${event.name}`} onClick={() => { setNotice(null); setSelected(event); }}>Reassign</button>}</td>
         </tr>)}</tbody>

@@ -15,7 +15,7 @@ Paths written as plain text in these documents are relative to the repository ro
 | Configure hosting later | [Deployment](infrastructure/deployment.md) |
 | Check CI usage policy | [CI budget](infrastructure/ci-budget.md) |
 | See checks performed and limitations | [Verification](infrastructure/verification.md) |
-| Find story acceptance tests and reports | [SPL-66 mapping](development/SPL-66.md), [SPL-69 mapping](tasks/SPL-69.md), [SPL-74 mapping](development/SPL-74.md), [SPL-114 mapping](tasks/SPL-114.md), [SPL-115 mapping](tasks/SPL-115.md), [SPL-116 mapping](tasks/SPL-116.md), [SPL-117 mapping](tasks/SPL-117.md), [SPL-118 mapping](tasks/SPL-118.md), [SPL-93 mapping](tasks/SPL-93.md), [SPL-91 mapping](tasks/SPL-91.md), [SPL-92 mapping](tasks/SPL-92.md), [SPL-96 mapping](tasks/SPL-96.md), [SPL-100 mapping](tasks/SPL-100.md), [SPL-85 mapping](tasks/SPL-85.md), [SPL-131 mapping](tasks/SPL-131.md) |
+| Find story acceptance tests and reports | [SPL-66 mapping](development/SPL-66.md), [SPL-69 mapping](tasks/SPL-69.md), [SPL-74 mapping](development/SPL-74.md), [SPL-114 mapping](tasks/SPL-114.md), [SPL-115 mapping](tasks/SPL-115.md), [SPL-116 mapping](tasks/SPL-116.md), [SPL-117 mapping](tasks/SPL-117.md), [SPL-118 mapping](tasks/SPL-118.md), [SPL-93 mapping](tasks/SPL-93.md), [SPL-91 mapping](tasks/SPL-91.md), [SPL-92 mapping](tasks/SPL-92.md), [SPL-96 mapping](tasks/SPL-96.md), [SPL-100 mapping](tasks/SPL-100.md), [SPL-85 mapping](tasks/SPL-85.md), [SPL-131 mapping](tasks/SPL-131.md), [SPL-86 mapping](tasks/SPL-86.md) |
 | See infrastructure acceptance criteria | [INF-01](infrastructure/tasks/INF-01.md), [INF-04](infrastructure/tasks/INF-04.md) |
 
 ### SPL-69 verification reports

@@ -8,6 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
+from app.event_cancellation import serialize_cancellation
 from app.event_confirmation import serialize_confirmation, serialize_confirmed_arrangements
 from app.event_statuses import status_explanation, status_label
 from app.models import (
@@ -735,6 +736,8 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         # CS-E07-S3 (SPL-85) AC5: who confirmed the event, when, and the arrangements it rests on.
         **serialize_confirmation(event),
         "confirmed_arrangements": serialize_confirmed_arrangements(event),
+        # CS-E07-S5 (SPL-86) AC6: who cancelled the event, when and why.
+        **serialize_cancellation(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,
