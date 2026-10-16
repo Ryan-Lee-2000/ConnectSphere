@@ -26,23 +26,25 @@ const slotName = (slot: string) => SLOT_NAMES[slot] || slot;
 const dateName = (day: string) => new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   .format(new Date(`${day}T00:00:00Z`));
 
-export function VenueBookingRequest({ api, eventId, venueId, venueName, expectedAttendance, preferredRoomLayout, timing, attendeeCount, requiredFacilities = NO_FACILITIES, onRequested }: {
+export function VenueBookingRequest({ api, eventId, venueId, venueName, expectedAttendance, preferredRoomLayout, timing, attendeeCount, requiredFacilities = NO_FACILITIES, proposedFacilities, onRequested }: {
   api: ApiRequest; eventId: number; venueId: number; venueName: string;
   timing?: BookingTiming; expectedAttendance: number | null; preferredRoomLayout: string | null; onRequested: (booking: VenueBooking) => void;
   attendeeCount?: number; requiredFacilities?: string[];
+  // SPL-131: facilities chosen in the search for this booking; the event's are the default.
+  proposedFacilities?: string[];
 }) {
   const [layouts, setLayouts] = useState<Layout[] | null>(null);
   const [venueFacilities, setVenueFacilities] = useState<string[]>([]);
   const [layout, setLayout] = useState('');
   const [attendees, setAttendees] = useState(String(initialAttendees(attendeeCount, expectedAttendance) ?? ''));
-  const [facilities, setFacilities] = useState<string[]>(requiredFacilities);
+  const [facilities, setFacilities] = useState<string[]>(proposedFacilities ?? requiredFacilities);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attendeeValue = Number(attendees);
   const attendeesValid = expectedAttendance !== null && Number.isInteger(attendeeValue) && attendeeValue >= 1 && attendeeValue <= expectedAttendance;
   // SPL-131 AC2/AC3: a layout fits this space's own attendee count; the event's preferred layout is the default.
   const fitting = (layouts || []).filter(option => attendeesValid && option.capacity >= attendeeValue);
-  const facilityOptions = Array.from(new Set([...requiredFacilities, ...venueFacilities]));
+  const facilityOptions = Array.from(new Set([...requiredFacilities, ...(proposedFacilities ?? []), ...venueFacilities]));
 
   // The venue profile is the source of supported layouts; search results are filtered by the
   // coordinator's exploratory criteria, so they cannot be relied on for the full list.

@@ -169,3 +169,38 @@ it('[TC-SPL-131-57] treats a search for fewer attendees as one part of the event
   expect(await screen.findByRole('button', { name: 'Request booking' })).toBeTruthy();
   expect((screen.getByLabelText('Attendees in this venue') as HTMLInputElement).value).toBe('20');
 });
+
+// TC-SPL-131-62 (BB) AC2/AC3 (review, dannywthefatty): a full-attendance booking may use its own
+// layout and facilities; the event's saved values are only the default.
+it('[TC-SPL-131-62] requests a full-attendance booking with its own layout and no facilities', async () => {
+  const savedEventChecks = { suitable: false, checks: [
+    { key: 'timing', label: 'Timing and preparation', passed: true, detail: 'Available.' },
+    { key: 'layout_capacity', label: 'Layout and capacity', passed: false, detail: 'The requested Theatre layout is not supported by this venue.' },
+    { key: 'facilities', label: 'Required facilities', passed: false, detail: 'Missing required facilities: Projector.' },
+    { key: 'accessibility', label: 'Accessibility needs', passed: true, detail: 'Met.' },
+  ] };
+  const api = vi.fn(async (path: string, options?: RequestInit) => ({ ok: true, json: async () => options?.method === 'POST'
+    ? { booking: booking(44, 'Seminar Hall', 'requested', 150, 'classroom', []) }
+    : path.includes('available-venues')
+      ? { venues: [{ id: 5, name: 'Seminar Hall', location: 'Marina', maximum_layout_capacity: 150, matching_layouts: [{ layout: 'classroom', capacity: 150 }], suitability: savedEventChecks }] }
+      : path.startsWith('/api/venues/') ? { venue: { layouts: [{ layout: 'classroom', capacity: 150 }], facilities: [] } }
+        : path.includes('venue-filter-options') ? { filter_options: { facilities: ['Projector'], accessibility_needs: [], locations: [] } } : {} })) as unknown as ApiRequest & ReturnType<typeof vi.fn>;
+  render(<VenueAvailabilitySearch accessToken="token" eventId={12} initialDate="2026-10-14" initialSlots={['PM']} expectedAttendance={150} preferredRoomLayout="Theatre" requiredFacilities={['Projector']} request={api} />);
+
+  // With the event's own layout and facilities, the saved checks still decide: no request.
+  fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Seminar Hall/ }));
+  await screen.findByRole('heading', { name: /Seminar Hall/ });
+  expect(screen.queryByRole('button', { name: 'Request booking' })).toBeNull();
+
+  // Propose this booking's own values: classroom, no projector, still all 150 attendees.
+  fireEvent.change(screen.getByLabelText('Room layout'), { target: { value: 'Classroom' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove Projector' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Search venues' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Seminar Hall/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Request booking' }));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/event-requests/12/venue-bookings', {
+    method: 'POST', body: JSON.stringify({ venue_id: 5, layout: 'classroom', required_facilities: [] }),
+  }));
+});
