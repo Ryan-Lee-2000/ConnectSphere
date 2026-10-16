@@ -6,7 +6,7 @@ Q109, Q119, Q131, Q110, Q60), not from the implementation. Concurrency and the m
 proved on PostgreSQL in test_venue_arrangements_postgres.py.
 """
 
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 
 import pytest
 import test_venue_booking_requests as base
@@ -1150,3 +1150,141 @@ def test_tc_spl_131_29_unconfigured_venue_timing_refused(app, client):
     assert response.status_code == 409
     assert "Confirm venue operating hours" in response.json["error"]
     assert count(app, VenueBooking) == 0
+
+
+# Review fixes (CLIVELIM01 on PR #87) ------------------------------------------------------------
+
+# Reassessment covers only commitments that have not ended (SPL-130), so these use a future date.
+FUTURE = date(2027, 1, 20)
+INTERVALS = {
+    "14-15": {"start": "2027-01-20T14:00:00+08:00", "end": "2027-01-20T15:00:00+08:00"},
+    "16-17": {"start": "2027-01-20T16:00:00+08:00", "end": "2027-01-20T17:00:00+08:00"},
+}
+
+
+def _venue_timing(client, venue_id, *, setup=0, turnaround=0, hours=None):
+    return client.patch(
+        f"/api/venues/{venue_id}",
+        json={
+            "setup_minutes": setup,
+            "turnaround_minutes": turnaround,
+            "operating_intervals": hours or [[0, 1440]],
+        },
+        headers=headers("venue-staff"),
+    )
+
+
+def _future_request(client, event_id, venue_id, start, end, **extra):
+    return exact_request(client, event_id, venue_id, start, end, date=FUTURE.isoformat(), **extra)
+
+
+def _sub_windows(app, client):
+    """One 13:00-18:00 event holding a zero-buffer hall twice: 14-15 Approved, 16-17 Requested."""
+
+    exact(app)
+    event_id = make_event(app, day=FUTURE, start=time(13), end=time(18))
+    hall = exact_venue(app, setup=0, turnaround=0)
+    first = _future_request(client, event_id, hall, "14:00", "15:00").json["booking"]
+    assert approve(client, first["id"]).status_code == 200
+    second = _future_request(client, event_id, hall, "16:00", "17:00").json["booking"]
+    return event_id, hall, first["id"], second["id"]
+
+
+def _findings(app, booking_id):
+    from app.models import VenueBookingReviewFinding
+
+    with Session(app.extensions["engine"]) as session:
+        return sorted(
+            finding.reason_type
+            for finding in session.scalars(
+                select(VenueBookingReviewFinding).where(
+                    VenueBookingReviewFinding.booking_id == booking_id,
+                    VenueBookingReviewFinding.resolved_at.is_(None),
+                )
+            )
+        )
+
+
+# TC-SPL-131-59 (WB) AC2/AC3: reassessment uses each booking's own interval, not the event's
+def test_tc_spl_131_59_reassessment_uses_each_booking_interval(app, client):
+    _, hall, first, second = _sub_windows(app, client)
+
+    response = _venue_timing(client, hall, hours=[[840, 960]])  # opening hours 14:00-16:00
+
+    assert response.status_code == 200, response.json
+    assert response.json["affected_booking_count"] == 1
+    assert _findings(app, first) == []  # 14:00-15:00 still fits
+    assert _findings(app, second) == ["outside_operating_hours"]  # 16:00-17:00 does not
+    assert booking_row(app, first)["exact_timing"]["event"] == INTERVALS["14-15"]
+
+
+def test_tc_spl_131_59_peers_compared_on_their_own_intervals(app, client):
+    _, hall, first, second = _sub_windows(app, client)
+
+    # With 45 minutes either side, 13:15-15:45 and 15:15-17:45 overlap each other.
+    assert _venue_timing(client, hall, setup=45, turnaround=45).json["affected_booking_count"] == 2
+    assert _findings(app, first) == ["overlap"]
+    assert _findings(app, second) == ["overlap"]
+
+    # With 15 minutes they no longer overlap, so nothing is newly flagged.
+    assert _venue_timing(client, hall, setup=15, turnaround=15).json["affected_booking_count"] == 0
+
+
+# TC-SPL-131-60 (WB) AC2/AC6: clearing a timing review keeps the booking's own advertised time
+@pytest.mark.parametrize("which", ["approved", "requested"])
+def test_tc_spl_131_60_clearance_preserves_booking_interval(app, client, which):
+    _, hall, first, second = _sub_windows(app, client)
+    target, other, window = (
+        (first, second, "14-15") if which == "approved" else (second, first, "16-17")
+    )
+    _venue_timing(client, hall, setup=45, turnaround=45)
+    other_before = booking_row(app, other)
+    refused = client.post(
+        f"/api/venue-bookings/{target}/timing-review", headers=headers("venue-staff")
+    )
+    assert refused.status_code == 409  # still overlaps its sibling
+    _venue_timing(client, hall, setup=15, turnaround=15)
+
+    cleared = client.post(
+        f"/api/venue-bookings/{target}/timing-review", headers=headers("venue-staff")
+    )
+
+    assert cleared.status_code == 200, cleared.json
+    timing = booking_row(app, target)["exact_timing"]
+    assert timing["event"] == INTERVALS[window]
+    starts = {"14-15": "2027-01-20T13:45:00+08:00", "16-17": "2027-01-20T15:45:00+08:00"}
+    assert timing["occupied"]["start"] == starts[window]
+    assert _findings(app, target) == []
+    other_after = booking_row(app, other)
+    assert other_after["exact_timing"] == other_before["exact_timing"]
+    assert other_after["status"] == other_before["status"]
+
+
+# TC-SPL-131-61 (BB) AC5 of SPL-85: the organiser sees each venue's own confirmed hours
+def test_tc_spl_131_61_confirmed_arrangements_show_each_booking_times(app, client):
+    exact(app)
+    event_id = make_event(app, day=FUTURE, start=time(13), end=time(18))
+    hall = exact_venue(app, setup=0, turnaround=0)
+    room = exact_venue(app, "Studio One", layouts=BREAKOUT_LAYOUTS, setup=0, turnaround=0)
+    plenary = _future_request(client, event_id, hall, "13:00", "18:00").json["booking"]
+    breakout_booking = _future_request(
+        client, event_id, room, "14:00", "15:00", layout="classroom", attendee_count=20
+    ).json["booking"]
+    for booking in (plenary, breakout_booking):
+        assert approve(client, booking["id"]).status_code == 200
+    confirmed = client.post(f"/api/event-requests/{event_id}/confirm", headers=headers())
+    assert confirmed.status_code == 200, confirmed.json
+
+    requests = client.get("/api/event-requests", headers=headers("organiser")).json
+    event = next(item for item in requests["event_requests"] if item["id"] == event_id)
+    venues = {item["venue"]: item for item in event["confirmed_arrangements"]["venues"]}
+
+    assert (venues["Harbour Hall"]["start_time"], venues["Harbour Hall"]["end_time"]) == (
+        "13:00",
+        "18:00",
+    )
+    assert (venues["Studio One"]["start_time"], venues["Studio One"]["end_time"]) == (
+        "14:00",
+        "15:00",
+    )
+    assert venues["Studio One"]["date"] == FUTURE.isoformat()
