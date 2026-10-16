@@ -105,6 +105,7 @@ def test_tc_spl_130_001_assesses_only_active_unfinished_commitments(app, client)
     response = timing_patch(client, venue_id, 30, 30)
     assert response.status_code == 200
     assert response.json["affected_booking_count"] == 2
+    assert response.json["pending_review_count"] == 2
     with Session(app.extensions["engine"]) as session:
         assert session.get(VenueBooking, first["id"]).requires_review
         assert session.get(VenueBooking, second["id"]).requires_review
@@ -160,6 +161,8 @@ def test_tc_spl_130_003_overlap_marks_both_with_original_and_new_occupancy(app, 
     assert {item["booking_id"] for item in queue} == {first["id"], second["id"]}
     assert {item["coordinator"]["name"] for item in queue} == {"Casey Lim"}
     for item in queue:
+        assert item["event"]["advertised_interval"]["start"]
+        assert item["event"]["advertised_interval"]["end"]
         finding = next(f for f in item["findings"] if f["reason_type"] == "overlap")
         assert finding["original_occupancy"]["start"]
         assert finding["current_occupancy"]["start"]
@@ -292,6 +295,73 @@ def test_tc_spl_130_008_explicit_review_retains_operational_reason(app, client):
         )
         assert timing.resolved_at is not None
         assert session.get(VenueBooking, booking["id"]).exact_timing["venue_revision"] == 3
+
+
+# TC-SPL-130-011 — AC4: removing a block is its explicit, audited resolution workflow.
+def test_tc_spl_130_011_block_removal_resolves_finding_and_clears_queue(app, client):
+    venue_id = venue(app)
+    booking = book(
+        client,
+        event(app, "Block removal", time(10), time(11)),
+        venue_id,
+        "10:00",
+        "11:00",
+    )
+    created = client.post(
+        f"/api/venues/{venue_id}/operational-blocks",
+        headers=headers(),
+        json={
+            "date": FUTURE.isoformat(),
+            "start_time": "10:30",
+            "end_time": "10:45",
+            "reason": "Inspection",
+        },
+    )
+    block_id = created.json["operational_block"]["id"]
+
+    removed = client.delete(
+        f"/api/venues/{venue_id}/operational-blocks/{block_id}", headers=headers()
+    )
+    assert removed.status_code == 200
+    assert removed.json["resolved_finding_count"] == 1
+    assert client.get("/api/venue-bookings/timing-reviews", headers=headers()).json["count"] == 0
+    with Session(app.extensions["engine"]) as session:
+        stored = session.get(VenueBooking, booking["id"])
+        finding = session.scalar(
+            select(VenueBookingReviewFinding).where(
+                VenueBookingReviewFinding.booking_id == booking["id"],
+                VenueBookingReviewFinding.reason_type == "operational_block",
+            )
+        )
+        assert stored.requires_review is False
+        assert stored.review_trigger_block_id is None
+        assert finding.resolved_at is not None
+        assert finding.resolved_by_account_id == legacy.VENUE_STAFF
+
+
+# TC-SPL-130-012 — AC4: block removal leaves independent timing findings active.
+def test_tc_spl_130_012_block_removal_recomputes_from_remaining_findings(app, client):
+    venue_id = venue(app)
+    booking = book(client, event(app, "Two causes", time(10), time(11)), venue_id, "10:00", "11:00")
+    created = client.post(
+        f"/api/venues/{venue_id}/operational-blocks",
+        headers=headers(),
+        json={
+            "date": FUTURE.isoformat(),
+            "start_time": "10:30",
+            "end_time": "10:45",
+            "reason": "Inspection",
+        },
+    )
+    timing_patch(client, venue_id, 15, hours=[[600, 660]])
+    client.delete(
+        f"/api/venues/{venue_id}/operational-blocks/{created.json['operational_block']['id']}",
+        headers=headers(),
+    )
+
+    review = client.get(f"/api/venue-bookings/{booking['id']}", headers=headers()).json["review"]
+    assert review["requires_review"] is True
+    assert [finding["reason_type"] for finding in review["findings"]] == ["outside_operating_hours"]
 
 
 # TC-SPL-130-009 — AC4: a still-overlapping review cannot be cleared.

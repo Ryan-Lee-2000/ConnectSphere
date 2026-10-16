@@ -6,7 +6,7 @@ import { occupancyName, type BookingReviewFinding } from './BookingReviewFinding
 type AffectedBooking = {
   booking_id: number;
   status: string;
-  event: { id: number; name: string };
+  event: { id: number; name: string; advertised_interval: { start: string; end: string } | null };
   venue: { id: number; name: string };
   coordinator: { id: string; name: string } | null;
   findings: BookingReviewFinding[];
@@ -49,7 +49,7 @@ export function BookingTimingReviews({ accessToken, onOpen, request }: {
       <caption className="visually-hidden">Active venue bookings with timing review findings</caption>
       <thead><tr><th scope="col">Event</th><th scope="col">Venue</th><th scope="col">Coordinator</th><th scope="col">Status</th><th scope="col">Reason and occupancy</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
       <tbody>{reviews.map(item => <tr key={item.booking_id}>
-        <th scope="row">{item.event.name}<span className="request-flag"><CircleAlert size={14} /> Needs review</span></th>
+        <th scope="row">{item.event.name}{item.event.advertised_interval && <span className="timing-review-event-time">Advertised: {occupancyName(item.event.advertised_interval)}</span>}<span className="request-flag"><CircleAlert size={14} /> Needs review</span></th>
         <td>{item.venue.name}</td>
         <td>{item.coordinator?.name || 'Not assigned'}</td>
         <td>{item.status === 'approved' ? 'Approved' : 'Requested'}</td>

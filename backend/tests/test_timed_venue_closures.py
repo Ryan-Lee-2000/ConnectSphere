@@ -181,15 +181,21 @@ def test_tc_spl_138_07_removing_one_block_preserves_other_and_review(app, client
     assert any(
         r["status"] == "blocked" for r in calendar(client, venue).json["days"][0]["intervals"]
     )
+    with Session(app.extensions["engine"]) as session:
+        stored = session.get(VenueBooking, booking["id"])
+        assert stored.requires_review
+        assert stored.review_trigger_block_id == second
     client.delete(
         f"/api/venues/{venue}/operational-blocks/{second}", headers=headers("venue-staff")
     )
     with Session(app.extensions["engine"]) as session:
-        assert session.get(VenueBooking, booking["id"]).requires_review
+        stored = session.get(VenueBooking, booking["id"])
+        assert stored.requires_review is False
+        assert stored.review_trigger_block_id is None
         assert session.query(VenueOperationalBlock).count() == 2
     read = client.get(f"/api/venue-bookings/{booking['id']}", headers=headers("venue-staff"))
-    assert read.json["review"]["requires_review"] is True
-    assert read.json["review"]["trigger_block"]["timing"]["start"] == "2026-10-14T12:30:00+08:00"
+    assert read.json["review"]["requires_review"] is False
+    assert read.json["review"]["trigger_block"] is None
 
 
 # TC-SPL-138-08

@@ -16,19 +16,20 @@ const finding = {
 
 describe('SPL-130 timing review queue', () => {
   it('TC-SPL-130-003 shows event, coordinator, status, reason and both occupancies', async () => {
-    const request = vi.fn(() => json({ reviews: [{ booking_id: 9, status: 'approved', event: { id: 1, name: 'Leadership Forum' }, venue: { id: 2, name: 'Atlas Hall' }, coordinator: { id: 'c', name: 'Casey Lim' }, findings: [finding] }], count: 1 }));
+    const request = vi.fn(() => json({ reviews: [{ booking_id: 9, status: 'approved', event: { id: 1, name: 'Leadership Forum', advertised_interval: { start: '2026-12-20T10:00:00+08:00', end: '2026-12-20T11:00:00+08:00' } }, venue: { id: 2, name: 'Atlas Hall' }, coordinator: { id: 'c', name: 'Casey Lim' }, findings: [finding] }], count: 1 }));
     render(<BookingTimingReviews accessToken="token" onOpen={vi.fn()} request={request} />);
     expect(await screen.findByText('Leadership Forum')).toBeTruthy();
     expect(screen.getByText('Casey Lim')).toBeTruthy();
     expect(screen.getByText('Approved')).toBeTruthy();
     expect(screen.getByText(finding.detail)).toBeTruthy();
+    expect(screen.getByText(/Advertised:/)).toBeTruthy();
     expect(screen.getByText(/Original:/)).toBeTruthy();
     expect(screen.getByText(/Current:/)).toBeTruthy();
   });
 
   it('TC-SPL-130-005 opens the selected affected booking for Venue Staff', async () => {
     const onOpen = vi.fn();
-    render(<BookingTimingReviews accessToken="token" onOpen={onOpen} request={() => json({ reviews: [{ booking_id: 9, status: 'requested', event: { id: 1, name: 'Forum' }, venue: { id: 2, name: 'Hall' }, coordinator: null, findings: [finding] }], count: 1 })} />);
+    render(<BookingTimingReviews accessToken="token" onOpen={onOpen} request={() => json({ reviews: [{ booking_id: 9, status: 'requested', event: { id: 1, name: 'Forum', advertised_interval: null }, venue: { id: 2, name: 'Hall' }, coordinator: null, findings: [finding] }], count: 1 })} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
     expect(onOpen).toHaveBeenCalledWith(9);
   });

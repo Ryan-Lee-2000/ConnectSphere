@@ -114,9 +114,23 @@ def register_venue_operational_block_routes(app: Flask) -> None:
                 abort(404, "Active operational block not found.")
             block.removed_by_account_id = g.user_id
             block.removed_at = datetime.now(timezone.utc)
+            # Removing the block is the authoritative resolution workflow for its stable finding.
+            # Preserve the finding as audit history and recompute the booking marker from any
+            # other active timing or operational causes.
+            from app.venue_booking_assessment import resolve_operational_findings
+
+            resolved_finding_count = resolve_operational_findings(
+                session,
+                block,
+                resolved_by_account_id=g.user_id,
+                resolved_at=block.removed_at,
+            )
             session.commit()
             session.refresh(block)
-            return jsonify(operational_block=_serialize_block(block))
+            return jsonify(
+                operational_block=_serialize_block(block),
+                resolved_finding_count=resolved_finding_count,
+            )
 
 
 def record_operational_block(

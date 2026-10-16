@@ -30,15 +30,20 @@ test('[TC-SPL-130-010] real Auth timing change, shared findings and explicit rev
   await test.step('Venue Staff changes preparation rules and sees every affected commitment', async () => {
     await signIn(page, 'venue.staff@example.test');
     await setPreparation(page, '30', '30');
-    await expect(page.getByText('Timing saved. 2 active bookings need review.')).toBeVisible();
+    await expect(page.getByText(
+      'Timing saved. 2 active bookings were affected by this save; 2 bookings are still awaiting review.',
+    )).toBeVisible();
     await page.getByRole('link', { name: 'Timing reviews', exact: true }).click();
-    const requestedRow = page.getByRole('row', { name: /SPL-130 Browser Requested Needs review/ });
-    const approvedRow = page.getByRole('row', { name: /SPL-130 Browser Approved Needs review/ });
+    const requestedRow = page.getByRole('rowheader')
+      .filter({ hasText: /^SPL-130 Browser Requested/ }).locator('..');
+    const approvedRow = page.getByRole('rowheader')
+      .filter({ hasText: /^SPL-130 Browser Approved/ }).locator('..');
     await expect(requestedRow).toBeVisible();
     await expect(approvedRow).toBeVisible();
     await expect(requestedRow.getByText('Requested', { exact: true })).toBeVisible();
     await expect(approvedRow.getByText('Approved', { exact: true })).toBeVisible();
     await expect(page.getByText('Casey Lim', { exact: true })).toHaveCount(2);
+    await expect(page.getByText(/^Advertised:/)).toHaveCount(2);
     await expect(page.getByText(/^Original:/)).toHaveCount(2);
     await expect(page.getByText(/^Current:/)).toHaveCount(2);
     await testInfo.attach('Venue Staff affected-booking queue', {
@@ -68,9 +73,12 @@ test('[TC-SPL-130-010] real Auth timing change, shared findings and explicit rev
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await signIn(page, 'venue.staff@example.test');
     await setPreparation(page, '0', '0');
-    await expect(page.getByText('Timing saved. No active bookings need review.')).toBeVisible();
+    await expect(page.getByText(
+      'Timing saved. 0 active bookings were affected by this save; 2 bookings are still awaiting review.',
+    )).toBeVisible();
     await page.goto('/workspace/timing-reviews');
-    await expect(page.getByRole('row', { name: /SPL-130 Browser Requested Needs review/ })).toBeVisible();
+    await expect(page.getByRole('rowheader')
+      .filter({ hasText: /^SPL-130 Browser Requested/ })).toBeVisible();
 
     for (const bookingId of [requestedBookingId, approvedBookingId]) {
       await page.goto(`/workspace/venue-bookings/${bookingId}`);

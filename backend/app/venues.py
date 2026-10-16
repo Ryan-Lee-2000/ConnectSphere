@@ -66,7 +66,7 @@ def register_venue_routes(app: Flask) -> None:
         attributes = _venue_attributes(data, partial=True)
         layouts = _layout_list(data["layouts"]) if "layouts" in data else None
         with Session(app.extensions["engine"]) as session:
-            venue = _find_venue(session, venue_id, lock=True)
+            venue = _find_venue(session, venue_id, exclusive_lock=True)
             timing_changed = "setup_minutes" in attributes
             if timing_changed:
                 venue.timing_revision += 1
@@ -78,18 +78,24 @@ def register_venue_routes(app: Flask) -> None:
                 session.flush()
                 session.add_all(VenueLayout(venue_id=venue.id, **layout) for layout in layouts)
             affected_booking_count = 0
+            pending_review_count = 0
             if timing_changed:
-                from app.venue_booking_assessment import assess_venue_bookings
+                from app.venue_booking_assessment import (
+                    assess_venue_bookings,
+                    count_pending_reviews,
+                )
 
                 affected_booking_count = assess_venue_bookings(
                     session, venue, assessed_by_account_id=g.user_id
                 )
+                pending_review_count = count_pending_reviews(session, venue.id)
             session.commit()
             session.refresh(venue)
             session.expire(venue, ["layouts"])
             return jsonify(
                 venue=_serialize_venue(venue),
                 affected_booking_count=affected_booking_count,
+                pending_review_count=pending_review_count,
             )
 
     @app.post("/api/venues/<int:venue_id>/layouts")
@@ -261,15 +267,17 @@ def _single_adjacent_slot(value: Any, label: str) -> int:
     return value
 
 
-def _find_venue(session: Session, venue_id: int, *, lock=False) -> Venue:
-    venue = session.scalar(
-        select(Venue)
-        .where(Venue.id == venue_id)
-        .options(selectinload(Venue.layouts))
-        .with_for_update()
-        if lock
-        else select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
-    )
+def _find_venue(
+    session: Session, venue_id: int, *, lock: bool = False, exclusive_lock: bool = False
+) -> Venue:
+    statement = select(Venue).where(Venue.id == venue_id).options(selectinload(Venue.layouts))
+    if exclusive_lock:
+        statement = statement.with_for_update()
+    elif lock:
+        # Layout writers retain the established key-share lock. Only timing configuration needs
+        # the exclusive venue lock that conflicts with exact booking creation.
+        statement = statement.with_for_update(key_share=True)
+    venue = session.scalar(statement)
     if venue is None:
         abort(404, "Venue not found.")
     return venue

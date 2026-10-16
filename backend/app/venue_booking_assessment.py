@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from flask import Flask, abort, g, jsonify
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
@@ -189,6 +189,78 @@ def assess_venue_bookings(
     return affected
 
 
+def count_pending_reviews(session: Session, venue_id: int) -> int:
+    """Count active venue commitments that still have at least one unresolved finding."""
+
+    return (
+        session.scalar(
+            select(func.count(VenueBooking.id)).where(
+                VenueBooking.venue_id == venue_id,
+                VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
+                VenueBooking.review_findings.any(VenueBookingReviewFinding.resolved_at.is_(None)),
+            )
+        )
+        or 0
+    )
+
+
+def resolve_operational_findings(
+    session: Session,
+    block: VenueOperationalBlock,
+    *,
+    resolved_by_account_id: str,
+    resolved_at: datetime,
+) -> int:
+    """Resolve one removed block's findings and recompute each affected booking marker."""
+
+    key = f"operational-block:{block.id}"
+    findings = session.scalars(
+        select(VenueBookingReviewFinding)
+        .join(VenueBooking)
+        .where(
+            VenueBooking.venue_id == block.venue_id,
+            VenueBookingReviewFinding.finding_key == key,
+            VenueBookingReviewFinding.resolved_at.is_(None),
+        )
+        .with_for_update()
+    ).all()
+    booking_ids = {finding.booking_id for finding in findings}
+    # Legacy SPL-89 rows identify only the triggering block. Include them so a database upgraded
+    # from that workflow cannot retain a stale review marker if no normalized row was present.
+    booking_ids.update(
+        session.scalars(
+            select(VenueBooking.id).where(
+                VenueBooking.venue_id == block.venue_id,
+                VenueBooking.review_trigger_block_id == block.id,
+            )
+        )
+    )
+    for finding in findings:
+        finding.resolved_at = resolved_at
+        finding.resolved_by_account_id = resolved_by_account_id
+        finding.last_assessed_at = resolved_at
+    session.flush()
+
+    if not booking_ids:
+        return 0
+    bookings = session.scalars(
+        select(VenueBooking).where(VenueBooking.id.in_(booking_ids)).with_for_update()
+    ).all()
+    for booking in bookings:
+        remaining = active_findings(session, booking.id)
+        booking.requires_review = bool(remaining)
+        if booking.review_trigger_block_id == block.id:
+            another_block = next(
+                (finding for finding in remaining if finding.reason_type == "operational_block"),
+                None,
+            )
+            booking.review_trigger_block_id = (
+                int(another_block.finding_key.rsplit(":", 1)[1]) if another_block else None
+            )
+    session.flush()
+    return len(findings)
+
+
 def record_operational_finding(
     session: Session,
     booking: VenueBooking,
@@ -261,7 +333,11 @@ def serialize_affected_booking(session: Session, booking: VenueBooking) -> dict[
     return {
         "booking_id": booking.id,
         "status": booking.status,
-        "event": {"id": event.id, "name": event.name},
+        "event": {
+            "id": event.id,
+            "name": event.name,
+            "advertised_interval": _advertised_interval(event),
+        },
         "venue": {"id": venue.id, "name": venue.name},
         "coordinator": (
             {"id": coordinator.id, "name": coordinator.display_name} if coordinator else None
@@ -270,6 +346,15 @@ def serialize_affected_booking(session: Session, booking: VenueBooking) -> dict[
             _serialize_finding(finding) for finding in active_findings(session, booking.id)
         ],
     }
+
+
+def _advertised_interval(event: EventRequest) -> dict[str, str] | None:
+    try:
+        from app.exact_venue_bookings import saved_event_interval
+
+        return saved_event_interval(event).serialize()
+    except ValueError:
+        return None
 
 
 def _serialize_finding(finding: VenueBookingReviewFinding) -> dict[str, Any]:

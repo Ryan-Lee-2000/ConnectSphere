@@ -106,3 +106,53 @@ def test_tc_spl_130_002_populated_migration_flags_both_overlaps(pg_url):
         ).all()
         assert rows == [(130001, "requested", True), (130002, "requested", True)]
     engine.dispose()
+
+
+# TC-SPL-130-015 — AC1: migration waits for a real timing rule before flagging legacy rows.
+def test_tc_spl_130_015_migration_does_not_flag_unconfigured_venue(pg_url):
+    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
+    parent = scripts.get_revision("s3_booking_review_findings").down_revision
+    assert isinstance(parent, str)
+    _alembic(pg_url, "downgrade", parent)
+    engine = create_engine(pg_url)
+    account = "00000000-0000-0000-0000-000000130015"
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organisations(id,name) VALUES (130015,'SPL-130 no timing')"))
+        conn.execute(
+            text("INSERT INTO accounts(id,display_name) VALUES (:id,'SPL-130 owner')"),
+            {"id": account},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO venues(id,name,facilities,accessibility_features,operating_slots,"
+                "setup_buffer_slots,turnaround_buffer_slots,timing_revision) VALUES "
+                "(130015,'Unconfigured Hall','[]','[]','[\"AM\",\"PM\"]',0,0,0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO event_requests(id,organiser_account_id,organisation_id,name,status,"
+                "proposed_date,start_time,end_time,required_facilities,accessibility_needs,"
+                "registration_required) VALUES "
+                "(130015,:account,130015,'Future legacy event','planning','2030-12-20',"
+                "'10:00','11:00','[]','[]',false)"
+            ),
+            {"account": account},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO venue_bookings(id,event_request_id,venue_id,status,requires_review,"
+                "event_slots) VALUES (130015,130015,130015,'requested',false,'[\"AM\"]')"
+            )
+        )
+    _alembic(pg_url, "upgrade", "head")
+    with engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT count(*) FROM venue_booking_review_findings WHERE booking_id=130015")
+        ).scalar_one()
+        requires_review = conn.execute(
+            text("SELECT requires_review FROM venue_bookings WHERE id=130015")
+        ).scalar_one()
+        assert count == 0
+        assert requires_review is False
+    engine.dispose()
