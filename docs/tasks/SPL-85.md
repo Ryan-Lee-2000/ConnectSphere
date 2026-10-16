@@ -55,13 +55,20 @@ booking) and equipment writers (stock pool, line) already use, so there is no cy
 review flag or booking change either commits before the gate reads or waits until it commits.
 TC-SPL-85-21 shows that without the line lock a release and a confirmation both succeed.
 
+The coordinator's equipment add, change and remove routes (`equipment_requirements.py`) take the
+same event and assignment lock first (`_assigned_planning_event(..., lock=True)`), then the
+equipment type and line, and re-check Planning on the locked row. Without it (PR #86 review), a
+line added or enlarged after its Planning check could commit after confirmation, leaving a
+Confirmed event with an incomplete essential arrangement. TC-SPL-85-27 and -28 pause that write
+after its check and prove confirmation now waits and then refuses.
+
 ## Acceptance-criteria test map
 
 | AC | Test cases | Evidence |
 | --- | --- | --- |
 | AC1 | TC-SPL-85-01, -02, -03, -04 | `backend/tests/test_event_confirmation.py`; component TC-24 (d) |
 | AC2 | TC-SPL-85-05, -06, -07 | `backend/tests/test_event_confirmation.py` |
-| AC3 | TC-SPL-85-08, -09, -10, -11, -21 | backend tests; `backend/tests/test_event_confirmation_postgres.py` |
+| AC3 | TC-SPL-85-08, -09, -10, -11, -21, -27, -28 | backend tests; `backend/tests/test_event_confirmation_postgres.py` |
 | AC4 | TC-SPL-85-12, -13, -14, -15 | `backend/tests/test_event_confirmation.py` |
 | AC5 | TC-SPL-85-16, -17, -18, -19, -20, -24, -25 | backend, PostgreSQL and `frontend/src/EventConfirmation.test.tsx` |
 | AC6 | TC-SPL-85-22, -23 | `backend/tests/test_event_confirmation.py` |

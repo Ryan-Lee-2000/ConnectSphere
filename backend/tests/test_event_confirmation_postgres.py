@@ -291,6 +291,123 @@ def test_tc_spl_85_21_confirmation_racing_a_release_has_one_consistent_outcome(e
         app.extensions["engine"].dispose()
 
 
+def _pause(monkeypatch, name):
+    """Hold a coordinator equipment request at ``name``, after it has checked the event is in
+    Planning, until the test resumes it. Returns (reached, resume) events."""
+
+    import app.equipment_requirements as module
+
+    original = getattr(module, name)
+    reached, resume = threading.Event(), threading.Event()
+
+    def held(*args, **kwargs):
+        reached.set()
+        assert resume.wait(30), "the paused request was never resumed"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, held)
+    return reached, resume
+
+
+def _interleave(app, paused_call, reached, resume, event_id):
+    """Start ``paused_call``; once it is held, start a confirmation and give it a chance to finish
+    before the held request resumes. Returns (paused result, confirm result, confirm finished
+    while the other request was still held)."""
+
+    def run(call):
+        response = call(app.test_client())
+        return response.status_code, response.json
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        paused = executor.submit(run, paused_call)
+        assert reached.wait(15), "the equipment request never reached its pause point"
+        confirming = executor.submit(run, _confirm(event_id))
+        try:
+            confirming.result(timeout=3)
+        except TimeoutError:
+            pass  # expected once both requests share the event lock: confirmation is waiting
+        finished_while_held = confirming.done()
+        resume.set()
+        return paused.result(timeout=30), confirming.result(timeout=30), finished_while_held
+
+
+# TC-SPL-85-27 — AC3 (Clive's review of PR #86): a coordinator adding an Essential line while the
+# event is being confirmed. Both must share the event lock, so confirmation either sees the new
+# unreserved line and refuses, or the add sees Confirmed and is refused. Never both succeed.
+def test_tc_spl_85_27_confirmation_racing_a_new_essential_line(engine, pg_url, monkeypatch):
+    ids, organisation_id, venue_id, type_id = _seed_accounts(engine)
+    app = _app(pg_url, ids)
+    try:
+        day = date(2027, 1, 12)
+        event_id, _ = _seed_ready_event(engine, ids, organisation_id, venue_id, type_id, day)
+        reached, resume = _pause(monkeypatch, "_new_attributes")
+
+        def add_essential_line(client):
+            return client.post(
+                f"/api/event-requests/{event_id}/equipment-requirements",
+                json={
+                    "equipment_type_id": type_id,
+                    "quantity": 4,
+                    "required_start_date": day.isoformat(),
+                    "required_end_date": day.isoformat(),
+                    "essentiality": "essential",
+                    "consulted_technical_support_account_id": ids["technical"],
+                    "essentiality_decision_note": "Needed for the second stage.",
+                },
+                headers={"Authorization": "Bearer coordinator"},
+            )
+
+        (add_status, _), (confirm_status, confirm_body), finished_while_held = _interleave(
+            app, add_essential_line, reached, resume, event_id
+        )
+
+        assert finished_while_held is False, "confirmation did not wait for the equipment write"
+        assert add_status == 201
+        assert confirm_status == 409, confirm_body
+        assert "essential_not_fully_reserved" in [b["code"] for b in confirm_body["blockers"]]
+        with Session(engine) as session:
+            assert session.get(EventRequest, event_id).status == "planning"
+    finally:
+        app.extensions["engine"].dispose()
+
+
+# TC-SPL-85-28 — AC3/AC4 (Clive's review of PR #86): a coordinator edit that invalidates the
+# reservation (quantity 4 -> 6 releases the held units and flags Review required) racing
+# confirmation. The edit validated Planning before waiting for its line lock; it must instead hold
+# the event lock, so confirmation observes the released, review-flagged line.
+def test_tc_spl_85_28_confirmation_racing_a_reservation_invalidating_edit(
+    engine, pg_url, monkeypatch
+):
+    ids, organisation_id, venue_id, type_id = _seed_accounts(engine)
+    app = _app(pg_url, ids)
+    try:
+        day = date(2027, 1, 19)
+        event_id, line_id = _seed_ready_event(engine, ids, organisation_id, venue_id, type_id, day)
+        reached, resume = _pause(monkeypatch, "_locked_editable_requirement")
+
+        def enlarge_line(client):
+            return client.patch(
+                f"/api/event-requests/{event_id}/equipment-requirements/{line_id}",
+                json={"quantity": 6},
+                headers={"Authorization": "Bearer coordinator"},
+            )
+
+        (edit_status, _), (confirm_status, confirm_body), finished_while_held = _interleave(
+            app, enlarge_line, reached, resume, event_id
+        )
+
+        assert finished_while_held is False, "confirmation did not wait for the equipment write"
+        assert edit_status == 200
+        assert confirm_status == 409, confirm_body
+        with Session(engine) as session:
+            stored = session.get(EventRequest, event_id)
+            line = session.get(EquipmentRequirement, line_id)
+            assert stored.status == "planning"
+            assert line.quantity == 6
+    finally:
+        app.extensions["engine"].dispose()
+
+
 # Migration evidence: the two columns are nullable, the confirmer is an account, and the pair is
 # enforced together by the database, not only by the route.
 def test_tc_spl_85_16_migration_adds_paired_confirmation_columns(engine):

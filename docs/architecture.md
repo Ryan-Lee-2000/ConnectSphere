@@ -151,7 +151,9 @@ shared `TRANSITION_RULES`, recording `confirmed_by_account_id`/`confirmed_at` an
 with none still Requested, SPL-99 equipment readiness, and no active booking or equipment line under
 review. It returns stable blocker codes; the assigned-event detail exposes the same result. The
 route locks event, venues, bookings, then equipment lines, matching the existing writer orders, so
-a concurrent release or review flag is either seen or waits. See [SPL-85](tasks/SPL-85.md).
+a concurrent release or review flag is either seen or waits. The coordinator's equipment add,
+change and remove routes take the same event lock first, so they cannot slip past a confirmation.
+See [SPL-85](tasks/SPL-85.md).
 
 ## Client-organisation event isolation
 
