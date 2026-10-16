@@ -39,6 +39,8 @@ jobs:
       - run: uv sync --frozen
       - run: python3 scripts/budget.py >> "$GITHUB_STEP_SUMMARY"
       - run: npm run verify
+      # SPL-85: report event-confirmation branch coverage (team aim ~95%; diagnostic, not a gate).
+      - run: npm run coverage:spl85
       - run: npm run integration
         env:
           INTEGRATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/integration

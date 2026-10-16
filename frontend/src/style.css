@@ -506,6 +506,8 @@ button { touch-action: manipulation; }
 /* The status name carries the meaning on its own; weight and spacing only reinforce it. */
 .event-request-status__label { display: block; font-weight: 600; }
 .event-request-status__explanation { display: block; font-size: 0.9em; max-width: 28rem; opacity: 0.85; }
+.event-request-status__arrangements { display: block; font-size: 0.9em; margin-top: 0.4rem; max-width: 28rem; }
+.event-request-status__arrangements ul { margin: 0.2rem 0 0; padding-left: 1.1rem; }
 .visually-hidden {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);

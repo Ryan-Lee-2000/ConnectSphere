@@ -1150,6 +1150,7 @@ def test_qa_spl68_070_the_rule_table_maps_under_review_to_rejected(client):
         APPROVE,
         REJECT,
         "withdraw",
+        "confirm",  # SPL-85: planning -> confirmed
     }
 
 

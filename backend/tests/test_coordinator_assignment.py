@@ -296,6 +296,8 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
     event = response.json["event"]
     equipment = event.pop("equipment_requirements")
     readiness = event.pop("equipment_readiness")
+    # SPL-85's confirmation checklist; its contents are covered in test_event_confirmation.py.
+    confirmation = event.pop("confirmation_readiness")
     assert event == {
         "id": event_id,
         "name": "Harbour Summit",
@@ -329,7 +331,10 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "withdrawn_by": None,
         "withdrawn_at": None,
         "withdrawal_note": None,
+        "confirmed_by": None,
+        "confirmed_at": None,
     }
+    assert confirmation["ready"] is False
     assert equipment[0]["equipment_type"] == "Podium"
     assert equipment[0]["quantity"] == 2
     assert equipment[0]["notes"] == "Lockable"

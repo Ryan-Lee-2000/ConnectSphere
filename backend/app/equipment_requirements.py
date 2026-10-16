@@ -128,7 +128,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     def add_equipment_requirement(event_request_id: int):
         data = _request_data()
         with Session(app.extensions["engine"]) as session:
-            event = _assigned_planning_event(session, event_request_id)
+            event = _assigned_planning_event(session, event_request_id, lock=True)
             attributes = _new_attributes(session, event, data)
             line = EquipmentRequirement(**attributes)
             session.add(line)
@@ -156,7 +156,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
 
         data = _request_data()
         with Session(app.extensions["engine"]) as session, session.begin():
-            event = _assigned_planning_event(session, event_request_id)
+            event = _assigned_planning_event(session, event_request_id, lock=True)
             line, equipment_type = _locked_editable_requirement(session, event, requirement_id)
             attributes = _update_attributes(session, event, line, data)
             changed = _changed_values(line, attributes)
@@ -181,7 +181,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
 
         _require_empty_body()
         with Session(app.extensions["engine"]) as session, session.begin():
-            event = _assigned_planning_event(session, event_request_id)
+            event = _assigned_planning_event(session, event_request_id, lock=True)
             line, equipment_type = _locked_editable_requirement(session, event, requirement_id)
             previous_status = line.status
             now = _now()
@@ -257,10 +257,23 @@ def register_equipment_requirement_routes(app: Flask) -> None:
             return jsonify(history=[_serialize_change(entry) for entry in entries])
 
 
-def _assigned_planning_event(session: Session, event_request_id: int) -> EventRequest:
-    """Return the caller's assigned Planning event, or fail without leaking another event."""
+def _assigned_planning_event(
+    session: Session, event_request_id: int, *, lock: bool = False
+) -> EventRequest:
+    """Return the caller's assigned Planning event, or fail without leaking another event.
+
+    ``lock=True`` is for the coordinator's add, change and remove routes. It takes the event and
+    assignment row locks first, the boundary SPL-85 confirmation and venue booking also use, so a
+    write and a confirmation cannot both pass their Planning check: the second waits, then this
+    function re-reads the event and refuses if it is no longer Planning or no longer assigned.
+    Lock order stays event, then equipment type, then requirement line.
+    """
     if event_request_id > MAX_EVENT_REQUEST_ID:
         abort(404, "Assigned event not found.")
+    if lock:
+        from app.exact_venue_bookings import lock_event
+
+        lock_event(session, event_request_id, g.user_id)
     event = session.scalar(
         select(EventRequest)
         .where(EventRequest.id == event_request_id)

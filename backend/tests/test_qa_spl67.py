@@ -652,6 +652,7 @@ def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
         APPROVE,
         "reject",
         "withdraw",
+        "confirm",  # SPL-85: planning -> confirmed
     }
 
 
