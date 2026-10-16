@@ -181,8 +181,9 @@ function normaliseRequirementValues(values: string[]) {
 function mergeOptions(...groups: string[][]) { return normaliseRequirementValues(groups.flat()); }
 // The same requirement names, ignoring order and letter case.
 function sameRequirements(left: string[], right: string[]) {
-  const key = (values: string[]) => values.map(value => value.toLowerCase()).sort().join(' ');
-  return key(left) === key(right);
+  const sorted = (values: string[]) => values.map(value => value.toLowerCase()).sort();
+  const [a, b] = [sorted(left), sorted(right)];
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 function appendRequirementFilters(parameters: URLSearchParams, name: string, values: string[]) {
   if (values.length) values.forEach(item => parameters.append(name, item)); else parameters.append(name, '');
