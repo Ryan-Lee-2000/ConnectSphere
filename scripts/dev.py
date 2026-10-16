@@ -248,6 +248,26 @@ def main():
             ".pytest-run",
         )
         run("uv", "run", "--frozen", "coverage", "report", "--show-missing")
+    elif cmd == "coverage-spl131":
+        # SPL-131 coverage report, also run in CI: branch coverage of the several-venue rules and
+        # cancellation route from their own acceptance tests. Reported, not a hard floor (~95%).
+        run("uv", "run", "--frozen", "coverage", "erase")
+        run(
+            "uv",
+            "run",
+            "--frozen",
+            "coverage",
+            "run",
+            "--branch",
+            "--source=app.venue_arrangements",
+            "-m",
+            "pytest",
+            "backend/tests/test_venue_arrangements.py",
+            "-q",
+            "--basetemp",
+            ".pytest-run",
+        )
+        run("uv", "run", "--frozen", "coverage", "report", "--show-missing")
     elif cmd == "integration":
         if not os.getenv("INTEGRATION_DATABASE_URL"):
             raise SystemExit("Set INTEGRATION_DATABASE_URL to a disposable PostgreSQL database.")
@@ -290,6 +310,8 @@ def main():
             "backend/tests/test_qa_spl134_postgres.py",
             # SPL-85: concurrent confirmation, confirmation racing a release, and the migration.
             "backend/tests/test_event_confirmation_postgres.py",
+            # SPL-131: same-venue requests and cancellations racing, and the migration.
+            "backend/tests/test_venue_arrangements_postgres.py",
             "-q",
         )
     elif cmd == "dev":
@@ -344,7 +366,7 @@ def main():
     else:
         print(
             "Commands: doctor setup dev migrate verify coverage-spl71 coverage-spl72 "
-            "coverage-spl73 coverage-spl75 coverage-spl85 integration "
+            "coverage-spl73 coverage-spl75 coverage-spl85 coverage-spl131 integration "
             "stop browser-install e2e budget"
         )
         if cmd != "help":

@@ -632,6 +632,18 @@ button { touch-action: manipulation; }
 .venue-booking-notice dt { color: var(--color-muted-slate); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .venue-booking-notice dd { margin: 0; font-weight: 650; }
 @media (max-width: 640px) { .venue-booking-request { grid-template-columns: 1fr; } }
+/* SPL-131 several venue bookings for one event */
+.venue-booking-request small { color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.4; }
+.venue-booking-request__facilities { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; border: 0; }
+.venue-booking-request__facilities legend { margin-bottom: var(--space-2); font-size: .875rem; font-weight: 650; }
+.venue-booking-request__facilities label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.75rem; }
+.venue-arrangements { display: grid; gap: var(--space-3); margin: 0 0 var(--space-5); }
+.venue-arrangements .eyebrow { margin: 0; }
+.venue-arrangements__list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.venue-arrangements__item { margin: 0; }
+.venue-arrangements__reason { flex: 1 1 100%; max-width: 40rem; }
+.venue-arrangements__reason textarea { width: 100%; min-height: 5rem; padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); color: var(--color-ink-navy); background: var(--color-atlas-paper); font: inherit; resize: vertical; }
+.venue-arrangements__reason textarea:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; border-color: var(--color-mineral-teal); }
 /* SPL-78 venue booking request panel and withdrawal */
 .venue-booking-panel { display: grid; gap: var(--space-3); margin: 0 0 var(--space-5); padding: var(--space-4) var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
 .venue-booking-panel .eyebrow { margin: 0; }

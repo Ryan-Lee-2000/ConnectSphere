@@ -12,6 +12,7 @@
     "coverage:spl73": "node scripts/run.mjs coverage-spl73",
     "coverage:spl75": "node scripts/run.mjs coverage-spl75",
     "coverage:spl85": "node scripts/run.mjs coverage-spl85",
+    "coverage:spl131": "node scripts/run.mjs coverage-spl131",
     "integration": "node scripts/run.mjs integration",
     "stop": "node scripts/run.mjs stop",
     "browser:install": "node scripts/run.mjs browser-install",

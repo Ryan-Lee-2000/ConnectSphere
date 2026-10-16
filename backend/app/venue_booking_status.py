@@ -2,6 +2,10 @@
 
 The event's current Event Coordinator sees the latest request with its current status, its full
 history, its stored SPL-89 review marker and the event's earlier requests. Reading changes nothing.
+
+SPL-131 (AC8, AC9): an event may hold several bookings, so ``bookings`` also lists every one,
+oldest first, each with its own status, history and review. An event's original single booking is
+therefore its first. The latest-request fields are kept for existing readers.
 """
 
 from typing import Any
@@ -59,7 +63,19 @@ def register_venue_booking_status_routes(app: Flask) -> None:
                 history=_history(session, latest.id),
                 review=_review(session, latest),
                 earlier_requests=[_summary(session, booking) for booking in earlier],
+                bookings=[_arrangement(session, booking) for booking in reversed(bookings)],
             )
+
+
+def _arrangement(session: Session, booking: VenueBooking) -> dict[str, Any]:
+    """One of the event's venue bookings with its own status, history and review (SPL-131)."""
+
+    return {
+        "booking": serialize_venue_booking(session, booking),
+        "current_status": {"status": booking.status, "label": booking_status_label(booking.status)},
+        "history": _history(session, booking.id),
+        "review": _review(session, booking),
+    }
 
 
 def _history(session: Session, booking_id: int) -> list[dict[str, Any]]:

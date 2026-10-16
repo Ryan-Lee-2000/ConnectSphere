@@ -3,36 +3,44 @@
 The route consumes the shared foundations rather than restating them: SPL-75 profile
 suitability checks, SPL-87 preparation derivation and SPL-83/SPL-89 atomic occupancy claims
 (see docs/development/SPL-77-integration-contract.md).
+
+SPL-131 lets an event hold several bookings, one per space it needs. Each request is checked on
+its own attendee count, layout and facilities (``app.venue_arrangements``); only a second hold on
+the same venue at an overlapping time is refused.
 """
 
 from datetime import date, datetime
 from typing import Any
 
 from flask import Flask, abort, current_app, g, jsonify, request
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import SINGAPORE
 from app.models import (
-    ACTIVE_BOOKING_STATUSES,
     Account,
     EventRequest,
     Role,
     Venue,
     VenueBooking,
-    VenueLayout,
 )
 from app.slots import OccupancyKind, derive_venue_occupancy, slots_for_range
-from app.venue_availability import profile_suitability_checks
+from app.venue_arrangements import (
+    ARRANGEMENT_FIELDS,
+    arrangement_checks,
+    arrangement_fields,
+    arrangement_layout,
+    resolve_arrangement,
+    same_event_overlap,
+    within_event,
+)
 from app.venue_booking_history import record_booking_transition
 from app.venue_conflicts import VenueOccupancyConflict, claim_venue_occupancy
 
 PLANNING = "planning"
 REQUESTED = "requested"
 TIMING_CHECK = "Timing and preparation"
-LAYOUT_CHECK = "Layout and capacity"
 MAX_LAYOUT_LENGTH = 100
 NOT_FOUND = "Assigned event not found."
 
@@ -41,14 +49,14 @@ def register_venue_booking_request_routes(app: Flask) -> None:
     @app.post("/api/event-requests/<int:event_request_id>/venue-bookings")
     @require_roles(Role.EVENT_COORDINATOR)
     def request_venue_booking(event_request_id: int):
-        venue_id, layout_name = _booking_request_body()
+        venue_id, layout_name, attendee_count, facilities = _booking_request_body()
         if event_request_id > MAX_EVENT_REQUEST_ID:
             abort(404, NOT_FOUND)
         with Session(app.extensions["engine"]) as session:
             if not is_assigned_coordinator(session, event_request_id, g.user_id):
                 abort(404, NOT_FOUND)
-            # Row lock: concurrent requests for one event queue here, so the one-active-booking
-            # check below always sees the other request's committed booking (AC4).
+            # Row locks: concurrent requests for one event queue on the event, and for one venue on
+            # the venue, so the same-venue check below sees the other request's booking (SPL-131).
             from app.exact_venue_bookings import lock_event, lock_venue
 
             event = lock_event(session, event_request_id, g.user_id)
@@ -59,19 +67,22 @@ def register_venue_booking_request_routes(app: Flask) -> None:
             venue = lock_venue(session, venue_id)
             if venue is None:
                 abort(404, "Venue not found.")
-            if session.scalar(
-                select(VenueBooking.id).where(
-                    VenueBooking.event_request_id == event.id,
-                    VenueBooking.status.in_(ACTIVE_BOOKING_STATUSES),
-                )
-            ):
-                abort(409, "This event already has an active venue-booking request.")
+            # SPL-131 AC2: the booking's own share of the event's attendance and facilities.
+            attendee_count, facilities = resolve_arrangement(event, attendee_count, facilities)
 
             if app.config["EXACT_VENUE_TIMING_ENABLED"]:
-                return _request_exact(session, event, venue, layout_name)
+                return _request_exact(
+                    session, event, venue, layout_name, attendee_count, facilities
+                )
+            # SPL-131 AC5: with slot timing every booking uses the event's saved slots, so any
+            # active booking of this event at this venue overlaps.
+            if same_event_overlap(session, event.id, venue.id, None):
+                abort(409, _already_held(venue))
             event_slots = _event_slots(event)
-            selected_layout = _selected_layout(venue.layouts, layout_name, event)
-            failed = _failed_checks(venue, event, event_slots, selected_layout)
+            selected_layout = arrangement_layout(venue.layouts, layout_name, attendee_count)
+            failed = _failed_checks(
+                venue, event, event_slots, layout_name, attendee_count, facilities
+            )
             if failed:
                 return jsonify(
                     error="This venue does not meet the event's requirements: "
@@ -85,7 +96,8 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 venue_id=venue.id,
                 status=REQUESTED,
                 layout=selected_layout.layout,
-                expected_attendance=event.expected_attendance,
+                expected_attendance=attendee_count,
+                required_facilities=facilities,
                 booking_date=event.proposed_date,
                 event_slots=event_slots,
                 requested_by_account_id=g.user_id,
@@ -161,6 +173,9 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         "turnaround": _slot(booking.turnaround_date, booking.turnaround_slot),
         "layout": booking.layout,
         "expected_attendance": booking.expected_attendance,
+        # SPL-131: the facilities this booking was checked against (the event's when it recorded
+        # none of its own).
+        "required_facilities": _facilities(session, booking),
         "status": booking.status,
         "requested_by": (
             {"id": requester.id, "name": requester.display_name} if requester else None
@@ -186,14 +201,18 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
     }
 
 
-def _booking_request_body() -> tuple[int, str]:
-    """Allow only reviewed inputs; identity, requirements and status remain server-owned."""
+def _booking_request_body() -> tuple[int, str, int | None, list[str] | None]:
+    """Allow only reviewed inputs; identity, requirements and status remain server-owned.
+
+    SPL-131 adds two optional fields, the booking's attendee count and facilities; omitted, the
+    event's values apply.
+    """
 
     data = request.get_json(silent=True)
     allowed = {"venue_id", "layout"}
     if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
         allowed |= {"date", "start_time", "end_time", "venue_revision"}
-    if not isinstance(data, dict) or set(data) != allowed:
+    if not isinstance(data, dict) or not allowed <= set(data) <= allowed | ARRANGEMENT_FIELDS:
         if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
             abort(400, "Send venue, layout, date, start/end times and the reviewed venue revision.")
         abort(400, "Send only the venue and the selected layout.")
@@ -204,7 +223,7 @@ def _booking_request_body() -> tuple[int, str]:
         abort(400, "Choose a layout for the booking.")
     if len(layout.strip()) > MAX_LAYOUT_LENGTH:
         abort(400, f"Keep the layout to {MAX_LAYOUT_LENGTH} characters or fewer.")
-    return venue_id, layout.strip()
+    return venue_id, layout.strip(), *arrangement_fields(data)
 
 
 def _event_slots(event: EventRequest) -> list[str]:
@@ -213,42 +232,34 @@ def _event_slots(event: EventRequest) -> list[str]:
     return slots_for_range(event.start_time, event.end_time)
 
 
-def _selected_layout(
-    layouts: list[VenueLayout], layout_name: str, event: EventRequest
-) -> VenueLayout | None:
-    """The venue's layout of that name, if it holds the event's expected attendance (AC2)."""
-
-    wanted = layout_name.casefold()
-    for layout in layouts:
-        if (
-            layout.layout.casefold() == wanted
-            and event.expected_attendance is not None
-            and layout.capacity >= event.expected_attendance
-        ):
-            return layout
-    return None
-
-
 def _failed_checks(
     venue: Venue,
     event: EventRequest,
     event_slots: list[str],
-    selected_layout: VenueLayout | None,
+    layout_name: str,
+    attendee_count: int | None,
+    facilities: list[str],
 ) -> list[str]:
     """Labels of every unmet suitability check, in SPL-75's check order.
 
     Timing is split from SPL-75's combined check on purpose: whether the venue can host the
     event and preparation slots at all is a suitability failure, while those slots being
     occupied is an AC5 conflict that must name the date and slot, so it is left to the claim.
+    The other checks are this booking's own (SPL-131 AC3).
     """
 
     failed = [] if _venue_can_host(venue, event, event_slots) else [TIMING_CHECK]
-    failed += [
-        check["label"] for check in profile_suitability_checks(venue, event) if not check["passed"]
+    return failed + [
+        check["label"]
+        for check in arrangement_checks(
+            venue,
+            event,
+            layout_name=layout_name,
+            attendee_count=attendee_count,
+            facilities=facilities,
+        )
+        if not check["passed"]
     ]
-    if selected_layout is None and LAYOUT_CHECK not in failed:
-        failed.insert(1 if failed[:1] == [TIMING_CHECK] else 0, LAYOUT_CHECK)
-    return failed
 
 
 def _venue_can_host(venue: Venue, event: EventRequest, event_slots: list[str]) -> bool:
@@ -284,8 +295,21 @@ def _exact_reasons(session, booking):
     return exact_review_reasons(session, booking)
 
 
-def _request_exact(session, event, venue, layout_name):
-    from app.exact_venue_availability import exact_availability
+def _facilities(session: Session, booking: VenueBooking) -> list[str]:
+    from app.venue_arrangements import booking_facilities
+
+    return booking_facilities(booking, session.get(EventRequest, booking.event_request_id))
+
+
+def _already_held(venue: Venue) -> str:
+    return (
+        f"This event already holds {venue.name} at an overlapping time. "
+        "Choose another venue or time."
+    )
+
+
+def _request_exact(session, event, venue, layout_name, attendee_count, facilities):
+    from app.exact_venue_availability import exact_availability, timing_for
     from app.exact_venue_bookings import requirements, saved_event_interval
     from app.venue_timing import parse_event_interval
 
@@ -302,21 +326,32 @@ def _request_exact(session, event, venue, layout_name):
         saved_interval = saved_event_interval(event)
     except ValueError as exc:
         abort(409, str(exc))
-    if interval != saved_interval:
+    # SPL-131 AC2: each booking has its own times, inside the saved event's start and end.
+    if not within_event(interval, saved_interval):
         abort(
             409,
-            "Requested date and times must match the saved event. "
-            "Search again using its recorded schedule.",
+            "Requested date and times must fall within the saved event. "
+            "Search again within its recorded schedule.",
         )
-    selected = _selected_layout(venue.layouts, layout_name, event)
+    selected = arrangement_layout(venue.layouts, layout_name, attendee_count)
     failed = [
-        check["label"] for check in profile_suitability_checks(venue, event) if not check["passed"]
+        check["label"]
+        for check in arrangement_checks(
+            venue,
+            event,
+            layout_name=layout_name,
+            attendee_count=attendee_count,
+            facilities=facilities,
+        )
+        if not check["passed"]
     ]
-    if selected is None or (
-        event.preferred_room_layout
-        and layout_name.casefold() != event.preferred_room_layout.strip().casefold()
-    ):
-        failed.append(LAYOUT_CHECK)
+    # SPL-131 AC5: refuse a second hold on this venue for this event at an overlapping time.
+    try:
+        occupied = timing_for(venue, interval)[0]
+    except (TypeError, ValueError):
+        occupied = None
+    if occupied is not None and same_event_overlap(session, event.id, venue.id, occupied):
+        abort(409, _already_held(venue))
     available, detail, timing = exact_availability(session, venue, interval)
     if failed or not available:
         abort(409, "; ".join(failed + ([] if available else [detail])))
@@ -326,7 +361,8 @@ def _request_exact(session, event, venue, layout_name):
         venue_id=venue.id,
         status=REQUESTED,
         layout=selected.layout,
-        expected_attendance=event.expected_attendance,
+        expected_attendance=attendee_count,
+        required_facilities=facilities,
         booking_date=interval.start.date(),
         event_slots=[],
         exact_timing=timing,
