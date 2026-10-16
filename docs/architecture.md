@@ -143,6 +143,16 @@ An event with no active requirements has no equipment blocker; this result says 
 event, venue, registration or safety readiness. The endpoint retains SPL-64 assignment scoping and
 does not add a mutation or a migration.
 
+## Event confirmation (SPL-85)
+
+`POST /api/event-requests/<id>/confirm` moves an assigned Planning event to Confirmed through the
+shared `TRANSITION_RULES`, recording `confirmed_by_account_id`/`confirmed_at` and status history.
+`app.event_confirmation.derive_confirmation_readiness` is the single gate: an Approved venue booking
+with none still Requested, SPL-99 equipment readiness, and no active booking or equipment line under
+review. It returns stable blocker codes; the assigned-event detail exposes the same result. The
+route locks event, venues, bookings, then equipment lines, matching the existing writer orders, so
+a concurrent release or review flag is either seen or waits. See [SPL-85](tasks/SPL-85.md).
+
 ## Client-organisation event isolation
 
 SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:

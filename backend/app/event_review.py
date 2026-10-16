@@ -34,10 +34,12 @@ RESPOND_CLARIFICATION = "respond_clarification"
 APPROVE = "approve"
 REJECT = "reject"
 WITHDRAW = "withdraw"
+CONFIRM = "confirm"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
 PLANNING = "planning"
+CONFIRMED = "confirmed"
 REJECTED = "rejected"
 WITHDRAWN = "withdrawn"
 MAX_CLARIFICATION_LENGTH = 2000
@@ -77,6 +79,11 @@ TRANSITION_RULES = {
     WITHDRAW: TransitionRule(
         previous_status=(SUBMITTED, UNDER_REVIEW, RETURNED_FOR_CLARIFICATION),
         resulting_status=WITHDRAWN,
+    ),
+    # SPL-85: confirmation follows planning once the essential arrangements are complete (Q80).
+    CONFIRM: TransitionRule(
+        previous_status=PLANNING,
+        resulting_status=CONFIRMED,
     ),
 }
 

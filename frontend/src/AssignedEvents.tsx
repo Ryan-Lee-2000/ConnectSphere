@@ -62,6 +62,10 @@ type EquipmentReadiness = {
   blockers: { code: string; requirement_id: number; message: string }[];
 };
 
+// SPL-85: the server's confirmation gate. The panel only displays it; the server decides.
+type ConfirmationBlocker = { code: string; message: string; booking_id?: number | null; requirement_id?: number };
+type ConfirmationReadiness = { ready: boolean; blockers: ConfirmationBlocker[] };
+
 // Begin review answers with the summary shape only, so the full detail fields are optional here.
 type AssignedEventDetail = AssignedEvent & Partial<{
   purpose: string | null;
@@ -78,6 +82,9 @@ type AssignedEventDetail = AssignedEvent & Partial<{
   venue_notes: string | null;
   equipment_requirements: EquipmentLine[];
   equipment_readiness: EquipmentReadiness;
+  confirmation_readiness: ConfirmationReadiness;
+  confirmed_by: { id: string; name: string } | null;
+  confirmed_at: string | null;
   registration_required: boolean;
   registration_notes: string | null;
   client_organisation: string;
@@ -132,6 +139,7 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
         ['Rejection reason', formatText(event.rejection_reason)] as [string, ReactNode],
       ] : []),
       ...(event.approved_by ? [['Approved by', `${event.approved_by.name}, ${formatTimestamp(event.approved_at)}`] as [string, ReactNode]] : []),
+      ...(event.confirmed_by ? [['Confirmed by', `${event.confirmed_by.name}, ${formatTimestamp(event.confirmed_at)}`] as [string, ReactNode]] : []),
       ...(event.withdrawn_by ? [
         ['Withdrawal recorded by', `${event.withdrawn_by.name}, ${formatTimestamp(event.withdrawn_at)}`] as [string, ReactNode],
         ['Withdrawal note', formatText(event.withdrawal_note)] as [string, ReactNode],
@@ -244,6 +252,46 @@ function EquipmentReadinessPanel({ event }: { event: AssignedEventDetail }) {
   </section>;
 }
 
+// SPL-85 (CS-E07-S3): the confirmation checklist and the two-step Confirm action. The button is
+// only enabled when the server reports no blockers, and the server re-checks on every attempt.
+function EventConfirmationPanel({ readiness, confirming, transitioning, onStart, onCancel, onConfirm }: {
+  readiness: ConfirmationReadiness | undefined;
+  confirming: boolean;
+  transitioning: boolean;
+  onStart: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!readiness) return null;
+  return <section className="equipment-readiness event-confirmation" aria-labelledby="event-confirmation-title">
+    <header className="equipment-readiness__header">
+      <div><p className="eyebrow">Event confirmation</p><h2 id="event-confirmation-title">Confirm this event</h2></div>
+      <strong className={`equipment-readiness__status equipment-readiness__status--${readiness.ready ? 'ready' : 'blocked'}`}>
+        {readiness.ready ? 'Ready to confirm' : 'Not ready to confirm'}
+      </strong>
+    </header>
+    <p className="equipment-readiness__scope">Confirmation needs an Approved venue booking and every essential equipment requirement fully reserved, with nothing awaiting review. Registration can be set up afterwards.</p>
+    {readiness.blockers.length > 0 && <div className="equipment-readiness__blockers">
+      <h3>What still blocks confirmation</h3>
+      <ul>{readiness.blockers.map(blocker => <li key={`${blocker.code}-${blocker.booking_id ?? blocker.requirement_id ?? 'event'}`}>{blocker.message}</li>)}</ul>
+    </div>}
+    {!confirming && <div className="organisation-events__actions">
+      <button type="button" className="button button--primary" disabled={!readiness.ready || transitioning} onClick={onStart}>
+        Confirm event
+      </button>
+    </div>}
+    {confirming && <div className="rejection-form" role="group" aria-label="Confirm the event">
+      <p><strong>Confirm this event?</strong> The organiser will see that it is going ahead with these arrangements. Registration can then be set up.</p>
+      <div className="organisation-events__actions">
+        <button type="button" className="button button--secondary" disabled={transitioning} onClick={onCancel}>Keep planning</button>
+        <button type="button" className="button button--primary" disabled={transitioning} onClick={onConfirm}>
+          {transitioning ? 'Confirming…' : 'Confirm'}
+        </button>
+      </div>
+    </div>}
+  </section>;
+}
+
 function EquipmentEvidence({ line }: { line: EquipmentLine }) {
   const unavailability = (line.unavailability_history ?? []).filter(record => record.reason);
   const hasEvidence = Boolean(line.notes)
@@ -279,6 +327,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   // SPL-111: change requests are read on demand, so opening an event costs no extra request.
   const [showChangeRequests, setShowChangeRequests] = useState(false);
   const [withdrawalNote, setWithdrawalNote] = useState('');
+  // SPL-85: whether the second confirmation step is showing.
+  const [confirmingEvent, setConfirmingEvent] = useState(false);
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
 
@@ -294,6 +344,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     setRejectionReason('');
     setWithdrawing(false);
     setWithdrawalNote('');
+    setConfirmingEvent(false);
     setBookingStageOnLoad(false);
     void (async () => {
       try {
@@ -365,6 +416,35 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       }
     } catch {
       setError('Could not approve the request. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  async function confirmEvent() {
+    if (!event || event.status !== 'planning' || transitioning) return;
+    setTransitioning(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/confirm`, { method: 'POST' });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not confirm the event. Try again.');
+        // The server's latest blockers replace the checklist, so the coordinator sees why.
+        if (Array.isArray(body?.blockers)) {
+          setEvent(current => current && ({ ...current, confirmation_readiness: { ready: false, blockers: body.blockers } }));
+        }
+        setConfirmingEvent(false);
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event, confirmation_readiness: undefined }));
+        setConfirmingEvent(false);
+        setNotice(body.message || 'Event confirmed.');
+      } else {
+        setError('Could not confirm the event. Try again.');
+      }
+    } catch {
+      setError('Could not confirm the event. Try again.');
     } finally {
       setTransitioning(false);
     }
@@ -508,6 +588,11 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       </header>
       <EventBrief event={event} />
       <EquipmentReadinessPanel event={event} />
+      {event.status === 'planning' && <EventConfirmationPanel readiness={event.confirmation_readiness}
+        confirming={confirmingEvent} transitioning={transitioning}
+        onStart={() => { setError(null); setConfirmingEvent(true); }}
+        onCancel={() => setConfirmingEvent(false)}
+        onConfirm={() => { void confirmEvent(); }} />}
       {/* SPL-79: the event's venue-booking request, its status and history. A request can only be
           made once the event is in Planning (SPL-77), so earlier stages have nothing to show. The
           panel follows the event as loaded, so approving on this page performs no booking read. */}

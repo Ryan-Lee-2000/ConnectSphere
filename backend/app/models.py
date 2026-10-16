@@ -47,6 +47,11 @@ REGISTRATION_PERIOD_ORDER = (
     "registration_opens_at is null or registration_opens_at < registration_closes_at"
 )
 REGISTRATION_CAPACITY_POSITIVE = "registration_capacity is null or registration_capacity >= 1"
+# CS-E07-S3 (SPL-85). Who confirmed the event and when are recorded together or not at all.
+CONFIRMATION_COMPLETE = (
+    "(confirmed_by_account_id is null and confirmed_at is null)"
+    " or (confirmed_by_account_id is not null and confirmed_at is not null)"
+)
 
 
 class Role(StrEnum):
@@ -228,6 +233,7 @@ class EventRequest(Base):
         CheckConstraint(
             REGISTRATION_CAPACITY_POSITIVE, name="ck_event_requests_registration_capacity"
         ),
+        CheckConstraint(CONFIRMATION_COMPLETE, name="ck_event_requests_confirmation_complete"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -286,12 +292,18 @@ class EventRequest(Base):
     registration_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_capacity: Mapped[int | None] = mapped_column(Integer)
+    # CS-E07-S3 (SPL-85). Who confirmed the event and when; both stay null until it is confirmed.
+    confirmed_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     organiser: Mapped[Account] = relationship(
         back_populates="event_requests", foreign_keys=[organiser_account_id]
     )
     approver: Mapped[Account | None] = relationship(foreign_keys=[approved_by_account_id])
     rejecter: Mapped[Account | None] = relationship(foreign_keys=[rejected_by_account_id])
     withdrawer: Mapped[Account | None] = relationship(foreign_keys=[withdrawn_by_account_id])
+    confirmer: Mapped[Account | None] = relationship(foreign_keys=[confirmed_by_account_id])
     venue: Mapped["Venue | None"] = relationship()
     organisation: Mapped[Organisation] = relationship(back_populates="event_requests")
     equipment_requirements: Mapped[list["EquipmentRequirement"]] = relationship(

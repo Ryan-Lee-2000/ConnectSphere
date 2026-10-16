@@ -29,7 +29,34 @@ type RequestSummary = {
   rejected_by?: { id: string; name: string } | null;
   rejected_at?: string | null;
   rejection_reason?: string | null;
+  // CS-E07-S3 (SPL-85): who confirmed the event, when, and the arrangements it rests on.
+  confirmed_by?: { id: string; name: string } | null;
+  confirmed_at?: string | null;
+  confirmed_arrangements?: ConfirmedArrangements | null;
 };
+
+type ConfirmedArrangements = {
+  venues: { booking_id: number; venue: string; date: string | null; start_time: string | null; end_time: string | null; layout: string | null }[];
+  equipment: { requirement_id: number; equipment: string; quantity: number; reserved_quantity: number; essential: boolean }[];
+};
+
+function ConfirmedArrangementsList({ arrangements }: { arrangements: ConfirmedArrangements }) {
+  return <div className="event-request-status__arrangements">
+    <strong>Confirmed arrangements</strong>
+    <ul aria-label="Confirmed venues">
+      {arrangements.venues.map(venue => <li key={venue.booking_id}>
+        {venue.venue}{venue.date ? `, ${new Date(`${venue.date}T00:00:00`).toLocaleDateString()}` : ''}
+        {venue.start_time && venue.end_time ? `, ${venue.start_time}–${venue.end_time}` : ''}
+        {venue.layout ? ` (${venue.layout} layout)` : ''}
+      </li>)}
+    </ul>
+    {arrangements.equipment.length > 0 && <ul aria-label="Confirmed equipment">
+      {arrangements.equipment.map(line => <li key={line.requirement_id}>
+        {line.equipment}: {line.reserved_quantity} of {line.quantity} reserved{line.essential ? ' (essential)' : ''}
+      </li>)}
+    </ul>}
+  </div>;
+}
 
 function mostRecentFirst(rows: RequestSummary[]) {
   return [...rows].sort((left, right) => {
@@ -245,6 +272,10 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
               {item.approved_by && <span className="event-request-status__explanation">
                 Approved by {item.approved_by.name}{item.approved_at ? ` on ${new Date(item.approved_at).toLocaleString()}` : ''}
               </span>}
+              {item.confirmed_by && <span className="event-request-status__explanation">
+                Confirmed by {item.confirmed_by.name}{item.confirmed_at ? ` on ${new Date(item.confirmed_at).toLocaleString()}` : ''}
+              </span>}
+              {item.confirmed_arrangements && <ConfirmedArrangementsList arrangements={item.confirmed_arrangements} />}
               {item.rejected_by && <span className="event-request-status__explanation">
                 Rejected by {item.rejected_by.name}{item.rejected_at ? ` on ${new Date(item.rejected_at).toLocaleString()}` : ''}
               </span>}

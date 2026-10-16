@@ -15,7 +15,10 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.models import Account, AccountRole, Role  # noqa: E402
 
-from scripts.equipment_e2e_fixtures import prepare_equipment_fixtures  # noqa: E402
+from scripts.equipment_e2e_fixtures import (  # noqa: E402
+    prepare_confirmation_fixture,
+    prepare_equipment_fixtures,
+)
 
 load_dotenv(ROOT / ".env")
 load_dotenv(ROOT / "frontend/.env.local")
@@ -86,5 +89,24 @@ try:
             coordinator=coordinator,
             manager=manager,
         )
+        # SPL-85's scenario also needs the Venue Staff fixture as its booking approver. It is
+        # optional so the SPL-90/95/97 scenarios above never depend on that extra account.
+        try:
+            venue_staff = fixture_account(
+                session,
+                os.getenv("VITE_LOCAL_DEMO_VENUE_STAFF_EMAIL", "venue.staff@example.test"),
+                Role.VENUE_STAFF,
+            )
+        except SystemExit:
+            print("Skipped the SPL-85 confirmation scenario: no local Venue Staff fixture.")
+        else:
+            prepare_confirmation_fixture(
+                session,
+                organiser=organiser,
+                technician=technician,
+                coordinator=coordinator,
+                manager=manager,
+                venue_staff=venue_staff,
+            )
 finally:
     engine.dispose()

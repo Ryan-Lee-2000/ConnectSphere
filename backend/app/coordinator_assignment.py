@@ -19,6 +19,7 @@ from app.equipment_readiness import (
     derive_equipment_readiness,
     serialize_equipment_requirement,
 )
+from app.event_confirmation import confirmation_readiness_for, serialize_confirmation
 from app.event_requests import (
     SINGAPORE,
     serialize_approval,
@@ -539,6 +540,8 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
             serialize_equipment_requirement(line) for line in event.equipment_requirements
         ],
         "equipment_readiness": derive_equipment_readiness(event.equipment_requirements),
+        # SPL-85: the same gate the Confirm action applies, so the checklist cannot disagree.
+        "confirmation_readiness": confirmation_readiness_for(event),
         "registration_required": event.registration_required,
         "registration_notes": event.registration_notes,
         "client_organisation": event.organisation.name,
@@ -548,6 +551,7 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         **serialize_approval(event),
         **serialize_rejection(event),
         **serialize_withdrawal(event),
+        **serialize_confirmation(event),
     }
 
 
