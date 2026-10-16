@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.models import Account, AccountRole, Role  # noqa: E402
 
 from scripts.equipment_e2e_fixtures import (  # noqa: E402
+    prepare_arrangement_fixture,
     prepare_confirmation_fixture,
     prepare_equipment_fixtures,
 )
@@ -89,8 +90,8 @@ try:
             coordinator=coordinator,
             manager=manager,
         )
-        # SPL-85's scenario also needs the Venue Staff fixture as its booking approver. It is
-        # optional so the SPL-90/95/97 scenarios above never depend on that extra account.
+        # SPL-85's and SPL-131's scenarios also need the Venue Staff fixture as booking approver.
+        # Optional, so the SPL-90/95/97 scenarios above never depend on that extra account.
         try:
             venue_staff = fixture_account(
                 session,
@@ -98,8 +99,12 @@ try:
                 Role.VENUE_STAFF,
             )
         except SystemExit:
-            print("Skipped the SPL-85 confirmation scenario: no local Venue Staff fixture.")
+            print("Skipped the SPL-85 and SPL-131 scenarios: no local Venue Staff fixture.")
         else:
+            # SPL-131's several-venue journey also has Venue Staff approve a booking.
+            prepare_arrangement_fixture(
+                session, organiser=organiser, coordinator=coordinator, manager=manager
+            )
             prepare_confirmation_fixture(
                 session,
                 organiser=organiser,

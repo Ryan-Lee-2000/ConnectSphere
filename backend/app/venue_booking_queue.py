@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.models import Account, EventRequest, Organisation, Role, Venue, VenueBooking
+from app.venue_arrangements import booking_facilities
 from app.venue_booking_requests import _date, _slot, _timestamp
 
 REQUESTED = "requested"
@@ -126,7 +127,9 @@ def _queue_item(session: Session, booking: VenueBooking, event: EventRequest) ->
         "setup": _slot(booking.setup_date, booking.setup_slot),
         "turnaround": _slot(booking.turnaround_date, booking.turnaround_slot),
         "layout": booking.layout,
+        # SPL-131 AC8: this booking's own share of the event's attendance and its facilities.
         "expected_attendance": booking.expected_attendance,
+        "required_facilities": booking_facilities(booking, event),
         "requested_by": (
             {"id": requester.id, "name": requester.display_name} if requester else None
         ),

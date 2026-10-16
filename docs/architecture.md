@@ -155,6 +155,19 @@ a concurrent release or review flag is either seen or waits. The coordinator's e
 change and remove routes take the same event lock first, so they cannot slip past a confirmation.
 See [SPL-85](tasks/SPL-85.md).
 
+## Several venue bookings per event (SPL-131)
+
+An event may hold one venue booking per space it needs (Week 7 change 3, Q109). Each booking
+records its own attendee count (a share of the single event-level attendance, Q119), layout and
+facilities (`venue_bookings.required_facilities`, null meaning the event's). In 15-minute mode
+its advertised times sit inside the saved event and its own setup/turnaround may extend outside.
+`app.venue_arrangements.arrangement_checks` is the per-booking suitability policy shared by the
+request, approval, status reads and SPL-85 confirmation; capacities are never summed. A second
+active hold on the same venue for the same event at an overlapping time is refused under the venue
+lock. `POST .../venue-bookings/<id>/cancel` cancels one Approved booking with a reason through
+SPL-137's `cancel_booking`; the status read adds `bookings`, every booking oldest first.
+See [SPL-131](tasks/SPL-131.md).
+
 ## Client-organisation event isolation
 
 SPL-45 adds the minimal trusted organisation relationship needed for same-client visibility:

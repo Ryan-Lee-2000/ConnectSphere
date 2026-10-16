@@ -372,7 +372,13 @@ class VenueBooking(Base):
     # SPL-77. The request as submitted, kept on the booking so it survives released occupancy.
     # Nullable because SPL-83/SPL-89 fixtures create bookings without a request.
     layout: Mapped[str | None] = mapped_column(Text)
+    # SPL-131: how many of the event's attendees use this space (never more than the event's
+    # expected attendance, Q119), and the facilities this space needs. Null facilities means the
+    # booking recorded none of its own, so the event's required facilities apply (AC9).
     expected_attendance: Mapped[int | None] = mapped_column(Integer)
+    required_facilities: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
     booking_date: Mapped[date | None] = mapped_column(Date)
     # jsonb, not json: SPL-89 selects DISTINCT bookings and json has no equality operator.
     event_slots: Mapped[list[str] | None] = mapped_column(

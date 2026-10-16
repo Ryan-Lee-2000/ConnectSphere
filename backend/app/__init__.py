@@ -27,6 +27,7 @@ from .my_registrations import register_my_registration_routes
 from .notifications import register_notification_routes
 from .open_registrations import register_open_registration_routes
 from .registration_settings import register_registration_settings_routes
+from .venue_arrangements import register_venue_arrangement_routes
 from .venue_availability import register_venue_availability_routes
 from .venue_booking_approvals import register_venue_booking_approval_routes
 from .venue_booking_assessment import register_venue_booking_assessment_routes
@@ -127,6 +128,8 @@ def create_app(test_config=None):
     register_venue_availability_routes(app)
     register_venue_booking_request_routes(app)
     register_venue_booking_withdrawal_routes(app)
+    # SPL-131: booking-level cancellation for events holding several venues.
+    register_venue_arrangement_routes(app)
     register_venue_booking_status_routes(app)
     register_venue_booking_approval_routes(app)
     register_venue_booking_assessment_routes(app)

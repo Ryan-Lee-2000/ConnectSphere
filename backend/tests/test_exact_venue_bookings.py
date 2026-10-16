@@ -360,22 +360,27 @@ def test_tc_06_unconfirmed_or_missing_legacy_evidence_refused(app, client):
     assert request_booking(client, event, venue).status_code == 409
 
 
-def test_tc_05_selected_layout_must_match_saved_requirement(app, client):
+# Updated for SPL-131 AC2: the event's preferred layout is each booking's default, and a
+# booking may choose another layout that holds its own attendee count.
+def test_tc_05_selected_layout_may_differ_from_saved_preference(app, client):
     from app.models import EventRequest
 
     event, venue = scenario(app)
     with Session(app.extensions["engine"]) as session:
         session.get(EventRequest, event).preferred_room_layout = "boardroom"
         session.commit()
-    assert request_booking(client, event, venue, layout="theatre").status_code == 409
-    assert request_booking(client, event, venue, layout="boardroom").status_code == 201
+    response = request_booking(client, event, venue, layout="theatre")
+    assert response.status_code == 201, response.json
+    assert response.json["booking"]["layout"] == "theatre"
 
 
+# Updated for SPL-131 AC2: a booking's times may sit inside the saved event, so the start
+# and end partitions now fall just outside it.
 @pytest.mark.parametrize(
     "changes",
-    [{"date": "2026-10-15"}, {"start_time": "10:15"}, {"end_time": "11:45"}, {"end_time": "24:00"}],
+    [{"date": "2026-10-15"}, {"start_time": "09:45"}, {"end_time": "12:15"}, {"end_time": "24:00"}],
 )
-def test_tc_02_request_must_match_saved_event_schedule(app, client, changes):
+def test_tc_02_request_must_fall_within_saved_event_schedule(app, client, changes):
     event, venue = scenario(app)
     response = request_booking(client, event, venue, **changes)
     assert response.status_code == 409, response.json
@@ -391,13 +396,14 @@ def test_tc_03_preexisting_mismatched_booking_cannot_be_approved(app, client):
     event, venue = scenario(app)
     booking = request_booking(client, event, venue).json["booking"]
     # Reproduce a record accepted by the old implementation, with an unchanged parent snapshot.
+    # SPL-131: times inside the saved event are valid, so the record falls outside it.
     with Session(app.extensions["engine"]) as session:
         row = session.get(VenueBooking, booking["id"])
         timing = dict(row.exact_timing)
-        timing["event"] = {"start": "2026-10-14T11:00:00+08:00", "end": "2026-10-14T12:00:00+08:00"}
+        timing["event"] = {"start": "2026-10-14T12:00:00+08:00", "end": "2026-10-14T13:00:00+08:00"}
         timing["occupied"] = {
-            "start": "2026-10-14T10:30:00+08:00",
-            "end": "2026-10-14T12:45:00+08:00",
+            "start": "2026-10-14T11:30:00+08:00",
+            "end": "2026-10-14T13:45:00+08:00",
         }
         row.exact_timing = timing
         session.commit()

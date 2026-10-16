@@ -170,8 +170,9 @@ def _race(app, marker, calls):
 
 
 # TC-SPL-77-13
-# SPL-77 AC-4 Test-13
-def test_tc_spl_77_13_concurrent_requests_for_one_event_create_one_booking(engine, pg_url):
+# SPL-77 AC-4 Test-13. Updated for SPL-131 AC1/AC4: two venues requested at once for one event
+# are independent bookings, so both succeed.
+def test_tc_spl_77_13_concurrent_requests_for_two_venues_create_two_bookings(engine, pg_url):
     ids, event_ids, venue_ids = _seed(engine, events=["alice"], venues={"Venue A": 0, "Venue B": 0})
     app = _app(pg_url, ids)
 
@@ -185,16 +186,14 @@ def test_tc_spl_77_13_concurrent_requests_for_one_event_create_one_booking(engin
     )
 
     statuses = sorted(status for status, _ in results)
-    assert statuses == [201, 409], results
-    refused = next(body for status, body in results if status == 409)
-    assert "already has an active venue-booking request" in refused["error"]
+    assert statuses == [201, 201], results
     with Session(engine) as session:
         bookings = session.scalars(
             select(VenueBooking).where(VenueBooking.event_request_id == event_ids["alice"])
         ).all()
-        assert [booking.status for booking in bookings] == ["requested"]
+        assert [booking.status for booking in bookings] == ["requested", "requested"]
         occupied_venues = set(session.scalars(select(VenueBookingOccupancy.venue_id)))
-        assert occupied_venues == {bookings[0].venue_id}
+        assert occupied_venues == {venue_ids["Venue A"], venue_ids["Venue B"]}
 
 
 # TC-SPL-77-18

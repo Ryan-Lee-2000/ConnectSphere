@@ -86,7 +86,7 @@ def interval_from_json(value):
 
 
 def saved_event_interval(event):
-    """SPL-137 retains SPL-77's saved-event schedule for a single booking."""
+    """The saved event's own date and times; every booking's times sit inside it (SPL-131)."""
     if not event.proposed_date or not event.start_time or not event.end_time:
         raise ValueError("Record a valid saved event date and quarter-hour times.")
     if any((value.second or value.microsecond) for value in (event.start_time, event.end_time)):
@@ -102,23 +102,44 @@ def exact_review_reasons(session, booking):
     if not booking.exact_timing or booking.status not in ("requested", "approved"):
         return []
     from app.exact_venue_availability import exact_availability
-    from app.venue_availability import profile_suitability_checks
-    from app.venue_booking_requests import _selected_layout
+    from app.venue_arrangements import (
+        arrangement_checks,
+        booking_attendee_count,
+        booking_facilities,
+        within_event,
+    )
 
     venue = session.get(Venue, booking.venue_id)
     event = session.get(EventRequest, booking.event_request_id)
     reasons = []
     if booking.reviewed_requirements != requirements(event):
         reasons.append("Event requirements changed. Review and submit a new request.")
-    if _selected_layout(venue.layouts, booking.layout, event) is None:
-        reasons.append("The requested layout no longer holds the expected attendance.")
-    reasons.extend(
-        check["detail"] for check in profile_suitability_checks(venue, event) if not check["passed"]
+    # SPL-131 AC3: the booking's own attendee count, layout and facilities, plus the event's
+    # accessibility needs and location preference.
+    attendee_count = booking_attendee_count(booking, event)
+    if (
+        attendee_count is not None
+        and event.expected_attendance is not None
+        and attendee_count > event.expected_attendance
+    ):
+        reasons.append("This booking's attendee count is above the event's expected attendance.")
+    layout_check, *other_checks = arrangement_checks(
+        venue,
+        event,
+        layout_name=booking.layout,
+        attendee_count=attendee_count,
+        facilities=booking_facilities(booking, event),
     )
+    if not layout_check["passed"]:
+        reasons.append("The requested layout no longer holds the expected attendance.")
+    reasons.extend(check["detail"] for check in other_checks if not check["passed"])
     try:
-        if interval_from_json(booking.exact_timing["event"]) != saved_event_interval(event):
+        # SPL-131 AC2: a booking's own times must stay inside the saved event's start and end.
+        if not within_event(
+            interval_from_json(booking.exact_timing["event"]), saved_event_interval(event)
+        ):
             reasons.append(
-                "Booking date and times do not match the saved event. "
+                "Booking date and times fall outside the saved event. "
                 "Review and submit a new request."
             )
         available, detail, timing = exact_availability(
@@ -139,7 +160,7 @@ def exact_review_reasons(session, booking):
 def cancel_booking(session, booking_id, *, coordinator_id, changed_at, note=None):
     """Assigned coordinator cancels one Approved booking, once, in the caller transaction.
 
-    SPL-131 exposes this action in its arrangement UI. Actor must come from authenticated
+    SPL-131 exposes this action (``app.venue_arrangements``). Actor must come from authenticated
     request context, never submitted JSON. No commit here: arrangement updates
     share the transaction.
     """

@@ -60,7 +60,7 @@ def register_venue_booking_assessment_routes(app: Flask) -> None:
                 abort(404, "Active venue booking not found.")
             venue = session.get(Venue, booking.venue_id)
             event = session.get(EventRequest, booking.event_request_id)
-            current, timing = _current_occupancy(venue, event)
+            current, timing = _current_occupancy(venue, event, booking)
             if current is None or timing is None:
                 abort(
                     409,
@@ -132,7 +132,7 @@ def assess_venue_bookings(
     current_intervals: dict[int, Interval] = {}
     for booking in candidates:
         event = session.get(EventRequest, booking.event_request_id)
-        current, _ = _current_occupancy(venue, event)
+        current, _ = _current_occupancy(venue, event, booking)
         if current is not None:
             current_intervals[booking.id] = current
         if _has_not_ended(booking, event, when):
@@ -336,7 +336,7 @@ def serialize_affected_booking(session: Session, booking: VenueBooking) -> dict[
         "event": {
             "id": event.id,
             "name": event.name,
-            "advertised_interval": _advertised_interval(event),
+            "advertised_interval": _advertised_interval(event, booking),
         },
         "venue": {"id": venue.id, "name": venue.name},
         "coordinator": (
@@ -348,11 +348,29 @@ def serialize_affected_booking(session: Session, booking: VenueBooking) -> dict[
     }
 
 
-def _advertised_interval(event: EventRequest) -> dict[str, str] | None:
-    try:
-        from app.exact_venue_bookings import saved_event_interval
+def _advertised_interval(event: EventRequest, booking: VenueBooking) -> dict[str, str] | None:
+    advertised = _booking_advertised(event, booking)
+    return advertised.serialize() if advertised else None
 
-        return saved_event_interval(event).serialize()
+
+def _booking_advertised(event: EventRequest, booking: VenueBooking | None) -> Interval | None:
+    """The advertised time this booking commits, for assessment and review clearance.
+
+    SPL-131: an event may hold several bookings, each with its own advertised interval inside the
+    event, so an exact booking is assessed around the interval it stored, never the whole event.
+    A slot-era booking has no stored interval, so it falls back to the saved event schedule.
+    Unreadable stored timing gives no interval, which leaves the booking needing review.
+    """
+
+    from app.exact_venue_bookings import interval_from_json, saved_event_interval
+
+    if booking is not None and booking.exact_timing:
+        try:
+            return interval_from_json(booking.exact_timing["event"])
+        except (KeyError, TypeError, ValueError):
+            return None
+    try:
+        return saved_event_interval(event)
     except ValueError:
         return None
 
@@ -436,7 +454,7 @@ def _reasons_for_booking(
             intervals.append(current_intervals[peer.id])
         elif include_peer_intervals:
             peer_event = session.get(EventRequest, peer.event_request_id)
-            peer_current, _ = _current_occupancy(venue, peer_event)
+            peer_current, _ = _current_occupancy(venue, peer_event, peer)
             if peer_current is not None:
                 intervals.append(peer_current)
             else:
@@ -456,19 +474,24 @@ def _reasons_for_booking(
     return reasons
 
 
-def _current_occupancy(venue: Venue, event: EventRequest) -> tuple[Interval | None, dict | None]:
+def _current_occupancy(
+    venue: Venue, event: EventRequest, booking: VenueBooking | None = None
+) -> tuple[Interval | None, dict | None]:
+    """Current settings applied to the booking's own advertised interval (SPL-131)."""
+
     if (
         venue.setup_minutes is None
         or venue.turnaround_minutes is None
         or venue.operating_intervals is None
     ):
         return None, None
+    advertised = _booking_advertised(event, booking)
+    if advertised is None:
+        return None, None
     try:
         from app.exact_venue_availability import timing_for
-        from app.exact_venue_bookings import saved_event_interval
 
-        event_interval = saved_event_interval(event)
-        return timing_for(venue, event_interval)
+        return timing_for(venue, advertised)
     except ValueError:
         return None, None
 

@@ -527,17 +527,18 @@ def test_tc_spl_78_12_same_venue_and_slots_can_be_requested_again(app, client, r
 
 
 # TC-SPL-78-13
-# SPL-78 AC-5 Test-13
+# SPL-78 AC-5 Test-13. Updated for SPL-131: another venue no longer needs a withdrawal (AC1), but
+# the same venue at the same time does (AC5), so withdrawal is still what unlocks it.
 def test_tc_spl_78_13_withdrawal_is_what_unlocks_a_new_request(app, client, requested):
-    east = add_venue(app, "Harbour Hall East")
+    harbour = requested["venue"]
 
-    before = request_booking(client, requested["event"], east)
+    before = request_booking(client, requested["event"], harbour)
     assert before.status_code == 409
-    assert "already has an active venue-booking request" in before.json["error"]
+    assert "already holds Harbour Hall" in before.json["error"]
 
     assert withdraw(client, requested["event"], requested["booking"]["id"]).status_code == 200
 
-    after = request_booking(client, requested["event"], east)
+    after = request_booking(client, requested["event"], harbour)
     assert after.status_code == 201, after.json
 
 

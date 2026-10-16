@@ -147,7 +147,9 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       ['Turnaround', preparation(booking.turnaround)],
     ] as [string, string][]),
     ['Layout', layoutName(booking.layout)],
+    // SPL-131 AC8: this booking's own share of the event's attendance and its own facilities.
     ['Expected attendance', String(booking.expected_attendance)],
+    ['Facilities for this booking', booking.required_facilities?.join(', ') || 'None recorded'],
     ['Requested by', booking.requested_by?.name ?? 'Not recorded'],
     ['Requested at', booking.requested_at ? timeName(booking.requested_at) : 'Not recorded'],
     ['Status', STATUS_NAMES[booking.status] || booking.status],

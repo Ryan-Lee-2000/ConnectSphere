@@ -4,7 +4,7 @@ import { ClarificationHistory, type Clarification } from './ClarificationHistory
 import { ChangeRequestsPanel } from './ChangeRequests';
 import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
-import { VenueBookingPanel } from './VenueBookingWithdrawal';
+import { VenueArrangements } from './VenueArrangements';
 
 const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
 import { slotLabel } from './slots';
@@ -593,10 +593,11 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         onStart={() => { setError(null); setConfirmingEvent(true); }}
         onCancel={() => setConfirmingEvent(false)}
         onConfirm={() => { void confirmEvent(); }} />}
-      {/* SPL-79: the event's venue-booking request, its status and history. A request can only be
-          made once the event is in Planning (SPL-77), so earlier stages have nothing to show. The
-          panel follows the event as loaded, so approving on this page performs no booking read. */}
-      {bookingStageOnLoad && <VenueBookingPanel api={api} eventId={event.id} emptyMessage />}
+      {/* SPL-79/SPL-131: every venue booking of the event, each with its status and history. A
+          request can only be made once the event is in Planning (SPL-77), so earlier stages have
+          nothing to show. The panel follows the event as loaded, so approving on this page
+          performs no booking read. */}
+      {bookingStageOnLoad && <VenueArrangements api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}

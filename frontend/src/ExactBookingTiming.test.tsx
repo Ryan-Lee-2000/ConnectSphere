@@ -21,11 +21,14 @@ it('[TC-SPL-137-01] previews and submits reviewed exact times and revision, reta
   expect(screen.queryByText(/Booking requested/)).toBeNull();
 });
 
-it('[TC-SPL-137-05] exact requests offer only the saved required layout', async () => {
+// Updated for SPL-131 AC2: the saved preferred layout is the default, and any layout that holds the
+// booking's attendee count may be chosen instead.
+it('[TC-SPL-137-05] exact requests default to the saved preferred layout', async () => {
   const api = vi.fn(async () => ({ ok: true, json: async () => ({ venue: { layouts: [{ layout: 'theatre', capacity: 200 }, { layout: 'boardroom', capacity: 150 }] } }) })) as unknown as ApiRequest;
   render(<VenueBookingRequest api={api} eventId={12} venueId={1} venueName="Hall" expectedAttendance={150} preferredRoomLayout="boardroom" timing={timing} onRequested={vi.fn()} />);
   const picker = await screen.findByLabelText('Booking layout') as HTMLSelectElement;
-  expect(Array.from(picker.options).map(option => option.value)).toEqual(['boardroom']);
+  expect(picker.value).toBe('boardroom');
+  expect(Array.from(picker.options).map(option => option.value)).toEqual(['theatre', 'boardroom']);
 });
 
 for (const matching of [false, true]) {

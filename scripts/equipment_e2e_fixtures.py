@@ -42,12 +42,21 @@ CONFIRMATION_EVENT = "E2E SPL-85 Confirmation Showcase"
 CONFIRMATION_TYPE = "E2E SPL-85 Stage Microphone"
 CONFIRMATION_VENUE = "E2E SPL-85 Harbour Hall"
 
+# SPL-131 recorded UAT: a Planning event for 150 with no venue yet, a hall for the plenary and a
+# 30-seat studio for a breakout, so one event can hold two independent bookings.
+ARRANGEMENT_EVENT = "E2E SPL-131 Leadership Summit"
+ARRANGEMENT_HALL = "E2E SPL-131 Grand Hall"
+ARRANGEMENT_STUDIO = "E2E SPL-131 Breakout Studio"
+ARRANGEMENT_DATE = date(2030, 10, 21)
+
 
 def remove_equipment_fixtures(session: Session) -> None:
     """Delete parents first; database cascades retain no dangling assignments or reservations."""
     session.execute(
         delete(EventRequest).where(
-            EventRequest.name.in_([row[0] for row in SCENARIOS] + [CONFIRMATION_EVENT])
+            EventRequest.name.in_(
+                [row[0] for row in SCENARIOS] + [CONFIRMATION_EVENT, ARRANGEMENT_EVENT]
+            )
         )
     )
     session.execute(
@@ -56,7 +65,61 @@ def remove_equipment_fixtures(session: Session) -> None:
         )
     )
     # The event (and so its booking) is gone, so the owned venue can be removed safely.
-    session.execute(delete(Venue).where(Venue.name == CONFIRMATION_VENUE))
+    session.execute(
+        delete(Venue).where(
+            Venue.name.in_([CONFIRMATION_VENUE, ARRANGEMENT_HALL, ARRANGEMENT_STUDIO])
+        )
+    )
+
+
+def prepare_arrangement_fixture(
+    session: Session, *, organiser: Account, coordinator: Account, manager: Account
+) -> None:
+    """Reset the SPL-131 scenario: an assigned Planning event for 150 and two free venues."""
+    hall = Venue(
+        name=ARRANGEMENT_HALL,
+        location="E2E Test Location",
+        facilities=["Projector"],
+        operating_slots=["AM", "PM", "NIGHT"],
+        setup_buffer_slots=0,
+        turnaround_buffer_slots=0,
+    )
+    hall.layouts = [VenueLayout(layout="theatre", capacity=200)]
+    studio = Venue(
+        name=ARRANGEMENT_STUDIO,
+        location="E2E Test Location",
+        facilities=["Projector"],
+        operating_slots=["AM", "PM", "NIGHT"],
+        setup_buffer_slots=0,
+        turnaround_buffer_slots=0,
+    )
+    studio.layouts = [
+        VenueLayout(layout="classroom", capacity=30),
+        VenueLayout(layout="theatre", capacity=40),
+    ]
+    event = EventRequest(
+        organiser_account_id=organiser.id,
+        organisation_id=organiser.organisation_id,
+        name=ARRANGEMENT_EVENT,
+        purpose="Local browser evidence only",
+        proposed_date=ARRANGEMENT_DATE,
+        start_time=time(14),
+        end_time=time(17),
+        expected_attendance=150,
+        preferred_room_layout="theatre",
+        required_facilities=["Projector"],
+        status="planning",
+    )
+    session.add_all([hall, studio, event])
+    session.flush()
+    session.add(
+        EventCoordinatorAssignment(
+            event_request_id=event.id,
+            coordinator_account_id=coordinator.id,
+            assigned_by_account_id=manager.id,
+            assigned_at=datetime.now(timezone.utc),
+        )
+    )
 
 
 def prepare_confirmation_fixture(

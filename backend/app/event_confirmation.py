@@ -188,14 +188,12 @@ def serialize_confirmed_arrangements(event: EventRequest) -> dict[str, Any] | No
 
     if event.status != "confirmed":
         return None
-    time_format = "%H:%M"
     venues = [
         {
             "booking_id": booking.id,
             "venue": booking.venue.name,
             "date": booking.booking_date.isoformat() if booking.booking_date else None,
-            "start_time": event.start_time.strftime(time_format) if event.start_time else None,
-            "end_time": event.end_time.strftime(time_format) if event.end_time else None,
+            **_booked_times(booking, event),
             "layout": booking.layout,
         }
         for booking in sorted(event.venue_bookings, key=lambda booking: booking.id)
@@ -213,6 +211,33 @@ def serialize_confirmed_arrangements(event: EventRequest) -> dict[str, Any] | No
         if line.status != REMOVED
     ]
     return {"venues": venues, "equipment": equipment}
+
+
+def _booked_times(booking: VenueBooking, event: EventRequest) -> dict[str, str | None]:
+    """The hours this booking actually holds (SPL-131: each booking has its own times).
+
+    An exact booking shows its stored advertised interval in Singapore time, with a midnight end
+    shown as 24:00. A slot-era booking has none, so the event's saved times apply.
+    """
+
+    time_format = "%H:%M"
+    if booking.exact_timing:
+        from app.exact_venue_bookings import interval_from_json
+        from app.venue_timing import SGT
+
+        try:
+            interval = interval_from_json(booking.exact_timing["event"])
+        except (KeyError, TypeError, ValueError):
+            return {"start_time": None, "end_time": None}
+        start, end = interval.start.astimezone(SGT), interval.end.astimezone(SGT)
+        return {
+            "start_time": start.strftime(time_format),
+            "end_time": "24:00" if end.date() > start.date() else end.strftime(time_format),
+        }
+    return {
+        "start_time": event.start_time.strftime(time_format) if event.start_time else None,
+        "end_time": event.end_time.strftime(time_format) if event.end_time else None,
+    }
 
 
 def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict[str, Any]]:

@@ -469,9 +469,10 @@ def test_tc_spl_77_10_client_supplied_date_or_slots_are_refused(app, client, for
 
 
 # TC-SPL-77-11
-# SPL-77 AC-4 Test-11
+# SPL-77 AC-4 Test-11. Updated for SPL-131 AC1: an event may now hold a second venue, so the
+# request succeeds and the existing booking is unchanged.
 @pytest.mark.parametrize("active_status", ["requested", "approved"])
-def test_tc_spl_77_11_second_request_refused_while_one_is_active(app, client, active_status):
+def test_tc_spl_77_11_second_venue_requested_while_one_is_active(app, client, active_status):
     event_id = make_event(app)
     harbour = add_venue(app)
     east = add_venue(app, "Harbour Hall East")
@@ -485,10 +486,10 @@ def test_tc_spl_77_11_second_request_refused_while_one_is_active(app, client, ac
 
     response = request_booking(client, event_id, east)
 
-    assert response.status_code == 409
-    assert "already has an active venue-booking request" in response.json["error"]
-    assert count(app, VenueBooking, VenueBooking.event_request_id == event_id) == 1
-    assert occupancy(app, east) == set()
+    assert response.status_code == 201, response.json
+    assert count(app, VenueBooking, VenueBooking.event_request_id == event_id) == 2
+    assert occupancy(app, east) != set()
+    assert occupancy(app, harbour) == HARBOUR_PM_CLAIM
 
 
 # TC-SPL-77-12
