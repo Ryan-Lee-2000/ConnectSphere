@@ -1,17 +1,21 @@
-"""Concurrency proofs for SPL-60 and SPL-61 against disposable PostgreSQL.
+"""Coordinator assignment and editing concurrency proofs against disposable PostgreSQL.
 
 Each test interleaves two real transactions, which SQLite cannot express, so they run only
-under `npm run integration`. Cases: first assignment wins, and reassignment loses to a
-concurrent transition into a terminal status.
+under `npm run integration`. Cases cover competing assignments, terminal transitions and the
+shared SPL-108 event/assignment lock boundary.
 """
 
 import os
 import subprocess
 import sys
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, time
+from time import monotonic, sleep
 
 import pytest
+from app import create_app
 from app.coordinator_assignment import (
     NON_REASSIGNABLE_STATUSES,
     SUBMITTED,
@@ -23,11 +27,23 @@ from app.models import (
     AccountRole,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
+    EventDetailChange,
     EventRequest,
     Organisation,
     Role,
 )
-from sqlalchemy import create_engine, delete, inspect, update
+from sqlalchemy import (
+    create_engine,
+    delete,
+    func,
+    inspect,
+    select,
+    text,
+    update,
+)
+from sqlalchemy import (
+    event as sql_event,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -216,3 +232,125 @@ def test_reassignment_applies_while_the_request_is_still_reassignable(engine, sc
         assignment = session.get(EventCoordinatorAssignment, event_request_id)
         assert assignment.coordinator_account_id == scenario["bob"]
         assert session.get(EventRequest, event_request_id).status == UNDER_REVIEW
+
+
+# SPL-108 AC4: coordinator edits and reassignment share one event-then-assignment lock order.
+def test_tc_spl_108_013_reassignment_wins_without_deadlocking_a_stale_edit(engine, scenario):
+    event_request_id = scenario["event_request_id"]
+    with Session(engine) as session:
+        _assign(session, scenario, scenario["alice"])
+        session.commit()
+
+    identities = {
+        "manager": scenario["manager"],
+        "alice": scenario["alice"],
+    }
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE_URL": os.environ["INTEGRATION_DATABASE_URL"],
+            "IDENTITY_VERIFIER": identities.__getitem__,
+        }
+    )
+    route_engine = app.extensions["engine"]
+    assignment_held = threading.Event()
+    release_reassignment = threading.Event()
+    edit_reached_assignment = threading.Event()
+    thread_ids = {}
+    editor_pid = {}
+
+    def hold_reassignment(conn, cursor, statement, params, context, many):
+        normalized = " ".join(statement.lower().split())
+        if threading.get_ident() == thread_ids.get("reassign") and normalized.startswith(
+            "update event_coordinator_assignments"
+        ):
+            assignment_held.set()
+            assert release_reassignment.wait(10), "Edit never reached the assignment lock"
+
+    def observe_edit(conn, cursor, statement, params, context, many):
+        normalized = " ".join(statement.lower().split())
+        if (
+            threading.get_ident() == thread_ids.get("edit")
+            and normalized.startswith("select")
+            and "event_coordinator_assignments" in normalized
+            and "for update" in normalized
+        ):
+            editor_pid["value"] = conn.connection.driver_connection.info.backend_pid
+            edit_reached_assignment.set()
+
+    def call(label, method, path, *, token, body):
+        thread_ids[label] = threading.get_ident()
+        client = app.test_client()
+        return getattr(client, method)(
+            path,
+            json=body,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assignment_path = f"/api/event-requests/{event_request_id}/coordinator"
+    edit_path = f"/api/event-requests/assigned/{event_request_id}/event-information"
+    sql_event.listen(route_engine, "after_cursor_execute", hold_reassignment)
+    sql_event.listen(route_engine, "before_cursor_execute", observe_edit)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reassign = pool.submit(
+                call,
+                "reassign",
+                "put",
+                assignment_path,
+                token="manager",
+                body={"coordinator_account_id": scenario["bob"]},
+            )
+            assert assignment_held.wait(10), "Reassignment never held the assignment row"
+            edit = pool.submit(
+                call,
+                "edit",
+                "patch",
+                edit_path,
+                token="alice",
+                body={"purpose": "Stale coordinator edit"},
+            )
+            assert edit_reached_assignment.wait(10), "Edit never requested the assignment lock"
+
+            deadline = monotonic() + 8
+            blocked = False
+            while monotonic() < deadline:
+                with engine.connect() as connection:
+                    blocked = bool(
+                        connection.scalar(
+                            text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"),
+                            {"pid": editor_pid["value"]},
+                        )
+                    )
+                if blocked:
+                    break
+                sleep(0.01)
+            assert blocked, "Edit did not wait for the reassignment boundary"
+            release_reassignment.set()
+
+            reassignment_response = reassign.result(timeout=10)
+            edit_response = edit.result(timeout=10)
+    finally:
+        release_reassignment.set()
+        sql_event.remove(route_engine, "after_cursor_execute", hold_reassignment)
+        sql_event.remove(route_engine, "before_cursor_execute", observe_edit)
+        route_engine.dispose()
+
+    assert reassignment_response.status_code == 200
+    assert edit_response.status_code == 404
+    assert edit_response.json == {"error": "Assigned event not found."}
+    with Session(engine) as session:
+        assignment = session.get(EventCoordinatorAssignment, event_request_id)
+        assert assignment.coordinator_account_id == scenario["bob"]
+        assert (
+            session.get(EventRequest, event_request_id).purpose
+            == "Proving interleaved transactions"
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EventDetailChange)
+                .where(EventDetailChange.event_request_id == event_request_id)
+            )
+            == 0
+        )

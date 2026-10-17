@@ -11,14 +11,14 @@ from datetime import datetime
 from typing import Any
 
 from flask import Flask, abort, g, jsonify
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, _serialize_assigned_event_detail
 from app.event_requests import SINGAPORE
 from app.event_statuses import ACTIVE_EVENT_STATUSES
-from app.models import EventCoordinatorAssignment, EventDetailChange, EventRequest, Role
+from app.exact_venue_bookings import lock_event
+from app.models import EventDetailChange, EventRequest, Role
 from app.validation import request_json
 
 FIELDS = {
@@ -81,19 +81,14 @@ def register_event_information_routes(app: Flask) -> None:
 
 
 def _assigned_event(session: Session, event_request_id: int) -> EventRequest:
-    """Lock only the caller's assigned event; unknown and another assignment share one 404."""
+    """Use the shared event-then-assignment lock order and keep one generic 404."""
 
     if event_request_id > MAX_EVENT_REQUEST_ID:
         abort(404, NOT_FOUND)
-    event = session.scalar(
-        select(EventRequest)
-        .join(EventCoordinatorAssignment)
-        .where(
-            EventRequest.id == event_request_id,
-            EventCoordinatorAssignment.coordinator_account_id == g.user_id,
-        )
-        .with_for_update()
-    )
+    # Reassignment writes the assignment before its history row. Taking NO KEY UPDATE on the
+    # event first lets that history foreign-key check finish while this request waits for the
+    # assignment, avoiding an event/assignment lock cycle.
+    event = lock_event(session, event_request_id, g.user_id)
     if event is None:
         abort(404, NOT_FOUND)
     return event
