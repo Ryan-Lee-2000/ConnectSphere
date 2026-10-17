@@ -67,6 +67,13 @@ EVENT_REQUEST_STATUSES: Final[dict[str, tuple[str, str]]] = {
 # The value a request holds the moment it is submitted (CS-E03-S5).
 INITIAL_STATUS: Final = "submitted"
 
+# SPL-134 defines when an event is active. SPL-108 reuses the same boundary for ordinary
+# information edits, so assignment and editing cannot disagree about a lifecycle state.
+INACTIVE_EVENT_STATUSES: Final = frozenset(
+    {"draft", "completed", "cancelled", "rejected", "withdrawn"}
+)
+ACTIVE_EVENT_STATUSES: Final = frozenset(EVENT_REQUEST_STATUSES) - INACTIVE_EVENT_STATUSES
+
 
 def status_check_constraint() -> str:
     """Render the vocabulary as the SQL the check constraint uses.

@@ -542,6 +542,11 @@ button { touch-action: manipulation; }
 .organisation-events__list { margin: 0; padding-left: var(--space-4); }
 .organisation-events__actions { margin-top: var(--space-6); }
 .clarification-form { margin-top: var(--space-6); }
+.event-information-editor { margin: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
+.event-information-editor__heading h2 { margin: var(--space-2) 0; }
+.event-information-editor__heading p:last-child { color: var(--color-muted-slate); }
+.event-information-editor__contacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.event-information-editor .organisation-events__actions { margin: var(--space-6) 0 0; }
 .clarification-history { margin-top: var(--space-8); }
 .clarification-history__list { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .clarification-history__list li { padding: var(--space-4) 0; border-top: 1px solid var(--color-blueprint-line); }
@@ -734,6 +739,7 @@ button { touch-action: manipulation; }
   .organisation-events__heading { flex-direction: column; gap: var(--space-4); }
   .organisation-events__heading > p { width: 100%; }
   .organisation-events__details { grid-template-columns: 1fr; }
+  .event-information-editor__contacts { grid-template-columns: 1fr; }
   .organisation-events__details div:nth-child(odd) { margin-right: 0; }
   .organisation-events__table { min-width: 38rem; }
   .venue-availability__filter-header, .venue-availability__actions { align-items: stretch; flex-direction: column; gap: var(--space-4); }

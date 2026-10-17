@@ -7,6 +7,9 @@ import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { VenueArrangements } from './VenueArrangements';
 
 const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
+const ACTIVE_EVENT_STATUSES = new Set([
+  'submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'postponed',
+]);
 import { slotLabel } from './slots';
 
 type AssignedEvent = {
@@ -70,6 +73,10 @@ type ConfirmationReadiness = { ready: boolean; blockers: ConfirmationBlocker[] }
 type AssignedEventDetail = AssignedEvent & Partial<{
   purpose: string | null;
   description: string | null;
+  event_notes: string | null;
+  event_contact_name: string | null;
+  event_contact_email: string | null;
+  event_contact_phone: string | null;
   start_time: string | null;
   end_time: string | null;
   expected_attendance: number | null;
@@ -153,6 +160,10 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
       ] : []),
       ['Purpose', formatText(event.purpose)],
       ['Description', formatText(event.description)],
+      ['Event notes', formatText(event.event_notes)],
+      ['Event contact', formatText(event.event_contact_name)],
+      ['Event contact email', formatText(event.event_contact_email)],
+      ['Event contact phone', formatText(event.event_contact_phone)],
       ['Proposed date', formatDate(event.proposed_date)],
       ['Time', time],
       ['Expected attendance', formatText(event.expected_attendance)],
@@ -384,6 +395,12 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [cancellationError, setCancellationError] = useState<string | null>(null);
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
+  const [editingInformation, setEditingInformation] = useState(false);
+  const [savingInformation, setSavingInformation] = useState(false);
+  const [information, setInformation] = useState({
+    purpose: '', description: '', event_notes: '', registration_notes: '',
+    event_contact_name: '', event_contact_email: '', event_contact_phone: '',
+  });
 
   // Refresh recorded requirements on navigation, including entry into search without a remount.
   useEffect(() => {
@@ -399,6 +416,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     setWithdrawalNote('');
     setConfirmingEvent(false);
     setBookingStageOnLoad(false);
+    setEditingInformation(false);
+    setSavingInformation(false);
     void (async () => {
       try {
         const response = await api(eventId === undefined
@@ -426,6 +445,49 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   function follow(click: MouseEvent<HTMLAnchorElement>, path: string) {
     click.preventDefault();
     onNavigate(path);
+  }
+
+  function openInformationEditor() {
+    if (!event || !ACTIVE_EVENT_STATUSES.has(event.status)) return;
+    setInformation({
+      purpose: event.purpose ?? '',
+      description: event.description ?? '',
+      event_notes: event.event_notes ?? '',
+      registration_notes: event.registration_notes ?? '',
+      event_contact_name: event.event_contact_name ?? '',
+      event_contact_email: event.event_contact_email ?? '',
+      event_contact_phone: event.event_contact_phone ?? '',
+    });
+    setError(null);
+    setNotice(null);
+    setEditingInformation(true);
+  }
+
+  async function saveInformation() {
+    if (!event || !ACTIVE_EVENT_STATUSES.has(event.status) || savingInformation) return;
+    setSavingInformation(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/assigned/${event.id}/event-information`, {
+        method: 'PATCH',
+        body: JSON.stringify(information),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(body?.error || 'Could not save the event information. Try again.');
+      } else if (body?.event) {
+        setEvent(current => current && ({ ...current, ...body.event }));
+        setEditingInformation(false);
+        setNotice(body.change ? 'Event information saved.' : 'No event information changed.');
+      } else {
+        setError('Could not save the event information. Try again.');
+      }
+    } catch {
+      setError('Could not save the event information. Try again.');
+    } finally {
+      setSavingInformation(false);
+    }
   }
 
   async function beginReview() {
@@ -700,6 +762,50 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
             View change requests
           </button>
         </div>}
+      {ACTIVE_EVENT_STATUSES.has(event.status) && !editingInformation && <div className="organisation-events__actions">
+        <button className="button button--secondary" type="button" onClick={openInformationEditor}>
+          Edit event information
+        </button>
+      </div>}
+      {ACTIVE_EVENT_STATUSES.has(event.status) && editingInformation && <form className="request-form event-information-editor"
+        aria-labelledby="event-information-editor-title"
+        onSubmit={submit => { submit.preventDefault(); void saveInformation(); }}>
+        <div className="event-information-editor__heading">
+          <p className="eyebrow">Ordinary information</p>
+          <h2 id="event-information-editor-title">Edit event information</h2>
+          <p>Update descriptive and contact details. Arrangement fields are managed in their own planning sections.</p>
+        </div>
+        <div className="field"><label htmlFor="event-purpose">Purpose</label>
+          <textarea id="event-purpose" rows={3} maxLength={2000} value={information.purpose}
+            onChange={change => setInformation(current => ({ ...current, purpose: change.target.value }))} /></div>
+        <div className="field"><label htmlFor="event-description">Description</label>
+          <textarea id="event-description" rows={4} maxLength={2000} value={information.description}
+            onChange={change => setInformation(current => ({ ...current, description: change.target.value }))} /></div>
+        <div className="field"><label htmlFor="event-notes">Event notes</label>
+          <textarea id="event-notes" rows={4} maxLength={2000} value={information.event_notes}
+            onChange={change => setInformation(current => ({ ...current, event_notes: change.target.value }))} /></div>
+        <div className="field"><label htmlFor="registration-notes">Registration notes</label>
+          <textarea id="registration-notes" rows={4} maxLength={2000} value={information.registration_notes}
+            onChange={change => setInformation(current => ({ ...current, registration_notes: change.target.value }))} /></div>
+        <div className="event-information-editor__contacts">
+          <div className="field"><label htmlFor="event-contact-name">Event contact name</label>
+            <input id="event-contact-name" maxLength={200} value={information.event_contact_name}
+              onChange={change => setInformation(current => ({ ...current, event_contact_name: change.target.value }))} /></div>
+          <div className="field"><label htmlFor="event-contact-email">Event contact email</label>
+            <input id="event-contact-email" type="email" maxLength={320} value={information.event_contact_email}
+              onChange={change => setInformation(current => ({ ...current, event_contact_email: change.target.value }))} /></div>
+          <div className="field"><label htmlFor="event-contact-phone">Event contact phone</label>
+            <input id="event-contact-phone" type="tel" maxLength={50} value={information.event_contact_phone}
+              onChange={change => setInformation(current => ({ ...current, event_contact_phone: change.target.value }))} /></div>
+        </div>
+        <div className="organisation-events__actions">
+          <button className="button button--secondary" type="button" disabled={savingInformation}
+            onClick={() => { setEditingInformation(false); setError(null); }}>Cancel</button>
+          <button className="button button--primary" type="submit" disabled={savingInformation}>
+            {savingInformation ? 'Saving…' : 'Save event information'}
+          </button>
+        </div>
+      </form>}
       <div className="organisation-events__table-wrap">
         <table className="organisation-events__table organisation-events__detail-table">
           <caption className="visually-hidden">Submitted request details for {event.name}</caption>

@@ -253,6 +253,12 @@ class EventRequest(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     purpose: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
+    # SPL-108: coordinator-maintained ordinary event information. These fields deliberately sit
+    # outside venue, equipment and registration configuration, whose changes have separate rules.
+    event_notes: Mapped[str | None] = mapped_column(Text)
+    event_contact_name: Mapped[str | None] = mapped_column(Text)
+    event_contact_email: Mapped[str | None] = mapped_column(Text)
+    event_contact_phone: Mapped[str | None] = mapped_column(Text)
     proposed_date: Mapped[date | None] = mapped_column(Date)
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
@@ -951,6 +957,25 @@ class EventStatusHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EventDetailChange(Base):
+    """One atomic SPL-108 ordinary-information edit; rows are append-only audit evidence."""
+
+    __tablename__ = "event_detail_changes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Only fields whose normalized value changed are recorded. Each entry contains the prior and
+    # resulting value, preserving an intelligible audit without snapshotting unrelated data.
+    changes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    changed_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    changed_by: Mapped[Account] = relationship(foreign_keys=[changed_by_account_id])
 
 
 class RegistrationSettingsChange(Base):

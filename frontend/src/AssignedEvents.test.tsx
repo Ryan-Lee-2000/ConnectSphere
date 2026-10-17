@@ -600,3 +600,80 @@ it('[TC-SPL-69-13] cancels locally and preserves the form when withdrawal is ref
   );
   expect((screen.getByLabelText('Withdrawal note (optional)') as HTMLTextAreaElement).value).toBe('Retry note.');
 });
+
+it('[TC-SPL-108-001, TC-SPL-108-005] edits the exact ordinary fields and displays the saved result', async () => {
+  const original = {
+    ...fullDetail,
+    event_notes: 'Initial coordinator note',
+    event_contact_name: 'Old Contact',
+    event_contact_email: 'old@example.com',
+    event_contact_phone: '+65 6000 0000',
+  };
+  const saved = {
+    ...original,
+    purpose: 'Updated purpose',
+    event_notes: 'Doors open at 8:30.',
+    event_contact_name: 'Avery Tan',
+    event_contact_email: 'avery@example.com',
+    event_contact_phone: '+65 6123 4567',
+  };
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: original }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: saved, change: { id: 1 } }) });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit event information' }));
+  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Updated purpose' } });
+  fireEvent.change(screen.getByLabelText('Event notes'), { target: { value: 'Doors open at 8:30.' } });
+  fireEvent.change(screen.getByLabelText('Event contact name'), { target: { value: 'Avery Tan' } });
+  fireEvent.change(screen.getByLabelText('Event contact email'), { target: { value: 'avery@example.com' } });
+  fireEvent.change(screen.getByLabelText('Event contact phone'), { target: { value: '+65 6123 4567' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save event information' }));
+
+  expect(await screen.findByText('Event information saved.')).toBeTruthy();
+  expect((screen.getByRole('rowheader', { name: 'Purpose' }).closest('tr')?.textContent)).toContain('Updated purpose');
+  expect((screen.getByRole('rowheader', { name: 'Event contact email' }).closest('tr')?.textContent)).toContain('avery@example.com');
+  expect(request).toHaveBeenLastCalledWith(
+    '/api/event-requests/assigned/12/event-information',
+    expect.objectContaining({ method: 'PATCH' }),
+  );
+  const options = request.mock.calls[1][1];
+  expect(JSON.parse(options.body)).toEqual({
+    purpose: 'Updated purpose',
+    description: '',
+    event_notes: 'Doors open at 8:30.',
+    registration_notes: 'Ticketed',
+    event_contact_name: 'Avery Tan',
+    event_contact_email: 'avery@example.com',
+    event_contact_phone: '+65 6123 4567',
+  });
+});
+
+it('[TC-SPL-108-004, TC-SPL-108-006] preserves the editor values when a save is refused', async () => {
+  const request = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ event: fullDetail }) })
+    .mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Enter the event contact email in the form name@domain.' }),
+    });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit event information' }));
+  fireEvent.change(screen.getByLabelText('Event contact email'), { target: { value: 'bad@address' } });
+  // The browser validates the email input first; use a syntactically valid value to exercise the
+  // API refusal while proving the form remains available with the user's entry.
+  fireEvent.change(screen.getByLabelText('Event contact email'), { target: { value: 'retry@example.com' } });
+  fireEvent.submit(screen.getByRole('button', { name: 'Save event information' }).closest('form')!);
+
+  expect((await screen.findByRole('alert')).textContent).toContain('name@domain');
+  expect((screen.getByLabelText('Event contact email') as HTMLInputElement).value).toBe('retry@example.com');
+});
+
+it('[TC-SPL-108-011, TC-SPL-108-012] does not offer edits for inactive events', async () => {
+  for (const status of ['draft', 'completed', 'cancelled', 'rejected', 'withdrawn']) {
+    renderDetail({ ...fullDetail, status, status_label: status });
+    expect(await screen.findByText('Harbour Hall')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit event information' })).toBeNull();
+    cleanup();
+  }
+});

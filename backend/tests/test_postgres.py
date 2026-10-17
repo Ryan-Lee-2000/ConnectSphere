@@ -25,6 +25,8 @@ PRODUCT_TABLES = {
     "event_coordinator_assignments",
     "event_coordinator_history",
     "event_status_history",
+    # SPL-108: append-only audit for assigned-coordinator ordinary information edits.
+    "event_detail_changes",
     "clarification_requests",
     "notifications",
     "venue_operational_blocks",
@@ -161,6 +163,34 @@ def test_empty_baseline_migration_is_rerunnable():
         withdrawal_columns = {
             column["name"]: column for column in inspect(engine).get_columns("event_requests")
         }
+        # SPL-108 is additive: all ordinary-information columns start nullable for legacy rows.
+        assert {
+            "event_notes",
+            "event_contact_name",
+            "event_contact_email",
+            "event_contact_phone",
+        } <= set(withdrawal_columns)
+        assert all(
+            withdrawal_columns[column]["nullable"]
+            for column in (
+                "event_notes",
+                "event_contact_name",
+                "event_contact_email",
+                "event_contact_phone",
+            )
+        )
+        detail_change_foreign_keys = inspect(engine).get_foreign_keys("event_detail_changes")
+        assert any(
+            foreign_key["constrained_columns"] == ["event_request_id"]
+            and foreign_key["referred_table"] == "event_requests"
+            and foreign_key["options"].get("ondelete") == "CASCADE"
+            for foreign_key in detail_change_foreign_keys
+        )
+        assert any(
+            foreign_key["constrained_columns"] == ["changed_by_account_id"]
+            and foreign_key["referred_table"] == "accounts"
+            for foreign_key in detail_change_foreign_keys
+        )
         assert withdrawal_columns["withdrawn_by_account_id"]["nullable"] is True
         assert withdrawal_columns["withdrawn_at"]["nullable"] is True
         assert withdrawal_columns["withdrawal_note"]["nullable"] is True

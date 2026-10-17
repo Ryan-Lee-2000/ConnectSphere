@@ -28,7 +28,7 @@ from app.event_requests import (
     serialize_rejection,
     serialize_withdrawal,
 )
-from app.event_statuses import EVENT_REQUEST_STATUSES, status_label
+from app.event_statuses import EVENT_REQUEST_STATUSES, INACTIVE_EVENT_STATUSES, status_label
 from app.models import (
     Account,
     AccountRole,
@@ -51,9 +51,9 @@ UNDER_REVIEW = "under_review"
 # would overflow the driver instead of answering "not found".
 MAX_EVENT_REQUEST_ID = 2**31 - 1
 DRAFT = "draft"
-NON_REASSIGNABLE_STATUSES = frozenset({"completed", "cancelled", "rejected", "withdrawn"})
+NON_REASSIGNABLE_STATUSES = INACTIVE_EVENT_STATUSES - {DRAFT}
 # SPL-134 AC2: an event is active unless it is a draft or in one of the closed statuses.
-INACTIVE_STATUSES = NON_REASSIGNABLE_STATUSES | {DRAFT}
+INACTIVE_STATUSES = INACTIVE_EVENT_STATUSES
 # CS-E07-S1 owns the vocabulary; fail at import if a value used here ever leaves it.
 assert {SUBMITTED, UNDER_REVIEW} | INACTIVE_STATUSES <= set(EVENT_REQUEST_STATUSES)
 
@@ -529,6 +529,10 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         **_serialize_assigned_event(event),
         "purpose": event.purpose,
         "description": event.description,
+        "event_notes": event.event_notes,
+        "event_contact_name": event.event_contact_name,
+        "event_contact_email": event.event_contact_email,
+        "event_contact_phone": event.event_contact_phone,
         "start_time": event.start_time.isoformat(timespec="minutes") if event.start_time else None,
         "end_time": event.end_time.isoformat(timespec="minutes") if event.end_time else None,
         "expected_attendance": event.expected_attendance,

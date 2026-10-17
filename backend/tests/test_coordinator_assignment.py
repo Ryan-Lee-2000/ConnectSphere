@@ -307,6 +307,10 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "mapped_slots": ["AM"],
         "purpose": "Client showcase",
         "description": "Annual client forum",
+        "event_notes": None,
+        "event_contact_name": None,
+        "event_contact_email": None,
+        "event_contact_phone": None,
         "start_time": "09:00",
         "end_time": "12:00",
         "expected_attendance": 120,
@@ -354,6 +358,10 @@ def test_tc_spl_64_02_empty_optional_fields_are_returned_empty(app, client):
     ).json["event"]
 
     assert event["description"] is None
+    assert event["event_notes"] is None
+    assert event["event_contact_name"] is None
+    assert event["event_contact_email"] is None
+    assert event["event_contact_phone"] is None
     assert event["venue_name"] is None
     assert event["required_facilities"] == ["Projector", "PA system"]
     assert event["accessibility_needs"] == ["Step-free access"]
