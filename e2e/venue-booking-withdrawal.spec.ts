@@ -46,7 +46,7 @@ test('TC-SPL-78-24 and TC-SPL-78-25: a coordinator withdraws a Requested booking
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -73,7 +73,7 @@ test('TC-SPL-78-24 and TC-SPL-78-25: a coordinator withdraws a Requested booking
   await expect(venueCard).toHaveCount(0);
 
   // TC-SPL-78-24: the panel shows the Requested booking; withdraw it, by keyboard, after confirming.
-  const panel = page.getByRole('region', { name: 'Venue booking request' });
+  const panel = page.getByRole('region', { name: /^Venue bookings/ });
   await expect(panel).toContainText(venueName);
   await expect(panel).toContainText('Status: Requested');
   await panel.getByRole('button', { name: 'Withdraw request' }).focus();
@@ -84,7 +84,10 @@ test('TC-SPL-78-24 and TC-SPL-78-25: a coordinator withdraws a Requested booking
 
   await expect(panel.getByRole('status')).toContainText('Request withdrawn');
   await expect(panel).toContainText('Status: Withdrawn');
-  await expect(panel).toContainText('Withdrawn by Casey Lim');
+  // SPL-131: the actor is shown in the booking's own history entry for the withdrawal.
+  const history = panel.getByRole('list', { name: /^History of/ });
+  await expect(history).toContainText('Withdrawn');
+  await expect(history).toContainText('Casey Lim');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   // AC3 and AC5: the venue is back in the refreshed search and can be requested again.

@@ -52,7 +52,7 @@ test('TC-SPL-88-24: the calendar shows a real booking, a real block and free slo
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('row').filter({ hasText: name })
     .getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -71,7 +71,7 @@ test('TC-SPL-88-24: the calendar shows a real booking, a real block and free slo
   const venueName = (await suitable.first().locator('strong').first().textContent())?.trim() ?? '';
   await suitable.first().click();
   await page.getByRole('button', { name: 'Request booking' }).click();
-  await expect(page.getByRole('region', { name: 'Venue booking request' })).toContainText('Status: Requested');
+  await expect(page.getByRole('region', { name: /^Venue bookings/ })).toContainText('Status: Requested');
 
   // AC1, AC2, AC3: the coordinator opens the calendar and sees that booking's slot as Requested.
   await page.getByRole('link', { name: 'Venue calendar' }).click();

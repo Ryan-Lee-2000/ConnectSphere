@@ -13,7 +13,7 @@ from app.models import (
     VenueBooking,
     VenueLayout,
 )
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 FIXTURE_DATE = date(2030, 10, 20)
@@ -75,20 +75,23 @@ def remove_equipment_fixtures(session: Session) -> None:
             )
         )
     )
-    # The event (and so its booking) is gone, so the owned venue can be removed safely.
+    fixture_venues = [
+        CONFIRMATION_VENUE,
+        ARRANGEMENT_HALL,
+        ARRANGEMENT_STUDIO,
+        CANCELLATION_HALL,
+        CANCELLATION_STUDIO,
+    ]
+    # Other browser journeys book the first suitable venue, which can be one of ours, and they
+    # leave that booking behind. Remove bookings held on our venues so the venues can be deleted.
+    # Only venues with these exact names are touched; their history rows cascade with the booking.
     session.execute(
-        delete(Venue).where(
-            Venue.name.in_(
-                [
-                    CONFIRMATION_VENUE,
-                    ARRANGEMENT_HALL,
-                    ARRANGEMENT_STUDIO,
-                    CANCELLATION_HALL,
-                    CANCELLATION_STUDIO,
-                ]
-            )
+        delete(VenueBooking).where(
+            VenueBooking.venue_id.in_(select(Venue.id).where(Venue.name.in_(fixture_venues)))
         )
     )
+    # The event (and so its booking) is gone, so the owned venue can be removed safely.
+    session.execute(delete(Venue).where(Venue.name.in_(fixture_venues)))
 
 
 def prepare_arrangement_fixture(

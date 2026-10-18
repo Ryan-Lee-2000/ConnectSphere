@@ -75,7 +75,7 @@ test('QA-SPL-111-200: an organiser submits a change request, the coordinator see
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`${coordinatorName} is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);

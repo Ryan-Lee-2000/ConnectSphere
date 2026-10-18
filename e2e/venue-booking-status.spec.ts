@@ -48,7 +48,7 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -66,7 +66,7 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await page.goto(eventUrl);
   await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-  const eventPanel = page.getByRole('region', { name: 'Venue booking request' });
+  const eventPanel = page.getByRole('region', { name: /^Venue bookings/ });
   await expect(eventPanel).toContainText('No venue-booking request has been made for this event yet.');
 
   // Request a venue, withdraw it, then request a venue again (SPL-77, SPL-78).
@@ -76,7 +76,7 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   const firstVenue = (await suitable.first().locator('strong').first().textContent())?.trim() ?? '';
   await suitable.first().click();
   await page.getByRole('button', { name: 'Request booking' }).click();
-  const searchPanel = page.getByRole('region', { name: 'Venue booking request' });
+  const searchPanel = page.getByRole('region', { name: /^Venue bookings/ });
   await expect(searchPanel).toContainText('Status: Requested');
   await searchPanel.getByRole('button', { name: 'Withdraw request' }).click();
   await searchPanel.getByRole('button', { name: 'Confirm withdrawal' }).click();
@@ -104,14 +104,15 @@ test('TC-SPL-79-21 and TC-SPL-79-22: the event page shows the current status, hi
   await page.goto(eventUrl);
   await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-  await expect(eventPanel).toContainText('Status: Requested');
-  const history = eventPanel.getByRole('list', { name: 'History' });
+  // SPL-131: every booking of the event is its own card with its own status and history.
+  const current = eventPanel.getByRole('article').filter({ hasText: replacementName });
+  await expect(current).toContainText('Status: Requested');
+  const history = current.getByRole('list', { name: /^History of/ });
   await expect(history.getByRole('listitem')).toHaveCount(1);
   await expect(history).toContainText('Requested');
   await expect(history).toContainText('Casey Lim');
-  const earlier = eventPanel.getByRole('list', { name: 'Earlier requests' });
-  await expect(earlier).toContainText(firstVenue);
-  await expect(earlier).toContainText('Withdrawn');
+  const earlier = eventPanel.getByRole('article').filter({ hasText: firstVenue });
+  await expect(earlier).toContainText('Status: Withdrawn');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   // Keyboard: the panel's Withdraw action is reachable from focus.
   await eventPanel.getByRole('button', { name: 'Withdraw request' }).focus();

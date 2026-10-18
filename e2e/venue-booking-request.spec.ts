@@ -49,7 +49,7 @@ test('TC-SPL-77-25 and TC-SPL-77-26: a coordinator requests a suitable venue fro
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   const queued = page.getByRole('row').filter({ hasText: name });
   await queued.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -78,9 +78,14 @@ test('TC-SPL-77-25 and TC-SPL-77-26: a coordinator requests a suitable venue fro
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   // TC-SPL-77-26: operable by keyboard alone — focus the layout, tab to the action, press Enter.
+  // SPL-131 added attendee and facility fields between the layout and the action, so tab until the
+  // action is reached (it must be reachable within a few presses).
   await layout.focus();
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Request booking' })).toBeFocused();
+  const requestButton = page.getByRole('button', { name: 'Request booking' });
+  for (let presses = 0; presses < 8 && !(await requestButton.evaluate(el => el === document.activeElement)); presses++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(requestButton).toBeFocused();
   await page.keyboard.press('Enter');
 
   // TC-SPL-77-25: the Requested booking is confirmed with its preparation, and the venue leaves search.
