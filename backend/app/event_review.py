@@ -26,7 +26,7 @@ from app.models import (
     EventStatusHistory,
     Role,
 )
-from app.notifications import add_review_outcome_notice
+from app.notifications import add_clarification_answered_notice, add_review_outcome_notice
 from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
@@ -253,6 +253,13 @@ def register_event_review_routes(app: Flask) -> None:
             clarification.response = response_text
             clarification.respondent_account_id = g.user_id
             clarification.responded_at = now
+            # SPL-103. Saved with the response, so a refused response leaves no notice.
+            add_clarification_answered_notice(
+                session,
+                event,
+                author_id=clarification.author_account_id,
+                clarification_id=clarification.id,
+            )
             session.commit()
             session.expire_all()
             event = session.get(EventRequest, event_request_id)

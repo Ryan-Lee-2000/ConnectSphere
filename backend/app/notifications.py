@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
 from app.event_requests import SINGAPORE
-from app.models import Account, EventRequest, Notification, Role
+from app.models import Account, EventCoordinatorAssignment, EventRequest, Notification, Role
 
 # Event, role and organisation permissions are enforced where the linked record is opened, so a
 # notice never grants access on its own.
@@ -113,6 +113,60 @@ def add_review_outcome_notice(
             event_request_id=event.id,
             message=message,
             dedupe_key=f"organiser_{kind}:{source_id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
+def add_clarification_answered_notice(
+    session: Session, event: EventRequest, *, author_id: str, clarification_id: int
+) -> None:
+    """Notify the coordinator who asked a clarification question that it was answered (SPL-103).
+
+    The recipient is the question's author, read from the stored row, never from the request, even
+    if the event has been reassigned since. Runs in the caller's transaction, so a refused response
+    leaves no notice, and the clarification row id stops a repeat adding a second.
+    """
+
+    session.add(
+        Notification(
+            recipient_account_id=author_id,
+            event_request_id=event.id,
+            message=f"The organiser responded to your clarification request on {event.name}.",
+            dedupe_key=f"clarification_answered:{clarification_id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
+def add_change_request_submitted_notice(
+    session: Session,
+    event: EventRequest,
+    *,
+    change_request_id: int,
+    field_labels: list[str],
+) -> None:
+    """Notify the event's assigned coordinator of a new change request (SPL-103).
+
+    The recipient is the coordinator currently assigned to the event. An event with no assignment
+    notifies nobody. The message names the fields only, never the values or reasons. Runs in the
+    caller's transaction, so a refused submission leaves no notice, and the change request id
+    stops a repeat adding a second.
+    """
+
+    coordinator_id = session.scalar(
+        select(EventCoordinatorAssignment.coordinator_account_id).where(
+            EventCoordinatorAssignment.event_request_id == event.id
+        )
+    )
+    if coordinator_id is None:
+        return
+    session.add(
+        Notification(
+            recipient_account_id=coordinator_id,
+            event_request_id=event.id,
+            message=f"A change request was submitted on {event.name}: {', '.join(field_labels)}.",
+            dedupe_key=f"change_request_submitted:{change_request_id}",
             created_at=datetime.now(SINGAPORE),
         )
     )

@@ -90,6 +90,13 @@ Assignment and reassignment share `notifications.add_coordinator_assigned_notice
 `add_assignment_change_notices`, written in the same transaction: the new coordinator, the
 organiser and, on reassignment, the former coordinator are each notified once per history row.
 
+SPL-103 adds the coordinator's own notices on top of that. `notifications.add_clarification_answered_notice`
+tells the coordinator who wrote a clarification request that the organiser answered it, and
+`add_change_request_submitted_notice` tells the event's assigned coordinator about a new change
+request. Each is written in the action's transaction and keyed to the clarification or change
+request row. The assignment notices that SPL-103's first two criteria describe are SPL-134's. See
+[SPL-103](tasks/SPL-103.md).
+
 ## Event review transitions
 
 SPL-70 introduces the first explicit workflow action at
