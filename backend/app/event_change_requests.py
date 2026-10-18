@@ -4,8 +4,8 @@ What this module does
 ---------------------
 The Event Organiser who owns a submitted event can send a change request: one or more items, each
 naming a field, the new value they want and why. The request is stored as Pending and the event's
-assigned coordinator can read it. Reviewing, approving or rejecting it, and notifying the
-coordinator (SPL-103), belong to later stories.
+assigned coordinator can read it and is notified (SPL-103). Reviewing, approving or rejecting it
+belong to later stories.
 
 How a submission is checked (``POST /api/event-requests/<id>/change-requests``), in order
 -----------------------------------------------------------------------------------------
@@ -39,6 +39,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import _iso_date, _iso_time, _positive_integer, _string_list
 from app.models import EventChangeRequest, EventChangeRequestItem, EventRequest, Role
+from app.notifications import add_change_request_submitted_notice
 from app.validation import request_json, required_text
 
 PENDING = "pending"
@@ -107,6 +108,15 @@ def register_event_change_request_routes(app: Flask) -> None:
             )
             session.add(change_request)
             try:
+                # SPL-103. Saved with the request, so a refused submission leaves no notice. The
+                # flush gives the request its id and surfaces the AC4 backstop before the notice.
+                session.flush()
+                add_change_request_submitted_notice(
+                    session,
+                    event,
+                    change_request_id=change_request.id,
+                    field_labels=[FIELDS[item["field"]] for item in items],
+                )
                 session.commit()
             except IntegrityError:
                 # Backstop for AC4: the partial unique index refuses a second Pending request.

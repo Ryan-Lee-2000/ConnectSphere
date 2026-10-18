@@ -706,8 +706,9 @@ def test_qa_spl_102_050_a_full_review_cycle_notifies_only_the_organiser(app, cli
     respond(client, event_id, clarified["clarifications"][0]["id"])
     approve(client, event_id)
 
-    # Alice gained no notice from the organiser-facing actions; the rival and others none at all.
-    assert len(stored_notices(app, ALICE)) == base_notices[ALICE]
+    # Alice gained one notice, the organiser's answer to her clarification (SPL-103 AC3), and none
+    # from the approval; the rival and others none at all.
+    assert len(stored_notices(app, ALICE)) == base_notices[ALICE] + 1
     for other in (RIVAL, ATTENDEE, MANAGER, BOB):
         assert stored_notices(app, other) == []
     organiser_notices = stored_notices(app, ORGANISER)
