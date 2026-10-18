@@ -59,15 +59,17 @@ test('TC-CS-E05-S1-01, TC-CS-E05-S2-01, TC-SPL-71-11 and AC6: a submitted reques
   // TC-CS-E05-S1-01: the manager finds that request waiting in the queue.
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
-  const queued = page.getByRole('row').filter({ hasText: name });
+  // The page also lists active events for supervision (SPL-134), so look only in the queue.
+  const queue = page.locator('section[aria-labelledby="assignment-queue-heading"]');
+  const queued = queue.getByRole('row').filter({ hasText: name });
   await expect(queued).toBeVisible();
 
   // TC-CS-E05-S2-01: assigning an active coordinator confirms and clears the request from the queue.
   await queued.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`${coordinatorName} is now responsible for ${name}.`)).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0);
+  await expect(queue.getByRole('row').filter({ hasText: name })).toHaveCount(0);
   await signOut(page);
 
   // SPL-70: assigning a coordinator does not begin review. The coordinator explicitly starts it.

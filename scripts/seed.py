@@ -37,6 +37,13 @@ fixtures = {
         "organisation": None,
         "roles": ("event_coordinator",),
     },
+    # A second coordinator, so reassignment and "the former coordinator can no longer act" can be
+    # demonstrated (SPL-134, SPL-102).
+    "qa.coordinator.b@example.test": {
+        "display_name": "Riley Chen",
+        "organisation": None,
+        "roles": ("event_coordinator",),
+    },
     "operations.manager@example.test": {
         "display_name": "Morgan Ong",
         "organisation": None,

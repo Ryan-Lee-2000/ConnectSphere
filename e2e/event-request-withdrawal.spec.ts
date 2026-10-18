@@ -43,7 +43,7 @@ test('TC-SPL-69-14 an assigned coordinator records and retains a withdrawal', as
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   const queued = page.getByRole('row').filter({ hasText: name });
   await queued.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);

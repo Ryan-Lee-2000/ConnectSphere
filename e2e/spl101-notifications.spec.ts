@@ -51,7 +51,7 @@ test('QA-SPL-101-041: an assignment notifies the coordinator, who sees, reads an
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   for (const name of [first, second]) {
     await page.getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-    await page.getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
+    await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: coordinatorName });
     await page.getByRole('button', { name: 'Confirm assignment' }).click();
     await expect(page.getByText(`${coordinatorName} is now responsible for ${name}.`)).toBeVisible();
   }

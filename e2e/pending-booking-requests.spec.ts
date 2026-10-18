@@ -53,7 +53,7 @@ test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens 
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('row').filter({ hasText: name })
     .getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -73,7 +73,7 @@ test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens 
   const venueName = (await suitable.first().locator('strong').first().textContent())?.trim() ?? '';
   await suitable.first().click();
   await page.getByRole('button', { name: 'Request booking' }).click();
-  await expect(page.getByRole('region', { name: 'Venue booking request' })).toContainText('Status: Requested');
+  await expect(page.getByRole('region', { name: /^Venue bookings/ })).toContainText('Status: Requested');
   await signOut(page);
 
   // AC1, AC2: Venue Staff find the request waiting in their queue.
@@ -113,7 +113,7 @@ test('TC-SPL-80-18: a requested booking reaches the Venue Staff queue and opens 
   await page.goto(eventUrl);
   await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-  const panel = page.getByRole('region', { name: 'Venue booking request' });
+  const panel = page.getByRole('region', { name: /^Venue bookings/ });
   await panel.getByRole('button', { name: 'Withdraw request' }).click();
   await panel.getByRole('button', { name: 'Confirm withdrawal' }).click();
   await expect(panel).toContainText('Status: Withdrawn');

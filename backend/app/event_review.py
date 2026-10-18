@@ -26,6 +26,7 @@ from app.models import (
     EventStatusHistory,
     Role,
 )
+from app.notifications import add_review_outcome_notice
 from app.slots import slots_for_range
 
 BEGIN_REVIEW = "begin_review"
@@ -172,13 +173,21 @@ def register_event_review_routes(app: Flask) -> None:
             except InvalidStatusTransition:
                 session.rollback()
                 abort(409, "Clarification can only be requested while the event is under review.")
-            session.add(
-                ClarificationRequest(
-                    event_request_id=event_request_id,
-                    message=message,
-                    author_account_id=g.user_id,
-                    created_at=now,
-                )
+            clarification = ClarificationRequest(
+                event_request_id=event_request_id,
+                message=message,
+                author_account_id=g.user_id,
+                created_at=now,
+            )
+            session.add(clarification)
+            session.flush()
+            # SPL-102. Saved with the transition, so a refused request leaves no notice.
+            add_review_outcome_notice(
+                session,
+                event,
+                kind="clarification_requested",
+                source_id=clarification.id,
+                message=f"Clarification was requested on {event.name}: {message}",
             )
             session.commit()
             actor = session.get(Account, g.user_id)
@@ -289,6 +298,15 @@ def register_event_review_routes(app: Flask) -> None:
                 .values(approved_by_account_id=g.user_id, approved_at=now)
                 .execution_options(synchronize_session=False)
             )
+            session.flush()
+            # SPL-102. Saved with the decision, so a refused approval leaves no notice.
+            add_review_outcome_notice(
+                session,
+                event,
+                kind="decision",
+                source_id=audit.id,
+                message=f"{event.name} has been approved.",
+            )
             session.commit()
             actor = session.get(Account, g.user_id)
             session.expire_all()
@@ -333,6 +351,15 @@ def register_event_review_routes(app: Flask) -> None:
                 .where(EventRequest.id == event_request_id)
                 .values(rejected_by_account_id=g.user_id, rejected_at=now, rejection_reason=reason)
                 .execution_options(synchronize_session=False)
+            )
+            session.flush()
+            # SPL-102. Saved with the decision, so a refused rejection leaves no notice.
+            add_review_outcome_notice(
+                session,
+                event,
+                kind="decision",
+                source_id=audit.id,
+                message=f"{event.name} has been rejected. Reason: {reason}",
             )
             session.commit()
             actor = session.get(Account, g.user_id)
@@ -386,6 +413,15 @@ def register_event_review_routes(app: Flask) -> None:
                     withdrawal_note=note,
                 )
                 .execution_options(synchronize_session=False)
+            )
+            session.flush()
+            # SPL-102. Saved with the withdrawal, so a refused one leaves no notice.
+            add_review_outcome_notice(
+                session,
+                event,
+                kind="withdrawn",
+                source_id=audit.id,
+                message=f"The withdrawal of {event.name} has been recorded.",
             )
             session.commit()
             actor = session.get(Account, g.user_id)

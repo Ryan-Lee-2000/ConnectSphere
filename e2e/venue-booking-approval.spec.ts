@@ -49,7 +49,7 @@ test('TC-SPL-81-24 and TC-SPL-81-25: Venue Staff approve a request and the coord
   await signIn(page, manager);
   await page.getByRole('link', { name: 'Coordinator assignment' }).click();
   await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: `Assign coordinator to ${name}` }).click();
-  await page.getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
+  await page.locator('form.assignment-panel').getByLabel('Event Coordinator').selectOption({ label: 'Casey Lim' });
   await page.getByRole('button', { name: 'Confirm assignment' }).click();
   await expect(page.getByText(`Casey Lim is now responsible for ${name}.`)).toBeVisible();
   await signOut(page);
@@ -73,7 +73,7 @@ test('TC-SPL-81-24 and TC-SPL-81-25: Venue Staff approve a request and the coord
     && /\/api\/event-requests\/\d+\/venue-bookings$/.test(new URL(response.url()).pathname));
   await page.getByRole('button', { name: 'Request booking' }).click();
   const bookingId = (await (await created).json()).booking.id as number;
-  await expect(page.getByRole('region', { name: 'Venue booking request' })).toContainText('Status: Requested');
+  await expect(page.getByRole('region', { name: /^Venue bookings/ })).toContainText('Status: Requested');
   await signOut(page);
 
   // TC-SPL-81-25: the review page at phone width, operated by keyboard.
@@ -101,7 +101,7 @@ test('TC-SPL-81-24 and TC-SPL-81-25: Venue Staff approve a request and the coord
   await page.setViewportSize({ width: 1280, height: 800 });
   await signIn(page, coordinator);
   await page.goto(eventUrl);
-  const panel = page.getByRole('region', { name: 'Venue booking request' });
+  const panel = page.getByRole('region', { name: /^Venue bookings/ });
   await expect(panel).toContainText('Status: Approved', { timeout: 15_000 });
   const history = panel.getByRole('list', { name: 'History' });
   await expect(history.getByRole('listitem')).toHaveCount(2, { timeout: 15_000 });
