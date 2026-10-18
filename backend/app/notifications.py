@@ -96,6 +96,28 @@ def add_assignment_change_notices(
     notify(event.organiser_account_id, organiser_message, "organiser_coordinator_changed")
 
 
+def add_review_outcome_notice(
+    session: Session, event: EventRequest, *, kind: str, source_id: int, message: str
+) -> None:
+    """Notify the event's organiser of a review outcome (SPL-102), in the caller's transaction.
+
+    The recipient is always the organiser stored on the event, never a value from the request.
+    The notice commits or rolls back with the action, so a refused action leaves none. The
+    source row (status history or clarification) identifies this action, so a repeat of it
+    cannot add a second notice. The ``organiser_`` prefix opens the organiser's event page.
+    """
+
+    session.add(
+        Notification(
+            recipient_account_id=event.organiser_account_id,
+            event_request_id=event.id,
+            message=message,
+            dedupe_key=f"organiser_{kind}:{source_id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
 def register_notification_routes(app: Flask) -> None:
     @app.get("/api/notifications")
     @require_roles(*ALL_ROLES)
