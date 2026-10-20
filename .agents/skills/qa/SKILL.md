@@ -110,14 +110,18 @@ the old "QA-[Jira Ticket Key]" space template.
     whatever evidence a result needs (error text, traces, screenshots).
 14. Failure and change log: one row per failing or changed test, in the master's columns. No
     test may be changed, skipped or left failing without a row.
-15. Embed or attach the video in the UAT section via Confluence attachment upload. If it can't
-    be embedded or attached, that's fine: give the user the local path and the section, record "video not
-    attached because ...", and re-read the page after they upload to fix stale text.
+15. Embed or attach the video in the UAT section via Confluence attachment upload. If you can't,
+    pause and ask the user to upload it. Give them three things: the QA-<KEY> page link, the
+    section to put it in (Recorded UAT), and the full local path to the video file. Wait until
+    they confirm it is uploaded. Do not write "video not attached"; this replaces that line in
+    the master template. Then re-read the page, confirm the video is in the UAT section, update
+    any text that still describes it as missing, and carry on to finish the page and the task.
 16. Before finishing, re-read the page and confirm every original failure row is unchanged and
     the page is linked on the ticket.
 
 ## Exit
 
+Don't finish while the video is still waiting to be uploaded.
 Pass = every test case passes. Finish with: did everything pass (initial vs final result), and
 if not why; open decisions with a recommendation each; and what is left running or created
 locally (servers, databases, containers, fixtures, test data). If QA passed, the next stage is
