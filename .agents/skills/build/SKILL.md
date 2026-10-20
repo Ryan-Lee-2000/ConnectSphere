@@ -52,7 +52,8 @@ Stage order: **build** → qa → devops. This skill ends when the branch is rea
 12. Handle edge cases as you build: empty, loading and error states, retries and
     duplicates, malformed or out-of-range input, and access after a state change.
 13. Keep changes small and coherent. No unrelated refactors, new dependencies or paid
-    services.
+    services. Comment only where necessary, briefly: name the AC a non-obvious rule enforces
+    (`# AC2: ...`) or explain a reason the code can't show. No other comments.
 
 ## Check and hand off
 14. Run `npm run verify` and make sure the existing suites still pass.

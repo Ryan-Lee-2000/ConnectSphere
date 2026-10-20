@@ -60,6 +60,10 @@ the old "QA-[Jira Ticket Key]" space template.
    Target 100% line and branch coverage of the lines this ticket added; report the figure,
    explain any gap, and say plainly if frontend coverage can't be measured. Do a red/mutation
    check: remove or break the feature and report which tests fail.
+   Case IDs are three digits, `QA-<KEY>-NNN`. Mark each automated test as
+   docs/development/testing.md describes: a one-line comment directly above it
+   (`# QA-<KEY>-001 | AC1 | BB`, or `//` in TypeScript) and the ID in the test name or title.
+   Add other comments only where a test's setup or assertion is not obvious, and keep them brief.
 7. Fill the BB/WB count table and the traceability table (AC -> case IDs -> automated test
    name). Before executing, review the cases against each AC's exact wording ("exactly once",
    "never", "after reload", "after reassignment") and record the risk and the case added for
