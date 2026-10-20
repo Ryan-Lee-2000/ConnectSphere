@@ -6,19 +6,21 @@ frameworks.
 
 ## Identify and find a test case
 
-Use `TC-SPL-<Jira number>-<two-digit sequence>`, for example `TC-SPL-70-03`.
+Use `QA-SPL-<Jira number>-<three-digit sequence>`, for example `QA-SPL-70-003`. Older stories used
+`TC-SPL-70-03`; leave those IDs as they are.
 
-- Record the ID, acceptance-criteria reference, scenario and expected result in the story document.
-- In Python, put the exact ID immediately above the test and include its normalised form in the
-  function name, for example `test_tc_spl_70_03_...`.
-- In TypeScript, begin the Vitest title with `[TC-SPL-70-03]`.
+- Record the ID, acceptance-criteria reference, scenario and expected result in the story's QA report.
+- In Python, put a one-line comment immediately above the test, `# QA-SPL-70-003 | AC1 | BB`, and
+  include the ID's normalised form in the function name, for example `test_qa_spl_70_003_...`.
+- In TypeScript (Vitest and Playwright), put `// QA-SPL-70-003 | AC1 | BB` above the test and begin
+  its title with the ID, for example `[QA-SPL-70-003]`.
 - Reuse an ID on multiple executable tests when they are distinct partitions of the same documented
   case. Do not combine unrelated outcomes merely to reduce the displayed case count.
 
 Find every document and executable test for a case from the repository root:
 
 ```sh
-rg -n "TC-SPL-70-03" docs backend/tests frontend/src
+rg -n "QA-SPL-70-003" docs backend/tests frontend/src e2e
 ```
 
 The result should lead directly to the documented expected result and the executable assertions.
@@ -83,7 +85,7 @@ is not needed to record an existing test.
 
 Copy the entire evidence directory to a dated evidence folder before another run:
 Playwright replaces output on rerun. Share the complete report folder, not index.html
-alone. Record story/TC IDs, covered AC, build commit plus any uncommitted changes,
+alone. Record story and case IDs, covered AC, build commit plus any uncommitted changes,
 fixture/environment, execution date and actual result alongside it. Use only local
 fake accounts: traces can contain Auth tokens, request bodies and local credentials;
 review artifacts before sharing, and never commit them. Generated evidence is ignored.
