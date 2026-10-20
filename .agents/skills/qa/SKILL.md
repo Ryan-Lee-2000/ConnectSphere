@@ -113,8 +113,8 @@ the old "QA-[Jira Ticket Key]" space template.
 15. Embed or attach the video in the UAT section via Confluence attachment upload. If you can't,
     pause and ask the user to upload it. Give them three things: the QA-<KEY> page link, the
     section to put it in (Recorded UAT), and the full local path to the video file. Wait until
-    they confirm it is uploaded. Do not write "video not attached"; this replaces that line in
-    the master template. Then re-read the page, confirm the video is in the UAT section, update
+    they confirm it is uploaded. Do not write "video not attached" (the master template says the
+    same). Then re-read the page, confirm the video is in the UAT section, update
     any text that still describes it as missing, and carry on to finish the page and the task.
 16. Before finishing, re-read the page and confirm every original failure row is unchanged and
     the page is linked on the ticket.
