@@ -17,7 +17,40 @@ type EventDetail = EventSummary & {
   status: string;
   status_label: string;
   status_explanation: string;
+  coordinator: { id: string; name: string } | null;
+  venue_arrangements: VenueArrangement[];
+  equipment_arrangements: EquipmentArrangement[];
+  registration_settings: RegistrationSettings;
   clarifications: Clarification[];
+};
+
+type VenueArrangement = {
+  booking_id: number;
+  venue: string;
+  location: string | null;
+  date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  status: 'approved' | 'requested' | 'review_required';
+  status_label: string;
+};
+
+type EquipmentArrangement = {
+  requirement_id: number;
+  equipment: string;
+  required_quantity: number;
+  reserved_quantity: number;
+  status: string;
+  status_label: string;
+  essentiality: string;
+  essentiality_label: string;
+};
+
+type RegistrationSettings = {
+  enabled: boolean;
+  capacity: number | null;
+  opens_at: string | null;
+  closes_at: string | null;
 };
 
 type OrganisationEventRequest = (path: string, init?: RequestInit) => Promise<Response>;
@@ -27,6 +60,70 @@ function formatDate(value: string) {
   return Number.isNaN(parsed.getTime())
     ? value
     : parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatInstant(value: string | null) {
+  if (!value) return 'Not configured';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('en-SG', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    timeZone: 'Asia/Singapore',
+  }).format(parsed);
+}
+
+function ArrangementsSummary({ event }: { event: EventDetail }) {
+  const venues = event.venue_arrangements ?? [];
+  const equipment = event.equipment_arrangements ?? [];
+  const registration = event.registration_settings ?? {
+    enabled: false, capacity: null, opens_at: null, closes_at: null,
+  };
+  return <section className="organisation-arrangements" aria-labelledby="organisation-arrangements-title">
+    <header className="organisation-arrangements__header">
+      <div>
+        <p className="eyebrow">Current saved state</p>
+        <h3 id="organisation-arrangements-title">Event arrangements</h3>
+        <p>This summary is read-only. Pending decisions and reviews are labelled separately from approved arrangements.</p>
+      </div>
+    </header>
+
+    <section className="organisation-arrangements__section" aria-labelledby="venue-arrangements-title">
+      <h4 id="venue-arrangements-title">Venue arrangements</h4>
+      {venues.length === 0
+        ? <p className="organisation-arrangements__empty">No current venue arrangement.</p>
+        : <div className="organisation-events__table-wrap"><table className="organisation-events__table">
+          <thead><tr><th scope="col">Venue</th><th scope="col">Booked date and time</th><th scope="col">Status</th></tr></thead>
+          <tbody>{venues.map(venue => <tr key={venue.booking_id}>
+            <td><strong>{venue.venue}</strong><small>{venue.location || 'Location not recorded'}</small></td>
+            <td>{venue.date ? formatDate(venue.date) : 'Date not recorded'}<small>{venue.start_time && venue.end_time ? `${venue.start_time} to ${venue.end_time}` : 'Time not recorded'}</small></td>
+            <td><span className={`arrangement-status arrangement-status--${venue.status}`}>{venue.status_label}</span></td>
+          </tr>)}</tbody>
+        </table></div>}
+    </section>
+
+    <section className="organisation-arrangements__section" aria-labelledby="equipment-arrangements-title">
+      <h4 id="equipment-arrangements-title">Equipment arrangements</h4>
+      {equipment.length === 0
+        ? <p className="organisation-arrangements__empty">No equipment requirements recorded.</p>
+        : <div className="organisation-events__table-wrap"><table className="organisation-events__table">
+          <thead><tr><th scope="col">Equipment</th><th scope="col">Quantity</th><th scope="col">Status</th></tr></thead>
+          <tbody>{equipment.map(item => <tr key={item.requirement_id}>
+            <td><strong>{item.equipment}</strong><small>{item.essentiality_label}</small></td>
+            <td><strong>{item.reserved_quantity}/{item.required_quantity}</strong><small>reserved / required</small></td>
+            <td><span className={`arrangement-status arrangement-status--${item.status}`}>{item.status_label}</span></td>
+          </tr>)}</tbody>
+        </table></div>}
+    </section>
+
+    <section className="organisation-arrangements__section" aria-labelledby="registration-arrangements-title">
+      <h4 id="registration-arrangements-title">Registration settings</h4>
+      <dl className="organisation-arrangements__registration">
+        <div><dt>Registration</dt><dd>{registration.enabled ? 'Enabled' : 'Not configured'}</dd></div>
+        <div><dt>Capacity</dt><dd>{registration.enabled ? registration.capacity : 'Not configured'}</dd></div>
+        <div><dt>Opens</dt><dd>{formatInstant(registration.opens_at)}</dd></div>
+        <div><dt>Closes</dt><dd>{formatInstant(registration.closes_at)}</dd></div>
+      </dl>
+    </section>
+  </section>;
 }
 
 export function OrganisationEvents({
@@ -125,8 +222,10 @@ export function OrganisationEvents({
       <div><dt>Proposed date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
       <div><dt>Time</dt><dd>{event.start_time} to {event.end_time}</dd></div>
       <div><dt>Expected attendance</dt><dd>{event.expected_attendance}</dd></div>
+      <div><dt>Assigned coordinator</dt><dd>{event.coordinator?.name || 'Not assigned'}</dd></div>
     </dl>
     {event.status === 'returned_for_clarification' && <p className="notice" role="status">{event.status_explanation}</p>}
+    <ArrangementsSummary event={event} />
     <ClarificationHistory clarifications={event.clarifications ?? []} heading="Clarification requests" />
   </section>;
 
