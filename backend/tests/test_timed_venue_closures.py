@@ -333,7 +333,7 @@ def test_tc_spl_138_07_removal_keeps_independent_event_review(app, client):
     booking = request_booking(client, event, venue).json["booking"]
     block = close(client, venue).json["operational_block"]
     with Session(app.extensions["engine"]) as session:
-        session.get(EventRequest, event).expected_attendance = 10000
+        session.get(EventRequest, event).expected_attendance = 100
         session.commit()
     assert (
         client.delete(
@@ -343,7 +343,7 @@ def test_tc_spl_138_07_removal_keeps_independent_event_review(app, client):
     )
     response = client.get(f"/api/venue-bookings/{booking['id']}", headers=headers("venue-staff"))
     reasons = response.json["booking"]["review_reasons"]
-    assert "Event requirements changed. Review and submit a new request." in reasons
+    assert "This booking's attendee count is above the event's expected attendance." in reasons
     assert not any("operational block" in reason for reason in reasons)
     assert response.json["review"]["requires_review"]
     assert (

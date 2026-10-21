@@ -152,6 +152,7 @@ test('TC-SPL-131-58 one event holds, checks and changes several independent venu
   await test.step('AC7/AC6: the coordinator cancels the hall with a reason; the studio is unchanged', async () => {
     await signIn(page, coordinator);
     await page.goto(eventPath);
+    await expect(page.getByRole('heading', { name: eventName, exact: true })).toBeVisible({ timeout: 30_000 });
     const hallCard = arrangement(page, hall);
     await expect(hallCard.getByText('Status: Approved')).toBeVisible();
     await hallCard.getByRole('button', { name: 'Cancel booking' }).click();

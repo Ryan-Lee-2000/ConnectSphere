@@ -79,12 +79,17 @@ def register_venue_routes(app: Flask) -> None:
                 session.add_all(VenueLayout(venue_id=venue.id, **layout) for layout in layouts)
             affected_booking_count = 0
             pending_review_count = 0
-            if timing_changed:
+            requirements_changed = layouts is not None or bool(
+                {"facilities", "accessibility_features", "location"}.intersection(attributes)
+            )
+            if timing_changed or requirements_changed:
                 from app.venue_booking_assessment import (
                     assess_venue_bookings,
                     count_pending_reviews,
                 )
 
+                session.flush()
+                session.expire(venue, ["layouts"])
                 affected_booking_count = assess_venue_bookings(
                     session, venue, assessed_by_account_id=g.user_id
                 )
@@ -103,10 +108,11 @@ def register_venue_routes(app: Flask) -> None:
     def create_venue_layout(venue_id: int):
         attributes = _layout_attributes(_request_json())
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id, lock=True)
+            venue = _find_venue(session, venue_id, exclusive_lock=True)
             _ensure_layout_is_unique(session, venue_id, attributes["layout"])
             layout = VenueLayout(venue_id=venue_id, **attributes)
             session.add(layout)
+            _assess_layout_change(session, venue)
             session.commit()
             session.refresh(layout)
             return jsonify(layout=_serialize_layout(layout)), 201
@@ -116,12 +122,13 @@ def register_venue_routes(app: Flask) -> None:
     def update_venue_layout(venue_id: int, layout_id: int):
         attributes = _layout_attributes(_request_json())
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id, lock=True)
+            venue = _find_venue(session, venue_id, exclusive_lock=True)
             layout = _find_layout(session, venue_id, layout_id)
             if layout.layout != attributes["layout"]:
                 _ensure_layout_is_unique(session, venue_id, attributes["layout"])
             layout.layout = attributes["layout"]
             layout.capacity = attributes["capacity"]
+            _assess_layout_change(session, venue)
             session.commit()
             session.refresh(layout)
             return jsonify(layout=_serialize_layout(layout))
@@ -130,11 +137,20 @@ def register_venue_routes(app: Flask) -> None:
     @require_roles(Role.VENUE_STAFF)
     def delete_venue_layout(venue_id: int, layout_id: int):
         with Session(app.extensions["engine"]) as session:
-            _find_venue(session, venue_id, lock=True)
+            venue = _find_venue(session, venue_id, exclusive_lock=True)
             layout = _find_layout(session, venue_id, layout_id)
             session.delete(layout)
+            _assess_layout_change(session, venue)
             session.commit()
         return "", 204
+
+
+def _assess_layout_change(session: Session, venue: Venue) -> None:
+    from app.venue_booking_assessment import assess_venue_bookings
+
+    session.flush()
+    session.expire(venue, ["layouts"])
+    assess_venue_bookings(session, venue, assessed_by_account_id=g.user_id)
 
 
 def _request_json() -> dict[str, Any]:

@@ -166,12 +166,20 @@ def test_tc_03_05_changed_requirements_refuse_approval_without_mutation(app, cli
     result = client.post(
         f"/api/venue-bookings/{booking['id']}/approve", json={}, headers=headers("venue-staff")
     )
-    assert result.status_code == 409, result.json
+    # SPL-106: increasing total attendance does not change this room's allocation.
+    assert result.status_code == (200 if change == "event" else 409), result.json
     read = client.get(f"/api/event-requests/{event}/venue-booking-status", headers=headers()).json
-    assert read["venue_booking_request"]["timing"] == booking["timing"]
-    assert read["venue_booking_request"]["status"] == "requested"
-    assert read["venue_booking_request"]["review_reasons"]
-    assert len(read["history"]) == 1
+    current = read["venue_booking_request"]
+    assert current["timing"] == booking["timing"]
+    if change == "event":
+        assert current["expected_attendance"] == booking["expected_attendance"]
+        assert current["status"] == "approved"
+        assert not current["review_reasons"]
+        assert len(read["history"]) == 2
+    else:
+        assert current["status"] == "requested"
+        assert current["review_reasons"]
+        assert len(read["history"]) == 1
 
 
 @pytest.mark.parametrize("action", ["reject", "withdraw"])

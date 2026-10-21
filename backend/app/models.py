@@ -450,6 +450,12 @@ BOOKING_REVIEW_REASON_TYPES = (
     "operational_block",
     "outside_operating_hours",
     "unresolved_historical_timing",
+    "layout_capacity",
+    "facilities",
+    "accessibility",
+    "location",
+    "attendance",
+    "event_times",
 )
 
 
