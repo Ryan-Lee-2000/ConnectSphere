@@ -99,6 +99,7 @@ def register_venue_booking_assessment_routes(app: Flask) -> None:
                 finding.resolved_by_account_id = g.user_id
                 finding.last_assessed_at = assessed_at
             booking.requires_review = _has_other_active_findings(session, booking.id, findings)
+            _assess_bookings(session, venue, [booking], g.user_id, assessed_at)
             session.commit()
             return jsonify(review=serialize_review(session, booking))
 
@@ -110,7 +111,7 @@ def assess_venue_bookings(
     assessed_by_account_id: str | None,
     assessed_at: datetime | None = None,
 ) -> int:
-    """Persist every current problem without silently resolving an older reason.
+    """Persist current problems, resolving only verified requirement findings.
 
     The caller holds the venue row with ``FOR UPDATE``. Exact booking creation takes a conflicting
     key-share lock, so updated rules, reassessment and protection of new allocations commit as one
@@ -128,6 +129,12 @@ def assess_venue_bookings(
         .order_by(VenueBooking.id)
         .with_for_update()
     ).all()
+    return _assess_bookings(session, venue, candidates, assessed_by_account_id, when)
+
+
+def _assess_bookings(session, venue, candidates, assessed_by_account_id, when) -> int:
+    from app.venue_requirement_review import REQUIREMENT_REASON_TYPES, requirement_reasons
+
     rows: list[tuple[VenueBooking, EventRequest]] = []
     current_intervals: dict[int, Interval] = {}
     for booking in candidates:
@@ -135,7 +142,7 @@ def assess_venue_bookings(
         current, _ = _current_occupancy(venue, event, booking)
         if current is not None:
             current_intervals[booking.id] = current
-        if _has_not_ended(booking, event, when):
+        if event.status not in ("cancelled", "completed") and _has_not_ended(booking, event, when):
             rows.append((booking, event))
 
     affected = 0
@@ -148,11 +155,13 @@ def assess_venue_bookings(
             event,
             current,
             current_intervals,
-            include_peer_intervals=False,
+            include_peer_intervals=True,
         )
-        if not reasons:
-            continue
-        affected += 1
+        reasons.extend(requirement_reasons(venue, event, booking))
+        previous = active_findings(session, booking.id)
+        previous_keys = {finding.finding_key for finding in previous}
+        if reasons:
+            affected += 1
         original = _original_occupancy(booking)
         current_json = current.serialize() if current else None
         for key, reason_type, detail in reasons:
@@ -182,9 +191,47 @@ def assess_venue_bookings(
                 existing.last_assessed_at = when
                 existing.resolved_at = None
                 existing.resolved_by_account_id = None
-        booking.requires_review = True
-        booking.review_marked_at = when
-        booking.review_marked_by_account_id = assessed_by_account_id
+        resolved = []
+        # AC4: automatic clearance belongs only to requirement causes and requires all checks.
+        if not reasons:
+            for finding in previous:
+                if finding.reason_type in REQUIREMENT_REASON_TYPES:
+                    finding.resolved_at = when
+                    finding.resolved_by_account_id = assessed_by_account_id
+                    finding.last_assessed_at = when
+                    resolved.append(finding)
+        session.flush()
+        current_findings = active_findings(session, booking.id)
+        if reasons or resolved:
+            legacy_block = (
+                session.get(VenueOperationalBlock, booking.review_trigger_block_id)
+                if booking.review_trigger_block_id
+                else None
+            )
+            booking.requires_review = bool(current_findings) or bool(
+                legacy_block and legacy_block.removed_at is None
+            )
+        if reasons:
+            booking.review_marked_at = when
+            booking.review_marked_by_account_id = assessed_by_account_id
+        new_findings = [
+            finding for finding in current_findings if finding.finding_key not in previous_keys
+        ]
+        if assessed_by_account_id and (new_findings or resolved):
+            from app.venue_booking_history import record_booking_transition
+
+            # AC3: a durable flag event for SPL-121, with no status transition or notification.
+            record_booking_transition(
+                session,
+                booking.id,
+                action="review_required" if new_findings else "review_resolved",
+                previous_status=booking.status,
+                resulting_status=booking.status,
+                actor_account_id=assessed_by_account_id,
+                changed_at=when,
+                note=("Review required: " if new_findings else "Review resolved: ")
+                + "; ".join(finding.detail for finding in new_findings or resolved),
+            )
     session.flush()
     return affected
 
@@ -398,6 +445,10 @@ def _reasons_for_booking(
     *,
     include_peer_intervals: bool,
 ) -> list[tuple[str, str, str]]:
+    if not booking.exact_timing and venue.setup_minutes is None:
+        from app.venue_requirement_review import legacy_timing_reasons
+
+        return legacy_timing_reasons(session, venue, booking)
     reasons: list[tuple[str, str, str]] = []
     if booking.exact_timing is None or current is None:
         reasons.append(
@@ -449,6 +500,7 @@ def _reasons_for_booking(
     ).all()
     for peer in peers:
         intervals: list[Interval] = []
+        intervals.extend(_protected_intervals(peer))
         peer_event = None
         if peer.id in current_intervals:
             intervals.append(current_intervals[peer.id])

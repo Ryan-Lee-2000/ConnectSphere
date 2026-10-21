@@ -102,37 +102,18 @@ def exact_review_reasons(session, booking):
     if not booking.exact_timing or booking.status not in ("requested", "approved"):
         return []
     from app.exact_venue_availability import exact_availability
-    from app.venue_arrangements import (
-        arrangement_checks,
-        booking_attendee_count,
-        booking_facilities,
-        within_event,
-    )
+    from app.venue_arrangements import within_event
+    from app.venue_requirement_review import requirement_reasons
 
     venue = session.get(Venue, booking.venue_id)
     event = session.get(EventRequest, booking.event_request_id)
-    reasons = []
-    if booking.reviewed_requirements != requirements(event):
-        reasons.append("Event requirements changed. Review and submit a new request.")
-    # SPL-131 AC3: the booking's own attendee count, layout and facilities, plus the event's
-    # accessibility needs and location preference.
-    attendee_count = booking_attendee_count(booking, event)
-    if (
-        attendee_count is not None
-        and event.expected_attendance is not None
-        and attendee_count > event.expected_attendance
-    ):
-        reasons.append("This booking's attendee count is above the event's expected attendance.")
-    layout_check, *other_checks = arrangement_checks(
-        venue,
-        event,
-        layout_name=booking.layout,
-        attendee_count=attendee_count,
-        facilities=booking_facilities(booking, event),
-    )
-    if not layout_check["passed"]:
-        reasons.append("The requested layout no longer holds the expected attendance.")
-    reasons.extend(check["detail"] for check in other_checks if not check["passed"])
+    reasons = [
+        "The requested layout no longer holds the expected attendance."
+        if reason_type == "layout_capacity"
+        else detail
+        for _, reason_type, detail in requirement_reasons(venue, event, booking)
+        if reason_type != "event_times"
+    ]
     try:
         # SPL-131 AC2: a booking's own times must stay inside the saved event's start and end.
         if not within_event(

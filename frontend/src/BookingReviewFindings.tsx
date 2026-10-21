@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 export type ReviewOccupancy = {
   start?: string;
   end?: string;
@@ -6,7 +8,8 @@ export type ReviewOccupancy = {
 
 export type BookingReviewFinding = {
   id: number;
-  reason_type: 'overlap' | 'operational_block' | 'outside_operating_hours' | 'unresolved_historical_timing';
+  reason_type: 'overlap' | 'operational_block' | 'outside_operating_hours' | 'unresolved_historical_timing'
+    | 'layout_capacity' | 'facilities' | 'accessibility' | 'location' | 'attendance' | 'event_times';
   detail: string;
   original_occupancy: ReviewOccupancy | null;
   current_occupancy: ReviewOccupancy | null;
@@ -30,9 +33,11 @@ export function occupancyName(occupancy: ReviewOccupancy | null) {
 }
 
 export function BookingReviewFindings({ findings }: { findings: BookingReviewFinding[] }) {
+  const headingId = useId();
   if (!findings.length) return null;
-  return <section className="booking-review-findings" aria-labelledby="timing-findings-title">
-    <h2 id="timing-findings-title">Timing review findings</h2>
+  const requirements = findings.some(finding => ['layout_capacity', 'facilities', 'accessibility', 'location', 'attendance', 'event_times'].includes(finding.reason_type));
+  return <section className="booking-review-findings" aria-labelledby={headingId}>
+    <h2 id={headingId}>{requirements ? 'Booking review findings' : 'Timing review findings'}</h2>
     <ul>
       {findings.map(finding => <li key={finding.id}>
         <strong>{finding.detail}</strong>
