@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
 from app.event_requests import SINGAPORE
-from app.models import Account, EventCoordinatorAssignment, EventRequest, Notification, Role
+from app.models import (
+    Account,
+    AccountRole,
+    EventCoordinatorAssignment,
+    EventRequest,
+    Notification,
+    Role,
+)
 
 # Event, role and organisation permissions are enforced where the linked record is opened, so a
 # notice never grants access on its own.
@@ -172,6 +179,37 @@ def add_change_request_submitted_notice(
     )
 
 
+def add_technical_support_notices(
+    session: Session, event: EventRequest, *, kind: str, source_id: str | int, message: str
+) -> None:
+    """Notify every active Technical Support Staff account (SPL-122), in the caller's transaction.
+
+    Recipients come from server-owned role assignments, never from the request. The notice commits
+    or rolls back with the action, so a refused action leaves none, and the source row in the
+    dedupe key stops a repeat of the same action adding a second.
+    """
+
+    now = datetime.now(SINGAPORE)
+    recipients = session.scalars(
+        select(Account.id)
+        .join(AccountRole, AccountRole.account_id == Account.id)
+        .where(
+            AccountRole.role == Role.TECHNICAL_SUPPORT_STAFF.value,
+            Account.is_active.is_(True),
+        )
+    ).all()
+    for recipient_id in recipients:
+        session.add(
+            Notification(
+                recipient_account_id=recipient_id,
+                event_request_id=event.id,
+                message=message,
+                dedupe_key=f"technical_{kind}:{source_id}",
+                created_at=now,
+            )
+        )
+
+
 def register_notification_routes(app: Flask) -> None:
     @app.get("/api/notifications")
     @require_roles(*ALL_ROLES)
@@ -253,6 +291,9 @@ def _event_link(notice: Notification) -> str:
     # organisation event page; the coordinator-only page would send them back to the workspace.
     # Both pages stay behind their own role and ownership checks on the server.
     kind = notice.dedupe_key.split(":", 1)[0]
+    if kind.startswith("technical_"):
+        # SPL-122 AC5: Technical Support cannot open coordinator pages; their queue holds the work.
+        return "/workspace/equipment-review-queue"
     page = "organisation-events" if kind.startswith("organiser_") else "assigned-events"
     return f"/workspace/{page}/{notice.event_request_id}"
 
