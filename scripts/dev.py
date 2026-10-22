@@ -326,6 +326,8 @@ def main():
             "backend/tests/test_equipment_requirement_unavailability_postgres.py",
             # SPL-111: simultaneous change-request submissions, the one-pending index and grants.
             "backend/tests/test_event_change_requests_postgres.py",
+            # SPL-141: equipment proposals serialize and roll back atomically.
+            "backend/tests/test_qa_spl141_postgres.py",
             # SPL-134: assignment/reassignment notices under real concurrent requests.
             "backend/tests/test_qa_spl134_postgres.py",
             # SPL-85: concurrent confirmation, confirmation racing a release, and the migration.

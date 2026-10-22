@@ -38,7 +38,14 @@ from app import registration_settings as settings
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import _iso_date, _iso_time, _positive_integer, _string_list
-from app.models import EventChangeRequest, EventChangeRequestItem, EventRequest, Role
+from app.models import (
+    EquipmentRequirement,
+    EquipmentType,
+    EventChangeRequest,
+    EventChangeRequestItem,
+    EventRequest,
+    Role,
+)
 from app.notifications import add_change_request_submitted_notice
 from app.validation import request_json, required_text
 
@@ -54,6 +61,7 @@ ONLY_ITEMS = "A change request accepts only items."
 ONLY_ITEM_KEYS = "Each item accepts only field, requested_value and reason."
 MAX_TEXT_LENGTH = 2_000
 MAX_REASON_LENGTH = 1_000
+MAX_ITEMS = 100
 
 # The event details an organiser may ask to change, with the label used in error messages.
 # Status, ownership, registration settings, venue and equipment have their own workflows.
@@ -75,6 +83,27 @@ _LIST_FIELDS = {"required_facilities", "accessibility_needs"}
 
 
 def register_event_change_request_routes(app: Flask) -> None:
+    @app.get("/api/event-requests/<int:event_request_id>/change-requests/equipment-options")
+    @require_roles(Role.EVENT_ORGANISER)
+    def equipment_change_options(event_request_id: int):
+        with Session(app.extensions["engine"]) as session:
+            event = _own_event(session, event_request_id)
+            if event.status not in CHANGEABLE_STATUSES:
+                abort(409, NOT_AVAILABLE)
+            lines = session.scalars(
+                select(EquipmentRequirement)
+                .where(
+                    EquipmentRequirement.event_request_id == event.id,
+                    EquipmentRequirement.status != "removed",
+                )
+                .order_by(EquipmentRequirement.id)
+            ).all()
+            types = session.scalars(select(EquipmentType).order_by(EquipmentType.name)).all()
+            return jsonify(
+                equipment_requirements=[_equipment_snapshot(line) for line in lines],
+                equipment_types=[{"id": item.id, "name": item.name} for item in types],
+            )
+
     @app.post("/api/event-requests/<int:event_request_id>/change-requests")
     @require_roles(Role.EVENT_ORGANISER)
     def submit_change_request(event_request_id: int):
@@ -90,6 +119,8 @@ def register_event_change_request_routes(app: Flask) -> None:
             if _pending_request(session, event.id) is not None:
                 abort(409, ALREADY_PENDING)
 
+            _equipment_snapshots(session, event, items)
+
             # Step 6. The request and its items are one write, so no request exists without items.
             change_request = EventChangeRequest(
                 event_request_id=event.id,
@@ -99,7 +130,11 @@ def register_event_change_request_routes(app: Flask) -> None:
                 items=[
                     EventChangeRequestItem(
                         field=item["field"],
-                        current_value=_current_value(event, item["field"]),
+                        current_value=(
+                            item["current_value"]
+                            if "current_value" in item
+                            else _current_value(event, item["field"])
+                        ),
                         requested_value=item["requested_value"],
                         reason=item["reason"],
                     )
@@ -115,7 +150,7 @@ def register_event_change_request_routes(app: Flask) -> None:
                     session,
                     event,
                     change_request_id=change_request.id,
-                    field_labels=[FIELDS[item["field"]] for item in items],
+                    field_labels=[_field_label(item["field"]) for item in items],
                 )
                 session.commit()
             except IntegrityError:
@@ -155,7 +190,7 @@ def serialize_change_request(change_request: EventChangeRequest) -> dict[str, An
             {
                 "id": item.id,
                 "field": item.field,
-                "field_label": FIELDS.get(item.field, item.field),
+                "field_label": _field_label(item.field),
                 "current_value": item.current_value,
                 "requested_value": item.requested_value,
                 "reason": item.reason,
@@ -174,7 +209,11 @@ def _items() -> list[dict[str, Any]]:
     submitted = data["items"]
     if not isinstance(submitted, list) or not submitted:
         abort(400, "Add at least one item to the change request.")
-    if len(submitted) > len(FIELDS):
+    if len(submitted) > MAX_ITEMS:
+        abort(400, f"A change request accepts at most {MAX_ITEMS} items.")
+    if len(submitted) > len(FIELDS) and not any(
+        isinstance(item, dict) and item.get("field") == "equipment" for item in submitted
+    ):
         abort(400, "A change request can change each field only once.")
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -182,10 +221,21 @@ def _items() -> list[dict[str, Any]]:
         if not isinstance(raw, dict) or set(raw) != {"field", "requested_value", "reason"}:
             abort(400, ONLY_ITEM_KEYS)
         field = raw["field"]
-        if not isinstance(field, str) or field not in FIELDS:
+        if not isinstance(field, str) or field not in {*FIELDS, "equipment"}:
             abort(400, f"Item {index}: choose a field that can be changed.")
+        value = (
+            _equipment_value(raw["requested_value"])
+            if field == "equipment"
+            else _requested_value(field, raw["requested_value"])
+        )
+        if field == "equipment":
+            field = (
+                f"equipment:add:{index}"
+                if value["operation"] == "add"
+                else f"equipment:line:{value['requirement_id']}"
+            )
         if field in seen:
-            abort(400, f"{FIELDS[field]} is in this change request more than once.")
+            abort(400, f"{_field_label(field)} is in this change request more than once.")
         seen.add(field)
         reason = required_text(raw["reason"], f"Item {index} reason")
         if len(reason) > MAX_REASON_LENGTH:
@@ -193,7 +243,7 @@ def _items() -> list[dict[str, Any]]:
         items.append(
             {
                 "field": field,
-                "requested_value": _requested_value(field, raw["requested_value"]),
+                "requested_value": value,
                 "reason": reason,
             }
         )
@@ -260,3 +310,75 @@ def _pending_request(session: Session, event_request_id: int) -> int | None:
             EventChangeRequest.status == PENDING,
         )
     )
+
+
+def _field_label(field: str) -> str:
+    if field.startswith("equipment:add:"):
+        return "Add equipment requirement"
+    if field.startswith("equipment:line:"):
+        return "Equipment requirement"
+    return FIELDS.get(field, field)
+
+
+def _equipment_value(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("operation") not in ("add", "update", "remove"):
+        abort(400, "Choose add, update or remove for the equipment proposal.")
+    operation = value["operation"]
+    identity = "equipment_type_id" if operation == "add" else "requirement_id"
+    expected = {"operation", identity}
+    if operation != "remove":
+        expected |= {"quantity", "notes"}
+    if set(value) != expected:
+        abort(400, "Provide only the equipment action, selected type or line, quantity and notes.")
+    target = value[identity]
+    if type(target) is not int or not 0 < target <= MAX_EVENT_REQUEST_ID:
+        abort(400, "Choose a valid equipment type or requirement line.")
+    cleaned = {"operation": operation, identity: target}
+    if operation != "remove":
+        quantity = value["quantity"]
+        if type(quantity) is not int or not 0 < quantity <= 2_147_483_647:
+            abort(400, "Equipment quantity must be a positive whole number up to 2147483647.")
+        notes = value["notes"]
+        if notes is not None and (not isinstance(notes, str) or len(notes) > MAX_TEXT_LENGTH):
+            abort(400, f"Technical notes must be text of {MAX_TEXT_LENGTH} characters or fewer.")
+        cleaned.update(quantity=quantity, notes=notes.strip() or None if notes else None)
+    return cleaned
+
+
+def _equipment_snapshot(line: EquipmentRequirement) -> dict[str, Any]:
+    return {
+        "requirement_id": line.id,
+        "equipment_type_id": line.equipment_type_id,
+        "equipment_type": line.equipment_type,
+        "quantity": line.quantity,
+        "notes": line.notes,
+    }
+
+
+def _equipment_snapshots(
+    session: Session, event: EventRequest, items: list[dict[str, Any]]
+) -> None:
+    # AC2/AC5: capture server-owned values under the event lock; never edit actual arrangements.
+    for item in items:
+        if not item["field"].startswith("equipment:"):
+            continue
+        proposal = item["requested_value"]
+        if proposal["operation"] == "add":
+            equipment_type = session.get(EquipmentType, proposal["equipment_type_id"])
+            if equipment_type is None:
+                abort(400, "Choose an equipment type from the catalogue.")
+            item["current_value"] = None
+            proposal["equipment_type"] = equipment_type.name
+        else:
+            line = session.scalar(
+                select(EquipmentRequirement).where(
+                    EquipmentRequirement.id == proposal["requirement_id"],
+                    EquipmentRequirement.event_request_id == event.id,
+                    EquipmentRequirement.status != "removed",
+                )
+            )
+            if line is None:
+                abort(400, "Choose a current equipment requirement from this event.")
+            item["current_value"] = _equipment_snapshot(line)
+            if proposal["operation"] == "update":
+                item["requested_value"] = {**item["current_value"], **proposal}
