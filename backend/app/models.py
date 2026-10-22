@@ -966,7 +966,7 @@ class EventStatusHistory(Base):
 
 
 class EventDetailChange(Base):
-    """One atomic SPL-108 ordinary-information edit; rows are append-only audit evidence."""
+    """One atomic coordinator event edit; rows are append-only audit evidence."""
 
     __tablename__ = "event_detail_changes"
 

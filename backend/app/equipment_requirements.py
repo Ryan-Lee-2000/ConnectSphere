@@ -106,7 +106,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def get_equipment_requirements(event_request_id: int):
         with Session(app.extensions["engine"]) as session:
-            event = _assigned_planning_event(session, event_request_id)
+            event = _assigned_planning_event(session, event_request_id, allow_confirmed=True)
             catalogue = session.scalars(
                 select(EquipmentType).order_by(EquipmentType.name, EquipmentType.id)
             ).all()
@@ -258,7 +258,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
 
 
 def _assigned_planning_event(
-    session: Session, event_request_id: int, *, lock: bool = False
+    session: Session, event_request_id: int, *, lock: bool = False, allow_confirmed: bool = False
 ) -> EventRequest:
     """Return the caller's assigned Planning event, or fail without leaking another event.
 
@@ -294,7 +294,7 @@ def _assigned_planning_event(
     )
     if event is None or not is_assigned_coordinator(session, event_request_id, g.user_id):
         abort(404, "Assigned event not found.")
-    if event.status != PLANNING:
+    if event.status != PLANNING and not (allow_confirmed and event.status == "confirmed"):
         abort(409, "Equipment requirements can only be planned for an event in Planning.")
     if event.proposed_date is None:
         abort(409, "Record the event date before planning equipment requirements.")
