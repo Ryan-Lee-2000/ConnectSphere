@@ -193,7 +193,7 @@ def serialize_confirmed_arrangements(event: EventRequest) -> dict[str, Any] | No
             "booking_id": booking.id,
             "venue": booking.venue.name,
             "date": booking.booking_date.isoformat() if booking.booking_date else None,
-            **_booked_times(booking, event),
+            **booked_times(booking, event),
             "layout": booking.layout,
         }
         for booking in sorted(event.venue_bookings, key=lambda booking: booking.id)
@@ -213,7 +213,7 @@ def serialize_confirmed_arrangements(event: EventRequest) -> dict[str, Any] | No
     return {"venues": venues, "equipment": equipment}
 
 
-def _booked_times(booking: VenueBooking, event: EventRequest) -> dict[str, str | None]:
+def booked_times(booking: VenueBooking, event: EventRequest) -> dict[str, str | None]:
     """The hours this booking actually holds (SPL-131: each booking has its own times).
 
     An exact booking shows its stored advertised interval in Singapore time, with a midnight end
@@ -240,10 +240,20 @@ def _booked_times(booking: VenueBooking, event: EventRequest) -> dict[str, str |
     }
 
 
-def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict[str, Any]]:
+def venue_booking_requires_review(session: Session, booking: VenueBooking) -> bool:
+    """Apply every current source of venue-review state used by the confirmation gate."""
+
     from app.exact_venue_bookings import exact_review_reasons
     from app.venue_booking_assessment import active_findings
 
+    return bool(
+        booking.requires_review
+        or active_findings(session, booking.id)
+        or exact_review_reasons(session, booking)
+    )
+
+
+def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict[str, Any]]:
     active = [booking for booking in bookings if booking.status in ACTIVE_BOOKING_STATUSES]
     blockers = []
     if not any(booking.status == APPROVED for booking in active):
@@ -266,11 +276,7 @@ def _venue_blockers(session: Session, bookings: list[VenueBooking]) -> list[dict
             )
         # Review comes from the SPL-89 marker, an unresolved SPL-130 timing finding, or SPL-137's
         # current reasons, matching how the booking status view decides "requires review".
-        if (
-            booking.requires_review
-            or active_findings(session, booking.id)
-            or exact_review_reasons(session, booking)
-        ):
+        if venue_booking_requires_review(session, booking):
             blockers.append(
                 {
                     "code": "venue_booking_review_required",
