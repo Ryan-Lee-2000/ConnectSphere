@@ -212,6 +212,12 @@ def register_equipment_availability_routes(app: Flask) -> None:
             requirement, equipment_type = _locked_reservable_requirement(session, requirement_id)
             if requirement.status != "review_required":
                 abort(409, "Only a Review Required equipment requirement can be revalidated.")
+            # SPL-109: retained reservations for the old event date cannot clear the new review.
+            event_date = requirement.event_request.proposed_date
+            if event_date is not None and not (
+                requirement.required_start_date <= event_date <= requirement.required_end_date
+            ):
+                abort(409, "Ask the coordinator to update this requirement to the new event date.")
             assessment = _assessment_for(session, requirement, equipment_type)
             if (
                 assessment.overcommitted_units > 0

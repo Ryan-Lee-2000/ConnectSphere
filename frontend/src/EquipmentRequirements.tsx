@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import type { ChangePreview } from './SignificantEventChanges';
 import { defaultRequest, responseError, type ApiRequest } from './api';
 
 type EquipmentType = {
@@ -65,8 +66,8 @@ function newDraft(eventDate: string | null, requirement?: Requirement): Draft {
     equipment_type_id: requirement?.equipment_type ? String(requirement.equipment_type.id) : '',
     quantity: String(requirement?.quantity ?? 1),
     notes: requirement?.notes ?? '',
-    required_start_date: requirement?.required_start_date ?? eventDate ?? '',
-    required_end_date: requirement?.required_end_date ?? eventDate ?? '',
+    required_start_date: eventDate ?? requirement?.required_start_date ?? '',
+    required_end_date: eventDate ?? requirement?.required_end_date ?? '',
     essentiality: requirement?.essentiality ?? 'undecided',
     consulted_technical_support_account_id: requirement?.consulted_technical_support?.id ?? '',
     essentiality_decision_note: requirement?.essentiality_decision_note ?? '',
@@ -163,7 +164,7 @@ function RequirementEditor({
     {/* SPL-91 AC2, said before the coordinator commits to it rather than discovered after: a
         change to a line holding stock costs it that stock and a fresh Technical Support review. */}
     {holdsStock && <p className="equipment-requirements__release-warning" role="note">
-      Technical Support has already reviewed this line. Changing the equipment, quantity, dates
+      Technical Support has already reviewed this line: {initial?.organiser_equipment_text} (equipment #{initial?.id}). Changing the equipment, quantity, dates
       or technical notes releases any units reserved for it and sends it back to Technical Support
       for review. Recording criticality does not.
     </p>}
@@ -277,10 +278,22 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
     // POST adds a new catalogue-backed line; PATCH maps or updates an existing unreserved line.
     setSaving(true); setError(null); setEditorError(null); setNotice(null);
     try {
-      const response = await api(requirement ? `${endpoint}/${requirement.id}` : endpoint, {
-        method: requirement ? 'PATCH' : 'POST',
-        body: JSON.stringify(asPayload(draft)),
-      });
+      let response: Response;
+      if (data?.event.status === 'confirmed' && requirement) {
+        const significant = `/api/event-requests/assigned/${eventId}/significant-changes`;
+        const payload = { values: asPayload(draft), equipment_requirement_id: requirement.id };
+        const proposed = await api(`${significant}/preview`, { method: 'POST', body: JSON.stringify(payload) });
+        if (!proposed.ok) { setEditorError(await responseError(proposed, 'Could not review these changes.')); return; }
+        const preview = await proposed.json() as ChangePreview;
+        if (!Object.keys(preview.changes).length) { await load(); setEditing(null); setNotice('No changes to save.'); return; }
+        const warning = preview.arrangements.map(item => `${item.name} (equipment #${item.id}): ${item.reason}`).join('\n');
+        if (!window.confirm(`${warning}\nThis event will return from Confirmed to Planning. Save changes?`)) return;
+        response = await api(significant, { method: 'PATCH', body: JSON.stringify({ ...payload, preview_token: preview.preview_token }) });
+      } else {
+        response = await api(requirement ? `${endpoint}/${requirement.id}` : endpoint, {
+          method: requirement ? 'PATCH' : 'POST', body: JSON.stringify(asPayload(draft)),
+        });
+      }
       if (!response.ok) {
         setEditorError(await responseError(response, 'Could not save this equipment requirement.'));
         return;
@@ -302,6 +315,7 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
   }
 
   async function remove(requirement: Requirement) {
+    if (data?.event.status !== 'planning') return;
     // Removing is a soft removal: the record remains in event history for traceability. SPL-91:
     // for a line holding stock, the confirmation says the units go too, before they do.
     const releases = HOLDING_STATUSES.has(requirement.status)
@@ -338,13 +352,14 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
     </header>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
+    {data.event.status === 'confirmed' && <p role="note">Editing an equipment requirement returns this event to Planning. Adding or removing lines is available in Planning.</p>}
     {editing === 'new' ? <RequirementEditor eventDate={data.event.proposed_date} catalogue={data.equipment_types}
       technicalSupport={data.technical_support_staff} onCancel={() => openEditor(null)} onSave={draft => { void save(draft); }} saving={saving} error={editorError} /> : <>
       <section className="equipment-requirements__overview" aria-label="Equipment planning guidance">
         <div><strong>{data.requirements.filter(line => line.status === 'unmapped').length}</strong><span>Needs mapping</span></div>
         <div><strong>{data.requirements.filter(line => line.status !== 'unmapped').length}</strong><span>Active requirements</span></div>
         <p>Map organiser wording to the shared catalogue, then mark criticality only after consulting Technical Support.</p>
-        <button className="button button--primary" type="button" onClick={() => openEditor('new')}>Add requirement</button>
+        <button className="button button--primary" type="button" disabled={data.event.status !== 'planning'} onClick={() => openEditor('new')}>Add requirement</button>
       </section>
       <section className="equipment-requirements__list" aria-label="Active equipment requirements">
         {data.requirements.length === 0 && <div className="equipment-requirements__empty"><strong>No equipment requirements yet.</strong><span>Add a requirement when this event needs equipment or technical preparation.</span></div>}
@@ -385,7 +400,7 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
             {requirement.notes && <p className="equipment-requirements__notes"><strong>Technical notes</strong>{requirement.notes}</p>}
             {requirement.essentiality !== 'undecided' && <div className="equipment-requirements__decision"><strong>{essentialityLabel(requirement.essentiality)}</strong><span>Consulted {requirement.consulted_technical_support?.name} · {requirement.essentiality_decision_note}</span><span>Recorded by {requirement.essentiality_decided_by?.name ?? 'the assigned Event Coordinator'} · {formatTimestamp(requirement.essentiality_decided_at)}</span></div>}
             <footer><button className="button button--secondary" type="button" onClick={() => openEditor(requirement.id)} disabled={saving}>{requirement.status === 'unmapped' ? 'Map to catalogue' : 'Edit requirement'}</button>
-              <button className="equipment-requirements__remove" type="button" onClick={() => { void remove(requirement); }} disabled={saving}>Remove</button></footer>
+              <button className="equipment-requirements__remove" type="button" onClick={() => { void remove(requirement); }} disabled={saving || data.event.status !== 'planning'}>Remove</button></footer>
           </>}
         </article>)}
       </section>

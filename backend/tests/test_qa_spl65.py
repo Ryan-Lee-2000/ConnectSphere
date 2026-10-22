@@ -1055,7 +1055,13 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
         "withdraw",
         "confirm",  # SPL-85: planning -> confirmed
         "cancel",  # SPL-86: any active status -> cancelled
+        "significant_change",  # SPL-109: confirmed -> planning
     }
+    significant_change = TRANSITION_RULES["significant_change"]
+    assert (significant_change.previous_status, significant_change.resulting_status) == (
+        "confirmed",
+        "planning",
+    )
     assert TRANSITION_RULES["begin_review"].resulting_status == "under_review"
 
 

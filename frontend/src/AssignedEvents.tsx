@@ -4,6 +4,7 @@ import { ClarificationHistory, type Clarification } from './ClarificationHistory
 import { ChangeRequestsPanel } from './ChangeRequests';
 import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
+import { SignificantEventChanges } from './SignificantEventChanges';
 import { VenueArrangements } from './VenueArrangements';
 
 const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
@@ -395,6 +396,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [cancellationError, setCancellationError] = useState<string | null>(null);
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
+  const [arrangementRevision, setArrangementRevision] = useState(0);
   const [editingInformation, setEditingInformation] = useState(false);
   const [savingInformation, setSavingInformation] = useState(false);
   const [information, setInformation] = useState({
@@ -735,6 +737,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       </header>
       <EventBrief event={event} />
       <EquipmentReadinessPanel event={event} />
+      {ACTIVE_EVENT_STATUSES.has(event.status) && <SignificantEventChanges key={event.id} event={event} api={api} onSaved={updated => { setEvent(updated); setConfirmingEvent(false); setArrangementRevision(value => value + 1); }} />}
+      {event.status === 'confirmed' && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
       {event.status === 'planning' && <EventConfirmationPanel readiness={event.confirmation_readiness}
         confirming={confirmingEvent} transitioning={transitioning}
         onStart={() => { setError(null); setConfirmingEvent(true); }}
@@ -750,7 +754,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           request can only be made once the event is in Planning (SPL-77), so earlier stages have
           nothing to show. The panel follows the event as loaded, so approving on this page
           performs no booking read. */}
-      {bookingStageOnLoad && <VenueArrangements api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
+      {bookingStageOnLoad && <VenueArrangements key={`${event.id}-${arrangementRevision}`} api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}

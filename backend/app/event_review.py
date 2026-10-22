@@ -56,6 +56,7 @@ class TransitionRule:
 
 
 TRANSITION_RULES = {
+    "significant_change": TransitionRule(previous_status=CONFIRMED, resulting_status=PLANNING),
     BEGIN_REVIEW: TransitionRule(
         previous_status=SUBMITTED,
         resulting_status=UNDER_REVIEW,
