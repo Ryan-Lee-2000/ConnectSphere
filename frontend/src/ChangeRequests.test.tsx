@@ -121,11 +121,12 @@ it('[QA-SPL-111-104] an item can be removed, a field cannot be picked twice, ite
   expect((second.getByRole('option', { name: 'Event name' }) as HTMLOptionElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Remove item 2' }));
   expect(screen.getAllByLabelText('Field to change')).toHaveLength(1);
-  // The cap equals the number of changeable fields (11).
-  for (let i = 0; i < 10; i += 1) fireEvent.click(screen.getByRole('button', { name: 'Add another item' }));
-  expect(screen.getAllByLabelText('Field to change')).toHaveLength(11);
+  // SPL-141 permits repeated equipment actions within the 100-item safety limit.
+  const addButton = screen.getByRole('button', { name: 'Add another item' });
+  for (let i = 0; i < 99; i += 1) fireEvent.click(addButton);
+  expect(screen.getAllByLabelText('Field to change')).toHaveLength(100);
   expect((screen.getByRole('button', { name: 'Add another item' }) as HTMLButtonElement).disabled).toBe(true);
-});
+}, 20_000);
 
 // QA-SPL-111-105 | AC3 | BB
 it('[QA-SPL-111-105] after submitting, the request shows as Pending and the form closes', async () => {

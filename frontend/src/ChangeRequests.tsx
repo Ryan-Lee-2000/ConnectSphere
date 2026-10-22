@@ -40,16 +40,37 @@ const FIELDS = [
   { value: 'required_facilities', label: 'Required facilities', kind: 'list' },
   { value: 'accessibility_needs', label: 'Accessibility needs', kind: 'list' },
   { value: 'venue_notes', label: 'Venue notes', kind: 'text' },
+  { value: 'equipment_add', label: 'Add equipment requirement', kind: 'equipment' },
+  { value: 'equipment_update', label: 'Change equipment quantity or notes', kind: 'equipment' },
+  { value: 'equipment_remove', label: 'Remove equipment requirement', kind: 'equipment' },
 ] as const;
 type Kind = typeof FIELDS[number]['kind'];
 
-type Draft = { key: number; field: string; value: string; reason: string };
+type Draft = { key: number; field: string; value: string; reason: string; quantity?: string; notes?: string };
+type EquipmentLine = { requirement_id: number; equipment_type: string; quantity: number; notes: string | null };
+type EquipmentOptions = { equipment_requirements: EquipmentLine[]; equipment_types: { id: number; name: string }[] };
+const isEquipment = (field: string) => field.startsWith('equipment_');
+
+function proposal(draft: Draft) {
+  if (!isEquipment(draft.field)) return requestedValue(FIELDS.find(field => field.value === draft.field)!.kind, draft.value);
+  const operation = draft.field.slice('equipment_'.length);
+  return {
+    operation,
+    [operation === 'add' ? 'equipment_type_id' : 'requirement_id']: Number(draft.value),
+    ...(operation === 'remove' ? {} : { quantity: Number(draft.quantity), notes: draft.notes?.trim() || null }),
+  };
+}
 
 const LOAD_FAILURE = "We couldn't load the change requests. Try again shortly.";
 const SUBMIT_FAILURE = 'Could not submit the change request. Try again.';
 
 function show(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Not set';
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const line = value as { operation?: string; equipment_type?: string; quantity?: number; notes?: string | null };
+    if (line.operation === 'remove') return 'Remove this requirement';
+    return `${line.equipment_type} · Quantity: ${line.quantity} · Notes: ${line.notes || 'None'}`;
+  }
   return Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : String(value);
 }
 
@@ -84,6 +105,9 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([{ key: 1, field: '', value: '', reason: '' }]);
+  const [equipmentOptions, setEquipmentOptions] = useState<EquipmentOptions | null>(null);
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
+  const [equipmentRetry, setEquipmentRetry] = useState(0);
   const [nextKey, setNextKey] = useState(2);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -114,6 +138,27 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
       if (response.ok && typeof body?.event_request?.status === 'string') setStatus(body.event_request.status);
     } catch { /* keep the status we have; the server still refuses an ineligible submission */ }
   }, [api, eventId]);
+
+  const needsEquipment = formOpen && drafts.some(draft => isEquipment(draft.field));
+  useEffect(() => {
+    if (!needsEquipment) return;
+    let active = true;
+    setEquipmentOptions(null);
+    setEquipmentError(null);
+    void (async () => {
+      try {
+        const response = await api(`/api/event-requests/${eventId}/change-requests/equipment-options`);
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !Array.isArray(body?.equipment_requirements) || !Array.isArray(body?.equipment_types)) {
+          throw new Error('Could not load equipment choices.');
+        }
+        if (active) setEquipmentOptions(body);
+      } catch {
+        if (active) setEquipmentError('Could not load equipment choices. Try again.');
+      }
+    })();
+    return () => { active = false; };
+  }, [api, eventId, needsEquipment, equipmentRetry]);
 
   const pending = requests?.find(item => item.status === 'pending') ?? null;
   const canStart = canSubmit && CHANGEABLE_STATUSES.includes(status) && requests !== null && !pending;
@@ -146,10 +191,15 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
     // A list field may be left empty on purpose: that asks for every entry to be removed.
     const incomplete = drafts.some(draft => {
       const kind = FIELDS.find(field => field.value === draft.field)?.kind;
-      return !draft.field || !draft.reason.trim() || (kind !== 'list' && !draft.value.trim());
+      return !draft.field || !draft.reason.trim() || (kind !== 'list' && !draft.value.trim())
+        || (kind === 'equipment' && draft.field !== 'equipment_remove' && !draft.quantity?.trim());
     });
     if (incomplete) {
       setFormError('Complete every item: choose a field and give the new value and a reason.');
+      return;
+    }
+    if (needsEquipment && !equipmentOptions) {
+      setFormError('Load equipment choices before submitting.');
       return;
     }
     setSaving(true); setFormError(null);
@@ -158,8 +208,8 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
         method: 'POST',
         body: JSON.stringify({
           items: drafts.map(draft => ({
-            field: draft.field,
-            requested_value: requestedValue(FIELDS.find(field => field.value === draft.field)!.kind, draft.value),
+            field: isEquipment(draft.field) ? 'equipment' : draft.field,
+            requested_value: proposal(draft),
             reason: draft.reason,
           })),
         }),
@@ -219,19 +269,55 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
           <legend>Item {index + 1}</legend>
           <label className="field">
             <span>Field to change</span>
-            <select value={draft.field} onChange={e => update(draft.key, { field: e.target.value, value: '' })}>
+            <select value={draft.field} onChange={e => update(draft.key, { field: e.target.value, value: '', quantity: '', notes: '' })}>
               <option value="">Choose a field</option>
               {FIELDS.map(field => <option key={field.value} value={field.value}
-                disabled={drafts.some(other => other.key !== draft.key && other.field === field.value)}>
+                disabled={!isEquipment(field.value) && drafts.some(other => other.key !== draft.key && other.field === field.value)}>
                 {field.label}
               </option>)}
             </select>
           </label>
-          <label className="field">
+          {kind === 'equipment' ? <>
+            {!equipmentOptions && !equipmentError && <p role="status">Loading equipment choices…</p>}
+            {equipmentError && <div role="alert"><p className="error">{equipmentError}</p>
+              <button className="button button--secondary" type="button" onClick={() => setEquipmentRetry(value => value + 1)}>Retry equipment choices</button>
+            </div>}
+            {equipmentOptions && <>
+              {draft.field === 'equipment_add' && equipmentOptions.equipment_types.length === 0 && <p role="status">No equipment types are available in the catalogue.</p>}
+              {draft.field !== 'equipment_add' && equipmentOptions.equipment_requirements.length === 0 && <p role="status">This event has no current equipment requirements to change.</p>}
+              <label className="field">
+                <span>{draft.field === 'equipment_add' ? 'Equipment type' : 'Current equipment requirement'}</span>
+                <select value={draft.value} onChange={e => {
+                  const line = draft.field === 'equipment_add' ? undefined
+                    : equipmentOptions.equipment_requirements.find(item => item.requirement_id === Number(e.target.value));
+                  update(draft.key, { value: e.target.value, quantity: line ? String(line.quantity) : '', notes: line?.notes ?? '' });
+                }}>
+                  <option value="">Choose equipment</option>
+                  {draft.field === 'equipment_add'
+                    ? equipmentOptions.equipment_types.map(item => <option key={item.id} value={item.id}>{item.name}</option>)
+                    : equipmentOptions.equipment_requirements.map(line => <option key={line.requirement_id} value={line.requirement_id}
+                      disabled={drafts.some(other => other.key !== draft.key && ['equipment_update', 'equipment_remove'].includes(other.field) && other.value === String(line.requirement_id))}>
+                      {line.equipment_type} · {line.quantity} · {line.notes || 'No notes'}
+                    </option>)}
+                </select>
+              </label>
+              {draft.field !== 'equipment_add' && draft.value && <p>Now: {show(equipmentOptions.equipment_requirements.find(line => line.requirement_id === Number(draft.value)))}</p>}
+              {draft.field !== 'equipment_remove' && <>
+                <label className="field"><span>Proposed quantity</span>
+                  <input type="number" min={1} max={2147483647} step={1} value={draft.quantity ?? ''}
+                    onChange={e => update(draft.key, { quantity: e.target.value })} />
+                </label>
+                <label className="field"><span>Proposed technical notes (optional)</span>
+                  <textarea rows={2} maxLength={2000} value={draft.notes ?? ''} onChange={e => update(draft.key, { notes: e.target.value })} />
+                </label>
+              </>}
+              <p className="notice">This proposes a change only. Equipment and reservations stay unchanged until a coordinator accepts it.</p>
+            </>}
+          </> : <label className="field">
             <span>New value{kind === 'list' ? ' (separate items with commas; leave empty to remove them all)' : ''}</span>
             <input type={inputType} min={kind === 'number' ? 1 : undefined} step={kind === 'number' ? 1 : undefined}
               value={draft.value} onChange={e => update(draft.key, { value: e.target.value })} />
-          </label>
+          </label>}
           <label className="field">
             <span>Reason</span>
             <textarea rows={2} maxLength={1000} value={draft.reason}
@@ -246,7 +332,7 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
       {formError && <p className="error" role="alert">{formError}</p>}
       <div className="form-actions">
         <button className="button button--secondary" type="button"
-          disabled={drafts.length >= FIELDS.length} onClick={addItem}>
+          disabled={drafts.length >= 100} onClick={addItem}>
           Add another item
         </button>
         <button className="button button--secondary" type="button" disabled={saving} onClick={() => setFormOpen(false)}>Cancel</button>
