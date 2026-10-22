@@ -9,6 +9,8 @@ if (!['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)) {
 }
 
 export default defineConfig(base, {
+  // Evidence runs opt back into fixture-specific walkthroughs that the ordinary suite excludes.
+  testIgnore: [],
   outputDir: 'artifacts/e2e-evidence/results',
   timeout: 60_000,
   use: {
