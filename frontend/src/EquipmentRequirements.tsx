@@ -256,7 +256,13 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showRemoved, setShowRemoved] = useState(false);
-  const openEditor = (target: number | 'new' | null) => { setEditorError(null); setEditing(target); };
+  // SPL-122 AC4: one id per opened Add form, resent by every attempt to save it, so a retry
+  // after a lost response gets the same line back instead of adding a second one.
+  const [addRequestId, setAddRequestId] = useState('');
+  const openEditor = (target: number | 'new' | null) => {
+    if (target === 'new') setAddRequestId(crypto.randomUUID());
+    setEditorError(null); setEditing(target);
+  };
 
   const endpoint = `/api/event-requests/${eventId}/equipment-requirements`;
   const load = async () => {
@@ -291,7 +297,8 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
         response = await api(significant, { method: 'PATCH', body: JSON.stringify({ ...payload, preview_token: preview.preview_token }) });
       } else {
         response = await api(requirement ? `${endpoint}/${requirement.id}` : endpoint, {
-          method: requirement ? 'PATCH' : 'POST', body: JSON.stringify(asPayload(draft)),
+          method: requirement ? 'PATCH' : 'POST',
+          body: JSON.stringify(requirement ? asPayload(draft) : { ...asPayload(draft), request_id: addRequestId }),
         });
       }
       if (!response.ok) {

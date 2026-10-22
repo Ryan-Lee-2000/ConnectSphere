@@ -736,3 +736,59 @@ def test_qa_spl_122_061_messages_carry_no_personal_details_or_free_text(app, cli
         assert not any(name in message for name in names)
         for account_id in IDENTITIES.values():
             assert account_id not in message
+
+
+# Review round 1 (2026-10-22, Ryan on PR #96): a retried addition must not notify twice.
+
+REQUEST = "5b0f0c3e-2a8e-4f7e-9b61-3c2d4e5f6a7b"
+
+
+def lines(app, event):
+    with Session(app.extensions["engine"]) as session:
+        return session.scalars(
+            select(EquipmentRequirement.id)
+            .where(EquipmentRequirement.event_request_id == event)
+            .order_by(EquipmentRequirement.id)
+        ).all()
+
+
+# QA-SPL-122-047 | AC4 | BB
+def test_qa_spl_122_047_a_retried_addition_returns_the_same_line_and_notifies_once(
+    app, client, event_id
+):
+    first = add(client, event_id, request_id=REQUEST)
+    assert first.status_code == 201, first.json
+    retry = add(client, event_id, request_id=REQUEST)
+    assert retry.status_code == 200, retry.json
+    assert retry.json["requirement"]["id"] == first.json["requirement"]["id"]
+    assert lines(app, event_id) == [first.json["requirement"]["id"]]
+    assert count(app, "technical") == 1
+
+    # A new request id is a deliberate second addition; no id keeps the old behaviour.
+    second = add(client, event_id, request_id=str(uuid.uuid4()))
+    assert second.status_code == 201, second.json
+    third = add(client, event_id)
+    assert third.status_code == 201, third.json
+    assert len(lines(app, event_id)) == 3
+    assert count(app, "technical") == 3
+
+
+@pytest.mark.parametrize("value", ["", "not-a-uuid", 7, None, True, "x" * 37])
+# QA-SPL-122-048 | AC4 | BB negative
+def test_qa_spl_122_048_a_malformed_request_id_is_refused(app, client, event_id, value):
+    response = add(client, event_id, request_id=value)
+    assert response.status_code == 400, response.json
+    assert lines(app, event_id) == []
+    assert count(app) == 0
+
+
+# QA-SPL-122-049 | AC4 | BB security
+def test_qa_spl_122_049_the_request_id_belongs_to_one_event_and_coordinator(app, client, event_id):
+    other_event = spl91.add_event(app, name="Second Forum")
+    assert add(client, event_id, request_id=REQUEST).status_code == 201
+    elsewhere = add(client, other_event, request_id=REQUEST)
+    assert elsewhere.status_code == 201, elsewhere.json
+    assert len(lines(app, other_event)) == 1
+    replay = add(client, event_id, identity="other-coordinator", request_id=REQUEST)
+    assert replay.status_code == 404, replay.json
+    assert count(app, "technical") == 2

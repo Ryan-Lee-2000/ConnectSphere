@@ -156,3 +156,50 @@ def test_qa_spl_122_073_a_failed_cancellation_rolls_the_notice_back(engine, pg_u
             assert session.scalar(select(func.count()).select_from(Notification)) == 0
     finally:
         app.extensions["engine"].dispose()
+
+
+# Review round 1 (2026-10-22, Ryan on PR #96): a retried addition must not notify twice.
+
+
+# QA-SPL-122-074 | AC4 | WB concurrency
+def test_qa_spl_122_074_simultaneous_retries_of_one_addition_add_one_line(engine, pg_url):
+    ids, organisation_id, venue_id, type_id = spl85._seed_accounts(engine)
+    app = spl85._app(pg_url, ids)
+    try:
+        for run in range(RUNS):
+            day = date(2027, 8, 2) + timedelta(days=run)
+            event_id, _ = spl85._seed_ready_event(
+                engine, ids, organisation_id, venue_id, type_id, day
+            )
+            body = {
+                "equipment_type_id": type_id,
+                "quantity": 2,
+                "required_start_date": day.isoformat(),
+                "required_end_date": day.isoformat(),
+                "essentiality": "undecided",
+                "request_id": str(uuid.uuid4()),
+            }
+
+            def call(client, body=body, event_id=event_id):
+                return client.post(
+                    f"/api/event-requests/{event_id}/equipment-requirements",
+                    json=body,
+                    headers={"Authorization": "Bearer coordinator"},
+                )
+
+            results = spl85._race(app, [call, call])
+            assert sorted(status for status, _ in results) == [200, 201], results
+            assert len({body["requirement"]["id"] for _, body in results}) == 1
+            with Session(engine) as session:
+                added = session.scalar(
+                    select(func.count())
+                    .select_from(EquipmentRequirement)
+                    .where(
+                        EquipmentRequirement.event_request_id == event_id,
+                        EquipmentRequirement.request_id == body["request_id"],
+                    )
+                )
+            assert added == 1
+            assert _per_recipient(engine, ids, event_id) == {"technical": 1}
+    finally:
+        app.extensions["engine"].dispose()

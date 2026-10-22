@@ -25,6 +25,7 @@ type and then the requirement line to be row-locked already, in that order; ever
 route in the codebase takes locks in that order so they can never deadlock one another.
 """
 
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -128,10 +129,23 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def add_equipment_requirement(event_request_id: int):
         data = _request_data()
+        request_id = _request_id(data.pop("request_id")) if "request_id" in data else None
         with Session(app.extensions["engine"]) as session:
             event = _assigned_planning_event(session, event_request_id, lock=True)
+            if request_id is not None:
+                # SPL-122 AC4: a retry of an addition that already happened gets that line back,
+                # so it adds no second line and no second notice. The event lock above orders
+                # simultaneous attempts, and the unique key backs it up.
+                existing = session.scalar(
+                    select(EquipmentRequirement).where(
+                        EquipmentRequirement.event_request_id == event.id,
+                        EquipmentRequirement.request_id == request_id,
+                    )
+                )
+                if existing is not None:
+                    return jsonify(requirement=_serialize_requirement(existing)), 200
             attributes = _new_attributes(session, event, data)
-            line = EquipmentRequirement(**attributes)
+            line = EquipmentRequirement(**attributes, request_id=request_id)
             session.add(line)
             session.flush()
             if line.equipment_type_id is not None:
@@ -751,6 +765,14 @@ def _request_data() -> dict[str, Any]:
     if not isinstance(data, dict):
         abort(400, "A JSON object is required.")
     return data
+
+
+def _request_id(value: Any) -> str:
+    """Accept the Add form's request id only as a UUID, stored in one canonical spelling."""
+    try:
+        return str(uuid.UUID(value))
+    except (AttributeError, TypeError, ValueError):
+        abort(400, "Send the request id as a UUID.")
 
 
 def _require_empty_body() -> None:

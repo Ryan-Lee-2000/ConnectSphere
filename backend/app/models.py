@@ -573,12 +573,18 @@ class EquipmentRequirement(Base):
             "essentiality in ('undecided', 'essential', 'non_essential')",
             name="ck_equipment_requirements_known_essentiality",
         ),
+        # SPL-122 AC4: one line per add request, so a retried request cannot add a second line.
+        UniqueConstraint(
+            "event_request_id", "request_id", name="uq_equipment_requirements_request"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     event_request_id: Mapped[int] = mapped_column(
         ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False
     )
+    # The id the Add form sends with every attempt of one addition; null for older lines.
+    request_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     equipment_type: Mapped[str] = mapped_column(Text, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
