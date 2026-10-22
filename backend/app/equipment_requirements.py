@@ -25,6 +25,7 @@ type and then the requirement line to be row-locked already, in that order; ever
 route in the codebase takes locks in that order so they can never deadlock one another.
 """
 
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -47,6 +48,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.notifications import add_technical_support_notices
 
 PLANNING = "planning"
 UNMAPPED = "unmapped"
@@ -127,11 +129,27 @@ def register_equipment_requirement_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def add_equipment_requirement(event_request_id: int):
         data = _request_data()
+        request_id = _request_id(data.pop("request_id")) if "request_id" in data else None
         with Session(app.extensions["engine"]) as session:
             event = _assigned_planning_event(session, event_request_id, lock=True)
+            if request_id is not None:
+                # SPL-122 AC4: a retry of an addition that already happened gets that line back,
+                # so it adds no second line and no second notice. The event lock above orders
+                # simultaneous attempts, and the unique key backs it up.
+                existing = session.scalar(
+                    select(EquipmentRequirement).where(
+                        EquipmentRequirement.event_request_id == event.id,
+                        EquipmentRequirement.request_id == request_id,
+                    )
+                )
+                if existing is not None:
+                    return jsonify(requirement=_serialize_requirement(existing)), 200
             attributes = _new_attributes(session, event, data)
-            line = EquipmentRequirement(**attributes)
+            line = EquipmentRequirement(**attributes, request_id=request_id)
             session.add(line)
+            session.flush()
+            if line.equipment_type_id is not None:
+                _notify_technical_support(session, line, "requirement_recorded", f"line-{line.id}")
             session.commit()
             session.refresh(line)
             return jsonify(requirement=_serialize_requirement(line)), 201
@@ -476,16 +494,61 @@ def _record_change(
 ) -> None:
     """Write one history row: what changed, from what to what, who, when, and what it released."""
 
-    session.add(
-        EquipmentRequirementChange(
-            equipment_requirement_id=line.id,
-            action=action,
-            old_values=old_values,
-            new_values=new_values,
-            released_quantity=released,
-            changed_by_account_id=g.user_id,
-            changed_at=now,
-        )
+    entry = EquipmentRequirementChange(
+        equipment_requirement_id=line.id,
+        action=action,
+        old_values=old_values,
+        new_values=new_values,
+        released_quantity=released,
+        changed_by_account_id=g.user_id,
+        changed_at=now,
+    )
+    session.add(entry)
+    session.flush()
+    _notify_technical_support_of_change(session, line, entry)
+
+
+def _notify_technical_support_of_change(
+    session: Session, line: EquipmentRequirement, entry: EquipmentRequirementChange
+) -> None:
+    # SPL-122 AC1: only lines Technical Support can act on, and only reviewed fields; recording
+    # criticality alone is not a change. Mapping an organiser's line counts as recording it.
+    if line.equipment_type_id is None:
+        return
+    if entry.action == "removed":
+        _notify_technical_support(session, line, "requirement_removed", entry.id)
+        return
+    reviewed = [field for field in REVIEWED_FIELDS if field in entry.new_values]
+    if not reviewed:
+        return
+    if "equipment_type_id" in reviewed and entry.old_values.get("equipment_type_id") is None:
+        _notify_technical_support(session, line, "requirement_recorded", entry.id)
+        return
+    labels = [FIELD_LABELS[field] for field in reviewed]
+    changed = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+    _notify_technical_support(session, line, "requirement_changed", entry.id, f" ({changed})")
+
+
+def _notify_technical_support(
+    session: Session,
+    line: EquipmentRequirement,
+    kind: str,
+    source_id: str | int,
+    detail: str = "",
+) -> None:
+    event = session.get(EventRequest, line.event_request_id)
+    item = f"{_type_name(session, line.equipment_type_id)} × {line.quantity}"
+    action = {
+        "requirement_recorded": "added to",
+        "requirement_changed": "changed on",
+        "requirement_removed": "removed from",
+    }[kind]
+    add_technical_support_notices(
+        session,
+        event,
+        kind=kind,
+        source_id=source_id,
+        message=f"Equipment requirement {action} {event.name}: {item}{detail}.",
     )
 
 
@@ -702,6 +765,14 @@ def _request_data() -> dict[str, Any]:
     if not isinstance(data, dict):
         abort(400, "A JSON object is required.")
     return data
+
+
+def _request_id(value: Any) -> str:
+    """Accept the Add form's request id only as a UUID, stored in one canonical spelling."""
+    try:
+        return str(uuid.UUID(value))
+    except (AttributeError, TypeError, ValueError):
+        abort(400, "Send the request id as a UUID.")
 
 
 def _require_empty_body() -> None:

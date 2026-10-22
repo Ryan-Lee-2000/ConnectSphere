@@ -93,6 +93,20 @@ def register_event_cancellation_routes(app: Flask) -> None:
             )
             released_bookings = _cancel_bookings(session, bookings, g.user_id, now, note)
             releases = _release_equipment(session, event_request_id, g.user_id, now, note)
+            if releases:
+                # Imported here: notifications imports event_requests, which imports this module.
+                from app.notifications import add_technical_support_notices
+
+                # SPL-122 AC2: only an event that was holding reserved units notifies.
+                units = sum(item.quantity for item in releases)
+                add_technical_support_notices(
+                    session,
+                    event,
+                    kind="event_cancelled",
+                    source_id=event_request_id,
+                    message=f"{event.name} was cancelled. {units} reserved equipment unit(s) "
+                    "were released.",
+                )
             session.commit()
             actor = session.get(Account, g.user_id)
             session.expire_all()
