@@ -8,16 +8,26 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.authorization import require_roles
+from app.equipment_reservation_state import remaining_quantity
 from app.event_cancellation import serialize_cancellation
-from app.event_confirmation import serialize_confirmation, serialize_confirmed_arrangements
+from app.event_confirmation import (
+    booked_times,
+    serialize_confirmation,
+    serialize_confirmed_arrangements,
+    venue_booking_requires_review,
+)
 from app.event_statuses import status_explanation, status_label
 from app.models import (
+    ACTIVE_BOOKING_STATUSES,
     Account,
     ClarificationRequest,
     EquipmentRequirement,
+    EquipmentReservation,
+    EventCoordinatorAssignment,
     EventRequest,
     Role,
     Venue,
+    VenueBooking,
 )
 from app.slots import slots_for_range
 from app.venue_operational_blocks import operational_block_for_slot
@@ -259,6 +269,16 @@ def register_event_request_routes(app: Flask) -> None:
                 )
                 .options(
                     selectinload(EventRequest.organiser),
+                    selectinload(EventRequest.coordinator_assignment).joinedload(
+                        EventCoordinatorAssignment.coordinator
+                    ),
+                    selectinload(EventRequest.venue_bookings).joinedload(VenueBooking.venue),
+                    selectinload(EventRequest.equipment_requirements).joinedload(
+                        EquipmentRequirement.catalogue_type
+                    ),
+                    selectinload(EventRequest.equipment_requirements)
+                    .selectinload(EquipmentRequirement.reservations)
+                    .selectinload(EquipmentReservation.releases),
                     selectinload(EventRequest.clarification_requests).joinedload(
                         ClarificationRequest.author
                     ),
@@ -269,7 +289,7 @@ def register_event_request_routes(app: Flask) -> None:
             )
             if event is None:
                 abort(404, "Event not found.")
-            return jsonify(event=_serialize_organisation_event_detail(event))
+            return jsonify(event=_serialize_organisation_event_detail(session, event))
 
 
 def _missing_mandatory_fields(data: dict[str, Any]) -> list[tuple[str, str]]:
@@ -573,7 +593,14 @@ def _serialize_organisation_event_summary(event: EventRequest) -> dict[str, Any]
     }
 
 
-def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
+def _serialize_organisation_event_detail(session: Session, event: EventRequest) -> dict[str, Any]:
+    """The organiser's safe, read-only event and arrangement summary.
+
+    This response is an allowlist. In particular, event notes, equipment notes and Venue Staff
+    approval notes stay out even though the loaded aggregates contain them. Those notes support
+    internal planning decisions and SPL-110 does not grant organisers access to them.
+    """
+
     return {
         **_serialize_organisation_event_summary(event),
         "purpose": event.purpose,
@@ -584,7 +611,96 @@ def _serialize_organisation_event_detail(event: EventRequest) -> dict[str, Any]:
         "status": event.status,
         "status_label": status_label(event.status),
         "status_explanation": status_explanation(event.status),
+        "coordinator": _serialize_organisation_coordinator(event),
+        "venue_arrangements": _serialize_organisation_venues(session, event),
+        "equipment_arrangements": _serialize_organisation_equipment(event),
+        "registration_settings": _serialize_organisation_registration(event),
         "clarifications": serialize_clarifications(event),
+    }
+
+
+def _serialize_organisation_coordinator(event: EventRequest) -> dict[str, str] | None:
+    assignment = event.coordinator_assignment
+    if assignment is None:
+        return None
+    return {"id": assignment.coordinator.id, "name": assignment.coordinator.display_name}
+
+
+def _serialize_organisation_venues(session: Session, event: EventRequest) -> list[dict[str, Any]]:
+    """Show only current venue arrangements, with review state taking precedence over approval."""
+
+    arrangements = []
+    for booking in sorted(event.venue_bookings, key=lambda item: item.id):
+        if booking.status not in ACTIVE_BOOKING_STATUSES:
+            continue
+        if venue_booking_requires_review(session, booking):
+            arrangement_status, arrangement_label = "review_required", "Review required"
+        elif booking.status == "approved":
+            arrangement_status, arrangement_label = "approved", "Approved"
+        else:
+            arrangement_status, arrangement_label = "requested", "Awaiting approval"
+        arrangements.append(
+            {
+                "booking_id": booking.id,
+                "venue": booking.venue.name,
+                "location": booking.venue.location,
+                "date": booking.booking_date.isoformat() if booking.booking_date else None,
+                **booked_times(booking, event),
+                "status": arrangement_status,
+                "status_label": arrangement_label,
+            }
+        )
+    return arrangements
+
+
+_EQUIPMENT_STATUS_LABELS = {
+    "unmapped": "Needs mapping",
+    "requested": "Requested — not reserved",
+    "partially_reserved": "Partially reserved",
+    "reserved": "Reserved",
+    "review_required": "Review required",
+    "unavailable": "Unavailable",
+}
+_ESSENTIALITY_LABELS = {
+    "undecided": "Undecided",
+    "essential": "Essential",
+    "non_essential": "Non-essential",
+}
+
+
+def _serialize_organisation_equipment(event: EventRequest) -> list[dict[str, Any]]:
+    arrangements = []
+    for line in event.equipment_requirements:
+        if line.status == "removed":
+            continue
+        arrangements.append(
+            {
+                "requirement_id": line.id,
+                "equipment": (
+                    line.catalogue_type.name if line.catalogue_type else line.equipment_type
+                ),
+                "required_quantity": line.quantity,
+                "reserved_quantity": sum(
+                    remaining_quantity(reservation) for reservation in line.reservations
+                ),
+                "status": line.status,
+                "status_label": _EQUIPMENT_STATUS_LABELS.get(line.status, line.status),
+                "essentiality": line.essentiality,
+                "essentiality_label": _ESSENTIALITY_LABELS.get(
+                    line.essentiality, line.essentiality
+                ),
+            }
+        )
+    return arrangements
+
+
+def _serialize_organisation_registration(event: EventRequest) -> dict[str, Any]:
+    enabled = event.registration_opens_at is not None
+    return {
+        "enabled": enabled,
+        "capacity": event.registration_capacity if enabled else None,
+        "opens_at": _singapore_time(event.registration_opens_at) if enabled else None,
+        "closes_at": _singapore_time(event.registration_closes_at) if enabled else None,
     }
 
 

@@ -541,6 +541,21 @@ button { touch-action: manipulation; }
 .organisation-events__detail-table th[scope="colgroup"] { padding-top: var(--space-6); color: var(--color-ink, inherit); }
 .organisation-events__list { margin: 0; padding-left: var(--space-4); }
 .organisation-events__actions { margin-top: var(--space-6); }
+.organisation-arrangements { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--color-blueprint-line); }
+.organisation-arrangements__header h3 { margin: 0; font-size: 1.5rem; letter-spacing: -.025em; }
+.organisation-arrangements__header p:last-child { max-width: 65ch; margin: var(--space-2) 0 0; color: var(--color-muted-slate); line-height: 1.6; }
+.organisation-arrangements__section { margin-top: var(--space-8); }
+.organisation-arrangements__section h4 { margin: 0 0 var(--space-3); font-size: 1rem; }
+.organisation-arrangements__empty { margin: 0; padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); color: var(--color-muted-slate); background: var(--color-mist-surface); }
+.organisation-arrangements .organisation-events__table td strong, .organisation-arrangements .organisation-events__table td small { display: block; }
+.organisation-arrangements .organisation-events__table td small { margin-top: var(--space-1); color: var(--color-muted-slate); }
+.arrangement-status { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: 999px; font-size: .8125rem; font-weight: 700; }
+.arrangement-status--approved, .arrangement-status--reserved { color: var(--color-mineral-teal); background: var(--color-mist-surface); }
+.arrangement-status--review_required, .arrangement-status--unavailable { color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.organisation-arrangements__registration { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); }
+.organisation-arrangements__registration div { padding: var(--space-4); }
+.organisation-arrangements__registration dt { color: var(--color-muted-slate); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.organisation-arrangements__registration dd { margin: var(--space-1) 0 0; line-height: 1.5; }
 .clarification-form { margin-top: var(--space-6); }
 .event-information-editor { margin: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
 .event-information-editor__heading h2 { margin: var(--space-2) 0; }
@@ -739,6 +754,7 @@ button { touch-action: manipulation; }
   .organisation-events__heading { flex-direction: column; gap: var(--space-4); }
   .organisation-events__heading > p { width: 100%; }
   .organisation-events__details { grid-template-columns: 1fr; }
+  .organisation-arrangements__registration { grid-template-columns: 1fr; }
   .event-information-editor__contacts { grid-template-columns: 1fr; }
   .organisation-events__details div:nth-child(odd) { margin-right: 0; }
   .organisation-events__table { min-width: 38rem; }
