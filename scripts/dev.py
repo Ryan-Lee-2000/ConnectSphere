@@ -336,6 +336,8 @@ def main():
             "backend/tests/test_venue_arrangements_postgres.py",
             # SPL-86: simultaneous cancellations, cancellation racing confirmation and release.
             "backend/tests/test_event_cancellation_postgres.py",
+            # SPL-122: racing removals, cancellations and changes notify Technical Support once.
+            "backend/tests/test_qa_spl122_postgres.py",
             "-q",
         )
     elif cmd == "dev":
