@@ -1,5 +1,6 @@
 import { useEffect, useState, type MouseEvent } from 'react';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
+import { RegistrationAttendees } from './RegistrationAttendees';
 
 type EventSummary = {
   id: number;
@@ -139,6 +140,7 @@ export function OrganisationEvents({
 }) {
   const [events, setEvents] = useState<EventSummary[] | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
+  const [registrationListAvailable, setRegistrationListAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const api = request || ((path: string, init: RequestInit = {}) => fetch(path, {
     ...init,
@@ -150,6 +152,7 @@ export function OrganisationEvents({
     setError(null);
     setEvents(null);
     setEvent(null);
+    setRegistrationListAvailable(false);
 
     async function load() {
       try {
@@ -166,7 +169,12 @@ export function OrganisationEvents({
           return;
         }
         if (eventId === undefined && Array.isArray(body?.events)) setEvents(body.events);
-        else if (eventId !== undefined && body?.event) setEvent(body.event);
+        else if (eventId !== undefined && body?.event) {
+          setRegistrationListAvailable(
+            response.headers?.get('X-ConnectSphere-Registration-List') === 'available',
+          );
+          setEvent(body.event);
+        }
         else setError("We couldn't load this event information. Try again shortly.");
       } catch {
         if (active) setError("We couldn't load this event information. Try again shortly.");
@@ -226,6 +234,7 @@ export function OrganisationEvents({
     </dl>
     {event.status === 'returned_for_clarification' && <p className="notice" role="status">{event.status_explanation}</p>}
     <ArrangementsSummary event={event} />
+    {registrationListAvailable && <RegistrationAttendees accessToken={accessToken} eventId={event.id} request={request} />}
     <ClarificationHistory clarifications={event.clarifications ?? []} heading="Clarification requests" />
   </section>;
 
