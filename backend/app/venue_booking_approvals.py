@@ -24,6 +24,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
 from app.event_requests import SINGAPORE
 from app.models import EventRequest, Role, Venue, VenueBooking, VenueBookingOccupancy
+from app.notifications import add_arrangement_notice
 from app.venue_booking_history import record_booking_transition
 from app.venue_booking_queue import decision_event_details
 from app.venue_booking_requests import serialize_venue_booking
@@ -70,7 +71,8 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             booking = _booking(session, booking_id, lock=True)
             if booking.status != REQUESTED:
                 abort(409, ONLY_REQUESTED)
-            if session.get(EventRequest, booking.event_request_id).status != PLANNING:
+            event = session.get(EventRequest, booking.event_request_id)
+            if event.status != PLANNING:
                 abort(409, ONLY_PLANNING)
             venue = session.get(Venue, booking.venue_id)
             try:
@@ -87,7 +89,7 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             booking.approved_at = datetime.now(SINGAPORE)
             booking.approval_note = note
             # SPL-79: the approval and its note are appended to the booking's status history.
-            record_booking_transition(
+            entry = record_booking_transition(
                 session,
                 booking.id,
                 action="approve",
@@ -96,6 +98,14 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                 actor_account_id=g.user_id,
                 changed_at=booking.approved_at,
                 note=note,
+            )
+            session.flush()
+            add_arrangement_notice(
+                session,
+                event,
+                kind="booking_approved",
+                source_id=entry.id,
+                message=f"Venue booking for {event.name} at {venue.name} was approved.",
             )
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
@@ -128,7 +138,7 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             # SPL-79: the rejection is appended to the booking's status history, reason as its note.
             # That history panel already shows notes, which is how the coordinator sees the
             # reason (AC5) without any new coordinator-facing screen.
-            record_booking_transition(
+            entry = record_booking_transition(
                 session,
                 booking.id,
                 action="reject",
@@ -137,6 +147,17 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                 actor_account_id=g.user_id,
                 changed_at=booking.rejected_at,
                 note=reason,
+            )
+            session.flush()
+            event = session.get(EventRequest, booking.event_request_id)
+            venue = session.get(Venue, booking.venue_id)
+            # AC1: the rejection reason is the one note the coordinator's notice carries.
+            add_arrangement_notice(
+                session,
+                event,
+                kind="booking_rejected",
+                source_id=entry.id,
+                message=f"Venue booking for {event.name} at {venue.name} was rejected: {reason}",
             )
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))

@@ -19,6 +19,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.notifications import add_arrangement_notice
 
 REQUESTED = "requested"
 UNAVAILABLE = "unavailable"
@@ -64,6 +65,16 @@ def register_equipment_requirement_unavailability_routes(app: Flask) -> None:
             )
             session.add(record)
             session.flush()
+            event = session.get(EventRequest, line.event_request_id)
+            equipment = session.get(EquipmentType, line.equipment_type_id)
+            add_arrangement_notice(
+                session,
+                event,
+                kind="equipment_unavailable",
+                source_id=record.id,
+                message=f"Equipment marked unavailable for {event.name}: {equipment.name} × "
+                f"{line.quantity}.",
+            )
             result = {
                 "requirement": _serialize_requirement(line),
                 "record": _serialize_record(record),

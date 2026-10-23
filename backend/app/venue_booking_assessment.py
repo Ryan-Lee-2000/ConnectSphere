@@ -129,10 +129,12 @@ def assess_venue_bookings(
         .order_by(VenueBooking.id)
         .with_for_update()
     ).all()
-    return _assess_bookings(session, venue, candidates, assessed_by_account_id, when)
+    return _assess_bookings(session, venue, candidates, assessed_by_account_id, when, notify=True)
 
 
-def _assess_bookings(session, venue, candidates, assessed_by_account_id, when) -> int:
+def _assess_bookings(
+    session, venue, candidates, assessed_by_account_id, when, *, notify: bool = False
+) -> int:
     from app.venue_requirement_review import REQUIREMENT_REASON_TYPES, requirement_reasons
 
     rows: list[tuple[VenueBooking, EventRequest]] = []
@@ -220,8 +222,8 @@ def _assess_bookings(session, venue, candidates, assessed_by_account_id, when) -
         if assessed_by_account_id and (new_findings or resolved):
             from app.venue_booking_history import record_booking_transition
 
-            # AC3: a durable flag event for SPL-121, with no status transition or notification.
-            record_booking_transition(
+            # AC3: a durable flag event for SPL-121, with no status transition.
+            entry = record_booking_transition(
                 session,
                 booking.id,
                 action="review_required" if new_findings else "review_resolved",
@@ -232,6 +234,20 @@ def _assess_bookings(session, venue, candidates, assessed_by_account_id, when) -
                 note=("Review required: " if new_findings else "Review resolved: ")
                 + "; ".join(finding.detail for finding in new_findings or resolved),
             )
+            if notify and new_findings:
+                # SPL-121 AC3: only venue changes notify; the coordinator's own event edits
+                # (SPL-106, SPL-109) reach this function with notify off.
+                from app.notifications import add_arrangement_notice
+
+                session.flush()
+                add_arrangement_notice(
+                    session,
+                    event,
+                    kind="booking_flagged",
+                    source_id=entry.id,
+                    message=f"Venue booking for {event.name} at {venue.name} needs review: "
+                    "the venue's details changed.",
+                )
     session.flush()
     return affected
 

@@ -338,6 +338,8 @@ def main():
             "backend/tests/test_event_cancellation_postgres.py",
             # SPL-122: racing removals, cancellations and changes notify Technical Support once.
             "backend/tests/test_qa_spl122_postgres.py",
+            # SPL-121: racing decisions notify the assigned coordinator once.
+            "backend/tests/test_qa_spl121_postgres.py",
             "-q",
         )
     elif cmd == "dev":

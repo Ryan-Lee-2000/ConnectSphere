@@ -196,8 +196,12 @@ def _locked_requirement(
 def _locked_planning_event(session: Session, event_request_id: int) -> EventRequest:
     if event_request_id > MAX_EVENT_REQUEST_ID:
         abort(404, "Event request not found.")
+    # NO KEY UPDATE, like the other lifecycle locks: a FOR UPDATE here would block the KEY SHARE
+    # lock a notice's event foreign key takes, and deadlock with SPL-121's stock-flag notices.
     event = session.scalar(
-        select(EventRequest).where(EventRequest.id == event_request_id).with_for_update()
+        select(EventRequest)
+        .where(EventRequest.id == event_request_id)
+        .with_for_update(key_share=True)
     )
     if event is None:
         abort(404, "Event request not found.")
