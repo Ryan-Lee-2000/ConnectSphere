@@ -29,6 +29,7 @@ from app.models import (
     Venue,
     VenueBooking,
 )
+from app.registration_lists import serialize_registration_list
 from app.slots import slots_for_range
 from app.venue_operational_blocks import operational_block_for_slot
 
@@ -289,7 +290,27 @@ def register_event_request_routes(app: Flask) -> None:
             )
             if event is None:
                 abort(404, "Event not found.")
-            return jsonify(event=_serialize_organisation_event_detail(session, event))
+            response = jsonify(event=_serialize_organisation_event_detail(session, event))
+            response.headers["X-ConnectSphere-Registration-List"] = "available"
+            return response
+
+    @app.get("/api/organisation/events/<int:event_request_id>/registrations")
+    @require_roles(Role.EVENT_ORGANISER)
+    def get_organisation_event_registrations(event_request_id: int):
+        """List registrations for a submitted event in the caller's organisation."""
+
+        with Session(app.extensions["engine"]) as session:
+            account = _current_organiser_account(session)
+            event = session.scalar(
+                select(EventRequest).where(
+                    EventRequest.id == event_request_id,
+                    EventRequest.organisation_id == account.organisation_id,
+                    EventRequest.status != "draft",
+                )
+            )
+            if event is None:
+                abort(404, "Event not found.")
+            return jsonify(registration_list=serialize_registration_list(session, event))
 
 
 def _missing_mandatory_fields(data: dict[str, Any]) -> list[tuple[str, str]]:
