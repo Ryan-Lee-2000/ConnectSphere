@@ -4,8 +4,8 @@ What this module does
 ---------------------
 The Event Organiser who owns a submitted event can send a change request: one or more items, each
 naming a field, the new value they want and why. The request is stored as Pending and the event's
-assigned coordinator can read it and is notified (SPL-103). Reviewing, approving or rejecting it
-belong to later stories.
+assigned coordinator can read it and is notified (SPL-103). Item decisions are handled by
+SPL-112 in event_change_decisions.py.
 
 How a submission is checked (``POST /api/event-requests/<id>/change-requests``), in order
 -----------------------------------------------------------------------------------------
@@ -56,7 +56,7 @@ NOT_FOUND = "Event not found."
 NOT_AVAILABLE = (
     "A change request can only be made while the event is under review, in planning or confirmed."
 )
-ALREADY_PENDING = "This event already has a pending change request. Wait until it is resolved."
+ALREADY_PENDING = "This event already has a pending change request. Wait until it is Closed."
 ONLY_ITEMS = "A change request accepts only items."
 ONLY_ITEM_KEYS = "Each item accepts only field, requested_value and reason."
 MAX_TEXT_LENGTH = 2_000
@@ -194,6 +194,14 @@ def serialize_change_request(change_request: EventChangeRequest) -> dict[str, An
                 "current_value": item.current_value,
                 "requested_value": item.requested_value,
                 "reason": item.reason,
+                "decision": item.decision or "pending",
+                "decline_reason": item.decline_reason,
+                "decided_by": (
+                    {"id": item.decided_by_account_id, "display_name": item.decided_by.display_name}
+                    if item.decided_by
+                    else None
+                ),
+                "decided_at": settings._timestamp(item.decided_at),
             }
             for item in change_request.items
         ],

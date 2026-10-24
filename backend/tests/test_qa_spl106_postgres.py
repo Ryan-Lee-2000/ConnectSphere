@@ -39,6 +39,8 @@ def test_qa_spl_106_039_migration_retains_resolved_history(engine, pg_url):
     assert down.returncode == 0, down.stderr
     up = migrate(pg_url, "upgrade", "head")
     assert up.returncode == 0, up.stderr
+    with engine.connect() as connection:
+        starting_revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
     ids, _, event_id, booking_id = seed(engine)
     with Session(engine) as session:
         event = session.get(EventRequest, event_id)
@@ -56,8 +58,8 @@ def test_qa_spl_106_039_migration_retains_resolved_history(engine, pg_url):
     assert refused.returncode != 0
     assert "Cannot downgrade while requirement review history exists" in refused.stderr
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "s4_booking_requirement_review"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == starting_revision
         )
         assert connection.scalar(text("SELECT count(*) FROM venue_booking_review_findings")) == 1
 

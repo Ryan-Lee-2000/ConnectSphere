@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { ApiRequest } from './api';
 import { responseError } from './api';
+import { ChangeRequestDecisions } from './ChangeRequestDecisions';
+import type { AssignedEventDetail } from './AssignedEvents';
 
 // SPL-111 (CS-E18-S1): an organiser asks to change an event they already submitted, and the
 // organiser and the event's assigned coordinator can read that request. The server owns every rule
@@ -14,6 +16,10 @@ export type ChangeRequestItem = {
   current_value: unknown;
   requested_value: unknown;
   reason: string;
+  decision?: 'pending' | 'accepted' | 'declined';
+  decline_reason?: string | null;
+  decided_by?: { id: string; display_name: string } | null;
+  decided_at?: string | null;
 };
 
 export type ChangeRequest = {
@@ -94,12 +100,13 @@ export function ChangeRequestItems({ items }: { items: ChangeRequestItem[] }) {
   </ul>;
 }
 
-export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = false, eventName }: {
+export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = false, eventName, onDecided }: {
   api: ApiRequest;
   eventId: number;
   eventStatus: string;
-  canSubmit?: boolean;   // the organiser who owns the event; the coordinator only reads
+  canSubmit?: boolean;   // the organiser who owns the event; the coordinator decides when onDecided is provided
   eventName?: string;
+  onDecided?: (event: AssignedEventDetail) => void;
 }) {
   const [requests, setRequests] = useState<ChangeRequest[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -246,11 +253,18 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
     {formError && !formOpen && <p className="error" role="alert">{formError}</p>}
 
     {!loadError && requests !== null && !formOpen && <>
-      {pending ? <div role="group" aria-label="Pending change request">
+      {onDecided ? <>
+        {requests.length ? requests.map(request => <div key={request.id} role="group"
+          aria-label={request.status === 'closed' ? 'Closed change request' : 'Pending change request'}>
+          <ChangeRequestDecisions api={api} eventId={eventId} eventStatus={eventStatus} request={request}
+            onReload={() => { void load(); }} onSaved={updated => { onDecided(updated); void load(); }} />
+        </div>)
+          : <p role="status">No change requests.</p>}
+      </> : pending ? <div role="group" aria-label="Pending change request">
         <p><strong>Pending</strong> · submitted {new Date(pending.submitted_at).toLocaleString()}</p>
         <ChangeRequestItems items={pending.items} />
         {canSubmit && <p className="notice" role="status">
-          You can submit another change request once this one is resolved.
+          You can submit another change request once this one is Closed.
         </p>}
       </div> : <p role="status">No pending change request.</p>}
       {canStart && <button className="button button--primary" type="button" onClick={open}>
