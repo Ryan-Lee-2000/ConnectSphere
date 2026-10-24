@@ -201,34 +201,7 @@ def register_equipment_requirement_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session, session.begin():
             event = _assigned_planning_event(session, event_request_id, lock=True)
             line, equipment_type = _locked_editable_requirement(session, event, requirement_id)
-            previous_status = line.status
-            now = _now()
-            released = 0
-            if equipment_type is not None:
-                held = _held_quantity(session, line.id)
-                if held:
-                    _release_from_requirement(
-                        session,
-                        line,
-                        equipment_type,
-                        quantity=held,
-                        reason=REMOVAL_RELEASE_REASON,
-                        actor_id=g.user_id,
-                        now=now,
-                    )
-                    released = held
-            line.status = REMOVED
-            line.removed_by_account_id = g.user_id
-            line.removed_at = now
-            _record_change(
-                session,
-                line,
-                action="removed",
-                old_values={"status": previous_status},
-                new_values={"status": REMOVED},
-                released=released,
-                now=now,
-            )
+            released = remove_requirement(session, line, equipment_type)
             result = dict(
                 message="Equipment requirement removed.",
                 requirement=_serialize_requirement(line),
@@ -273,6 +246,39 @@ def register_equipment_requirement_routes(app: Flask) -> None:
                 )
             ).all()
             return jsonify(history=[_serialize_change(entry) for entry in entries])
+
+
+def remove_requirement(session, line, equipment_type):
+    """Remove a line and release its stock in the caller's transaction."""
+    previous_status = line.status
+    now = _now()
+    released = 0
+    if equipment_type is not None:
+        held = _held_quantity(session, line.id)
+        if held:
+            _release_from_requirement(
+                session,
+                line,
+                equipment_type,
+                quantity=held,
+                reason=REMOVAL_RELEASE_REASON,
+                actor_id=g.user_id,
+                now=now,
+            )
+            released = held
+    line.status = REMOVED
+    line.removed_by_account_id = g.user_id
+    line.removed_at = now
+    _record_change(
+        session,
+        line,
+        action="removed",
+        old_values={"status": previous_status},
+        new_values={"status": REMOVED},
+        released=released,
+        now=now,
+    )
+    return released
 
 
 def _assigned_planning_event(

@@ -70,35 +70,9 @@ def register_significant_event_change_routes(app: Flask) -> None:
                 )
             if not changes:
                 return jsonify(event=_serialize_assigned_event_detail(event), change=None)
-            now = datetime.now(SINGAPORE)
-            released = 0
-            if equipment is not None:
-                from app.equipment_requirements import _apply_change
-
-                line, equipment_type = equipment
-                changed = {
-                    key: (getattr(line, key), value)
-                    for key, value in values.items()
-                    if getattr(line, key) != value
-                }
-                released = _apply_change(session, line, equipment_type, values, changed)
-                audit_changes = {f"equipment_requirement:{line.id}": changes}
-            else:
-                for key, value in values.items():
-                    setattr(event, key, value)
-                assess_event_bookings(
-                    session, event, assessed_by_account_id=g.user_id, assessed_at=now
-                )
-                _flag_equipment(session, impacts, now)
-                audit_changes = changes
-            status_change = return_to_planning(session, event, now)
-            audit = EventDetailChange(
-                event_request_id=event.id,
-                changes=audit_changes,
-                changed_by_account_id=g.user_id,
-                changed_at=now,
+            audit, status_change, released = apply_prepared_change(
+                session, event, values, changes, impacts, equipment
             )
-            session.add(audit)
             session.commit()
             return jsonify(
                 event=_serialize_assigned_event_detail(event),
@@ -106,6 +80,38 @@ def register_significant_event_change_routes(app: Flask) -> None:
                 status_change_id=status_change.id if status_change else None,
                 released_quantity=released,
             )
+
+
+def apply_prepared_change(session, event, values, changes, impacts, equipment=None):
+    """AC2: direct edits and accepted proposals share the same impact and audit rules."""
+    now = datetime.now(SINGAPORE)
+    released = 0
+    if equipment is not None:
+        from app.equipment_requirements import _apply_change
+
+        line, equipment_type = equipment
+        changed = {
+            key: (getattr(line, key), value)
+            for key, value in values.items()
+            if getattr(line, key) != value
+        }
+        released = _apply_change(session, line, equipment_type, values, changed)
+        audit_changes = {f"equipment_requirement:{line.id}": changes}
+    else:
+        for key, value in values.items():
+            setattr(event, key, value)
+        assess_event_bookings(session, event, assessed_by_account_id=g.user_id, assessed_at=now)
+        _flag_equipment(session, impacts, now)
+        audit_changes = changes
+    status_change = return_to_planning(session, event, now)
+    audit = EventDetailChange(
+        event_request_id=event.id,
+        changes=audit_changes,
+        changed_by_account_id=g.user_id,
+        changed_at=now,
+    )
+    session.add(audit)
+    return audit, status_change, released
 
 
 def return_to_planning(session: Session, event: EventRequest, now: datetime):
@@ -158,6 +164,20 @@ def _preview(event, changes, impacts, snapshot):
 
 
 def _prepare(session: Session, event_id: int):
+    data = request_json()
+    if set(data) - {"values", "preview_token", "equipment_requirement_id"}:
+        abort(400, "Send only values, preview_token and an optional equipment_requirement_id.")
+    equipment_id = data.get("equipment_requirement_id")
+    if "equipment_requirement_id" in data and equipment_id is None:
+        abort(400, "Choose a valid equipment requirement.")
+    return prepare_change(
+        session, _assigned_event(session, event_id), data.get("values"), equipment_id
+    )
+
+
+def prepare_change(
+    session: Session, event: EventRequest, raw, equipment_id=None, *, extra_type_ids=()
+):
     from app.equipment_releases import _held_quantity
     from app.equipment_requirements import (
         REVIEWED_FIELDS,
@@ -166,18 +186,12 @@ def _prepare(session: Session, event_id: int):
         _update_attributes,
     )
 
-    data = request_json()
-    if set(data) - {"values", "preview_token", "equipment_requirement_id"}:
-        abort(400, "Send only values, preview_token and an optional equipment_requirement_id.")
-    raw = data.get("values")
     if not isinstance(raw, dict) or not raw:
         abort(400, "Provide the fields to change.")
-    event = _assigned_event(session, event_id)
     if event.status not in ACTIVE_EVENT_STATUSES:
         abort(409, "Significant changes can only be made while the event is active.")
     snapshot = {"event": _snapshot(event)}
-    equipment_id = data.get("equipment_requirement_id")
-    if "equipment_requirement_id" in data:
+    if equipment_id is not None:
         if isinstance(equipment_id, bool) or not isinstance(equipment_id, int) or equipment_id <= 0:
             abort(400, "Choose a valid equipment requirement.")
         if event.status not in {"planning", "confirmed"}:
@@ -316,7 +330,7 @@ def _prepare(session: Session, event_id: int):
     ).all()
     session.scalars(
         select(EquipmentType)
-        .where(EquipmentType.id.in_(type_ids))
+        .where(EquipmentType.id.in_(set(type_ids) | set(extra_type_ids)))
         .order_by(EquipmentType.id)
         .with_for_update()
     ).all()
