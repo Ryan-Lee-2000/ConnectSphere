@@ -23,6 +23,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.notifications import add_arrangement_notice
 
 ACTIVE_REQUIREMENT_STATUSES = (
     "requested",
@@ -195,6 +196,16 @@ def register_equipment_availability_routes(app: Flask) -> None:
                 # The change and release history is kept in its own tables and is not touched.
                 requirement.review_reason = None
                 requirement.review_flagged_at = None
+            event = session.get(EventRequest, requirement.event_request_id)
+            outcome = "reserved" if requirement.status == "reserved" else "partially reserved"
+            add_arrangement_notice(
+                session,
+                event,
+                kind="equipment_reserved",
+                source_id=reservation.id,
+                message=f"Equipment {outcome} for {event.name}: {equipment_type.name} × "
+                f"{requirement.quantity} ({total_reserved} of {requirement.quantity} units).",
+            )
             result = {
                 "reservation": _serialize_reservation(reservation),
                 "assessment": _serialize_requirement(session, requirement),

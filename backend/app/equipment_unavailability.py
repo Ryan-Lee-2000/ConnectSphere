@@ -42,8 +42,10 @@ from app.models import (
     EquipmentReservation,
     EquipmentType,
     EquipmentUnavailabilityRecord,
+    EventRequest,
     Role,
 )
+from app.notifications import add_arrangement_notice
 
 MARKED = "marked_unavailable"
 RESTORED = "restored"
@@ -138,6 +140,14 @@ def _apply_change(app: Flask, equipment_type_id: int, *, action: str) -> tuple |
         # already promised; putting units back never can, so only a marking flags anything. A
         # restore deliberately clears nothing: AC5 says Technical Support revalidates each
         # flagged line through SPL-97's route rather than a restore doing it silently.
+        already_flagged = set(
+            session.scalars(
+                select(EquipmentRequirement.id).where(
+                    EquipmentRequirement.equipment_type_id == equipment_type.id,
+                    EquipmentRequirement.status == REVIEW_REQUIRED,
+                )
+            )
+        )
         flagged = (
             _flag_shortfall_lines(session, equipment_type, reason, _now())
             if action == MARKED
@@ -153,6 +163,11 @@ def _apply_change(app: Flask, equipment_type_id: int, *, action: str) -> tuple |
             recorded_at=_now(),
         )
         session.add(record)
+        session.flush()
+        # SPL-121 AC4: only a line this change newly put in Review Required notifies.
+        for line_id in flagged:
+            if line_id not in already_flagged:
+                _notify_coordinator_of_flag(session, equipment_type, line_id, record.id)
         session.commit()
         session.refresh(record)
         return (
@@ -165,6 +180,21 @@ def _apply_change(app: Flask, equipment_type_id: int, *, action: str) -> tuple |
             ),
             201,
         )
+
+
+def _notify_coordinator_of_flag(
+    session: Session, equipment_type: EquipmentType, line_id: int, record_id: int
+) -> None:
+    line = session.get(EquipmentRequirement, line_id)
+    event = session.get(EventRequest, line.event_request_id)
+    add_arrangement_notice(
+        session,
+        event,
+        kind="equipment_flagged",
+        source_id=f"{record_id}-line-{line_id}",
+        message=f"Equipment for {event.name} needs review: {equipment_type.name} × "
+        f"{line.quantity}; units became unavailable.",
+    )
 
 
 def _flag_shortfall_lines(

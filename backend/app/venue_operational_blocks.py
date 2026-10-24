@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.authorization import require_roles
 from app.models import (
     ACTIVE_BOOKING_STATUSES,
+    EventRequest,
     Role,
     Venue,
     VenueBooking,
@@ -225,8 +226,27 @@ def _mark_overlapping_bookings_for_review(
         from app.venue_booking_assessment import record_operational_finding
 
         record_operational_finding(session, booking, block, assessed_at=marked_at)
+        _notify_coordinator_of_block(session, booking, block)
     session.flush()
     return len(bookings)
+
+
+def _notify_coordinator_of_block(
+    session: Session, booking: VenueBooking, block: VenueOperationalBlock
+) -> None:
+    # SPL-121 AC3; the block's own reason stays with Venue Staff.
+    from app.notifications import add_arrangement_notice
+
+    event = session.get(EventRequest, booking.event_request_id)
+    venue = session.get(Venue, block.venue_id)
+    add_arrangement_notice(
+        session,
+        event,
+        kind="booking_flagged",
+        source_id=f"block-{block.id}-booking-{booking.id}",
+        message=f"Venue booking for {event.name} at {venue.name} needs review: Venue Staff "
+        "blocked time it uses.",
+    )
 
 
 def _block_attributes(data: dict[str, Any]) -> dict[str, Any]:

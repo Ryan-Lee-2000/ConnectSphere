@@ -181,6 +181,35 @@ def add_change_request_submitted_notice(
     )
 
 
+def add_arrangement_notice(
+    session: Session, event: EventRequest, *, kind: str, source_id: str | int, message: str
+) -> None:
+    """Notify the event's assigned coordinator of a decision on its arrangements (SPL-121).
+
+    The recipient is the coordinator assigned when the action happens, read on the server; an
+    event with no assignment notifies nobody. Runs in the caller's transaction, so a refused or
+    failed action leaves no notice, and the source row in the dedupe key stops a repeat adding a
+    second.
+    """
+
+    coordinator_id = session.scalar(
+        select(EventCoordinatorAssignment.coordinator_account_id).where(
+            EventCoordinatorAssignment.event_request_id == event.id
+        )
+    )
+    if coordinator_id is None:
+        return
+    session.add(
+        Notification(
+            recipient_account_id=coordinator_id,
+            event_request_id=event.id,
+            message=message,
+            dedupe_key=f"arrangement_{kind}:{source_id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
 def add_technical_support_notices(
     session: Session, event: EventRequest, *, kind: str, source_id: str | int, message: str
 ) -> None:
