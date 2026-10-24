@@ -4,7 +4,7 @@ Every account sees only the notices addressed to it. The recipient always comes 
 session, never from the request, so one account cannot read or change another's inbox.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from flask import Flask, abort, g, jsonify
@@ -20,6 +20,8 @@ from app.models import (
     EventRequest,
     Notification,
     Role,
+    Venue,
+    VenueBooking,
 )
 
 # Event, role and organisation permissions are enforced where the linked record is opened, so a
@@ -190,15 +192,7 @@ def add_technical_support_notices(
     """
 
     now = datetime.now(SINGAPORE)
-    recipients = session.scalars(
-        select(Account.id)
-        .join(AccountRole, AccountRole.account_id == Account.id)
-        .where(
-            AccountRole.role == Role.TECHNICAL_SUPPORT_STAFF.value,
-            Account.is_active.is_(True),
-        )
-    ).all()
-    for recipient_id in recipients:
+    for recipient_id in _active_role_holders(session, Role.TECHNICAL_SUPPORT_STAFF):
         session.add(
             Notification(
                 recipient_account_id=recipient_id,
@@ -208,6 +202,95 @@ def add_technical_support_notices(
                 created_at=now,
             )
         )
+
+
+def add_venue_booking_notices(
+    session: Session, booking: VenueBooking, event: EventRequest, *, kind: str
+) -> None:
+    """Notify every active Venue Staff account that a booking was requested or withdrawn (SPL-104).
+
+    ``kind`` is ``requested`` or ``withdrawn``. Recipients come from role assignments, so an
+    account that also requested the booking is notified as Venue Staff. Runs in the caller's
+    transaction, so a refused action leaves no notice, and the booking id in the dedupe key gives
+    each booking its own notice and stops a retry adding a second (AC4, AC7).
+    """
+
+    venue = session.get(Venue, booking.venue_id)
+    action = "Venue booking requested" if kind == "requested" else "Venue booking request withdrawn"
+    message = f"{action} for {event.name}: {venue.name}{_booking_details(booking, event)}."
+    now = datetime.now(SINGAPORE)
+    for recipient_id in _active_role_holders(session, Role.VENUE_STAFF):
+        session.add(
+            Notification(
+                recipient_account_id=recipient_id,
+                event_request_id=event.id,
+                message=message,
+                dedupe_key=f"venue_booking_{kind}:{booking.id}",
+                created_at=now,
+            )
+        )
+
+
+def _active_role_holders(session: Session, role: Role) -> list[str]:
+    return session.scalars(
+        select(Account.id)
+        .join(AccountRole, AccountRole.account_id == Account.id)
+        .where(AccountRole.role == role.value, Account.is_active.is_(True))
+    ).all()
+
+
+def _booking_details(booking: VenueBooking, event: EventRequest) -> str:
+    """AC5: date, Singapore times and the whole occupied window, from the booking's own timing."""
+
+    day = booking.booking_date
+    if booking.exact_timing:
+        start, end = _interval(booking.exact_timing["event"])
+        occupied_start, occupied_end = _interval(booking.exact_timing["occupied"])
+        return (
+            f" on {_day(day)}, {start:%H:%M}–{end:%H:%M} SGT; venue occupied "
+            f"{_clock(occupied_start, day)}–{_clock(occupied_end, day)} "
+            "including setup and turnaround"
+        )
+    if day is None or not booking.event_slots:
+        # A Requested booking stored without timing (SPL-83 claims) must still be withdrawable.
+        return ""
+    # Slot timing keeps the event's own times and records preparation as whole slots.
+    times = (
+        f", {event.start_time:%H:%M}–{event.end_time:%H:%M} SGT"
+        if event.start_time and event.end_time
+        else ""
+    )
+    preparation = [
+        f"{label} {_slot_name(slot)}" + (f" on {_day(slot_day)}" if slot_day != day else "")
+        for label, slot_day, slot in (
+            ("setup", booking.setup_date, booking.setup_slot),
+            ("turnaround", booking.turnaround_date, booking.turnaround_slot),
+        )
+        if slot
+    ]
+    slots = ", ".join(_slot_name(slot) for slot in booking.event_slots)
+    return f" on {_day(day)}{times}; venue occupied {slots}" + (
+        f" ({', '.join(preparation)})" if preparation else ""
+    )
+
+
+def _interval(stored: dict[str, str]) -> tuple[datetime, datetime]:
+    return tuple(
+        datetime.fromisoformat(stored[edge]).astimezone(SINGAPORE) for edge in ("start", "end")
+    )
+
+
+def _clock(moment: datetime, day: date) -> str:
+    # Preparation can cross midnight, so name the other day when it does.
+    return f"{moment:%H:%M}" if moment.date() == day else f"{_day(moment.date())} {moment:%H:%M}"
+
+
+def _day(value: date) -> str:
+    return f"{value:%a} {value.day} {value:%b %Y}"
+
+
+def _slot_name(slot: str) -> str:
+    return "Night" if slot == "NIGHT" else slot
 
 
 def register_notification_routes(app: Flask) -> None:
@@ -294,6 +377,9 @@ def _event_link(notice: Notification) -> str:
     if kind.startswith("technical_"):
         # SPL-122 AC5: Technical Support cannot open coordinator pages; their queue holds the work.
         return "/workspace/equipment-review-queue"
+    if kind.startswith("venue_booking_"):
+        # SPL-104: Venue Staff cannot open coordinator pages; their booking queue holds the work.
+        return "/workspace/booking-requests"
     page = "organisation-events" if kind.startswith("organiser_") else "assigned-events"
     return f"/workspace/{page}/{notice.event_request_id}"
 

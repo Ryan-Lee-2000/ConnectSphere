@@ -97,6 +97,12 @@ request. Each is written in the action's transaction and keyed to the clarificat
 request row. The assignment notices that SPL-103's first two criteria describe are SPL-134's. See
 [SPL-103](tasks/SPL-103.md).
 
+SPL-104 adds `notifications.add_venue_booking_notices`, called by the venue-booking request (both
+timing modes) and withdrawal routes in their own transactions. Every active Venue Staff account is
+notified once per booking and action, keyed to the booking id; the notice names the event, venue,
+date, Singapore times and occupied window and opens `/workspace/booking-requests`. See
+[SPL-104](tasks/SPL-104.md).
+
 ## Event review transitions
 
 SPL-70 introduces the first explicit workflow action at
