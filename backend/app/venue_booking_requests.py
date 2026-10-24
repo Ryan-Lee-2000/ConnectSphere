@@ -25,6 +25,7 @@ from app.models import (
     Venue,
     VenueBooking,
 )
+from app.notifications import add_venue_booking_notices
 from app.slots import OccupancyKind, derive_venue_occupancy, slots_for_range
 from app.venue_arrangements import (
     ARRANGEMENT_FIELDS,
@@ -132,6 +133,7 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 actor_account_id=g.user_id,
                 changed_at=booking.requested_at,
             )
+            add_venue_booking_notices(session, booking, event, kind="requested")
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking)), 201
 
@@ -381,5 +383,6 @@ def _request_exact(session, event, venue, layout_name, attendee_count, facilitie
         actor_account_id=g.user_id,
         changed_at=booking.requested_at,
     )
+    add_venue_booking_notices(session, booking, event, kind="requested")
     session.commit()
     return jsonify(booking=serialize_venue_booking(session, booking)), 201
