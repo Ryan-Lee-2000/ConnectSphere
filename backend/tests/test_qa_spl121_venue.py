@@ -394,7 +394,11 @@ def test_qa_spl_121_052_an_unassigned_event_notifies_nobody(app, client):
         session.commit()
     assert reject(client, booking, reason="maintenance").status_code == 200
     with Session(app.extensions["engine"]) as session:
-        assert session.scalars(select(Notification)).all() == []
+        # SPL-104's Venue Staff notice of the booking request is the only notice; no one is told
+        # of the rejection.
+        assert session.scalars(select(Notification.dedupe_key)).all() == [
+            f"venue_booking_requested:{booking['id']}"
+        ]
 
 
 # QA-SPL-121-054 | AC5 | BB
