@@ -71,7 +71,7 @@ type ConfirmationBlocker = { code: string; message: string; booking_id?: number 
 type ConfirmationReadiness = { ready: boolean; blockers: ConfirmationBlocker[] };
 
 // Begin review answers with the summary shape only, so the full detail fields are optional here.
-type AssignedEventDetail = AssignedEvent & Partial<{
+export type AssignedEventDetail = AssignedEvent & Partial<{
   purpose: string | null;
   description: string | null;
   event_notes: string | null;
@@ -758,9 +758,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
-      {/* SPL-111: the organiser's change requests, read-only here. Reviewing them is a later story. */}
+      {/* SPL-112: decisions refresh event readiness and arrangement flags. */}
       {showChangeRequests
-        ? <ChangeRequestsPanel api={api} eventId={event.id} eventStatus={event.status} />
+        ? <ChangeRequestsPanel api={api} eventId={event.id} eventStatus={event.status}
+          onDecided={updated => { setEvent(updated); setConfirmingEvent(false); setArrangementRevision(value => value + 1); }} />
         : <div className="organisation-events__actions">
           <button className="button button--secondary" type="button" onClick={() => setShowChangeRequests(true)}>
             View change requests

@@ -143,7 +143,7 @@ test('QA-SPL-111-200: an organiser submits a change request, the coordinator see
   await row().getByRole('button', { name: 'Change requests' }).click();
   await expect(page.getByRole('group', { name: 'Pending change request' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Request a change' })).toHaveCount(0);
-  await expect(page.getByText(/once this one is resolved/)).toBeVisible();
+  await expect(page.getByText(/once this one is Closed/)).toBeVisible();
   await caption(page, 'AC4: no second request is offered while one is Pending');
   const refusal = await page.evaluate(async ({ header, title }) => {
     const headers = { Authorization: header, 'Content-Type': 'application/json' };

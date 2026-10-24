@@ -140,7 +140,7 @@ it('[QA-SPL-111-105] after submitting, the request shows as Pending and the form
   expect(screen.queryByRole('form', { name: 'New change request' })).toBeNull();
   // AC4 in the interface: a second request is not offered while one is pending.
   expect(screen.queryByRole('button', { name: 'Request a change' })).toBeNull();
-  expect(screen.getByText(/once this one is resolved/)).toBeTruthy();
+  expect(screen.getByText(/once this one is Closed/)).toBeTruthy();
 });
 
 // QA-SPL-111-106 | AC4 | BB

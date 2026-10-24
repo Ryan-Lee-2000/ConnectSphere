@@ -1128,7 +1128,7 @@ class Notification(Base):
 
 # SPL-111 (CS-E18-S1): a change request is Pending until a later story resolves it. Shared with the
 # migration so the model and the database cannot drift apart.
-CHANGE_REQUEST_STATUSES = ("pending",)
+CHANGE_REQUEST_STATUSES = ("pending", "closed")
 ONE_PENDING_CHANGE_REQUEST = "status = 'pending'"
 
 
@@ -1177,6 +1177,15 @@ class EventChangeRequestItem(Base):
     __tablename__ = "event_change_request_items"
     __table_args__ = (
         UniqueConstraint("change_request_id", "field", name="uq_event_change_request_items_field"),
+        CheckConstraint(
+            "(decision IS NULL AND decline_reason IS NULL AND decided_by_account_id IS NULL "
+            "AND decided_at IS NULL) OR (decision IS NOT NULL AND "
+            "decision IN ('accepted', 'declined') AND decided_by_account_id IS NOT NULL "
+            "AND decided_at IS NOT NULL AND ((decision = 'accepted' AND decline_reason IS NULL) "
+            "OR (decision = 'declined' AND decline_reason IS NOT NULL "
+            "AND length(trim(decline_reason)) > 0)))",
+            name="ck_change_request_item_decision",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1189,4 +1198,11 @@ class EventChangeRequestItem(Base):
     current_value: Mapped[Any] = mapped_column(JSON)
     requested_value: Mapped[Any] = mapped_column(JSON, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(20))
+    decline_reason: Mapped[str | None] = mapped_column(Text)
+    decided_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped["Account | None"] = relationship(foreign_keys=[decided_by_account_id])
     change_request: Mapped[EventChangeRequest] = relationship(back_populates="items")
