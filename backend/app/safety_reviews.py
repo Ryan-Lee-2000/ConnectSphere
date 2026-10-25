@@ -74,7 +74,14 @@ def register_safety_review_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session:
             event = _visible_event(session, event_request_id)
             review = _latest_review(session, event.id)
-            return jsonify(event=_event_context(event), review=_serialize_review(review, event))
+            # SPL-136 AC4: the active review controls the gate, while earlier review
+            # versions remain available as accountable evidence of the rework cycle.
+            reviews = _review_history(session, event.id)
+            return jsonify(
+                event=_event_context(event),
+                review=_serialize_review(review, event),
+                reviews=[_serialize_review(item, event) for item in reviews],
+            )
 
     @app.post("/api/event-requests/<int:event_request_id>/safety-review")
     @require_roles(Role.EVENT_COORDINATOR)
@@ -94,6 +101,13 @@ def register_safety_review_routes(app: Flask) -> None:
                 and latest.arrangement_fingerprint == _fingerprint(event)
             ):
                 abort(409, "This arrangement already has a safety review awaiting a decision.")
+            if (
+                latest is not None
+                and latest.status == "approved"
+                and latest.arrangement_fingerprint == _fingerprint(event)
+                and latest.plan == plan
+            ):
+                abort(409, "The current safety plan is already approved.")
             now = datetime.now(SINGAPORE)
             review = SafetyReview(
                 event_request_id=event.id,
@@ -268,6 +282,16 @@ def _latest_review(session: Session, event_id: int, lock: bool = False) -> Safet
     if lock:
         query = query.with_for_update()
     return session.scalar(query)
+
+
+def _review_history(session: Session, event_id: int) -> list[SafetyReview]:
+    """Return the newest-first review evidence without treating old versions as actionable."""
+
+    return session.scalars(
+        select(SafetyReview)
+        .where(SafetyReview.event_request_id == event_id)
+        .order_by(SafetyReview.id.desc())
+    ).all()
 
 
 def _fingerprint(event: EventRequest) -> str:
