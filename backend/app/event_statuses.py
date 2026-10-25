@@ -42,6 +42,10 @@ EVENT_REQUEST_STATUSES: Final[dict[str, tuple[str, str]]] = {
         "Confirmed",
         "Everything is arranged. Your event is going ahead on the agreed date.",
     ),
+    "preparing": (
+        "Preparing",
+        "Safety arrangements are approved and event preparation is underway.",
+    ),
     "completed": (
         "Completed",
         "Your event has taken place and this request is now closed.",

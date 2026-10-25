@@ -433,6 +433,31 @@ def _slot_name(slot: str) -> str:
     return "Night" if slot == "NIGHT" else slot
 
 
+def add_safety_decision_notice(session: Session, event: EventRequest, *, review) -> None:
+    """Notify the currently assigned coordinator of a durable safety decision."""
+    coordinator_id = session.scalar(
+        select(EventCoordinatorAssignment.coordinator_account_id).where(
+            EventCoordinatorAssignment.event_request_id == event.id
+        )
+    )
+    if coordinator_id is None:
+        return
+    wording = {
+        "approved": "approved the safety arrangement.",
+        "changes_requested": "requested changes to the safety arrangement.",
+        "rejected": "rejected the safety arrangement.",
+    }[review.status]
+    session.add(
+        Notification(
+            recipient_account_id=coordinator_id,
+            event_request_id=event.id,
+            message=f"Safety Officer {wording} for {event.name}",
+            dedupe_key=f"safety_decision:{review.id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
 def register_notification_routes(app: Flask) -> None:
     @app.get("/api/notifications")
     @require_roles(*ALL_ROLES)
