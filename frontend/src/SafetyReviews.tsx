@@ -39,7 +39,9 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
   const api = useMemo(() => defaultRequest(accessToken), [accessToken]);
   const [context, setContext] = useState<SafetyContext | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [plan, setPlan] = useState<Plan>(emptyPlan);
+  const [editingPlan, setEditingPlan] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -48,8 +50,9 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
     setError(null);
     const response = await api(`/api/event-requests/${eventId}/safety-review`);
     if (!response.ok) throw new Error(await responseError(response, 'Could not load the safety review.'));
-    const body = await response.json() as { event: SafetyContext; review: Review | null };
-    setContext(body.event); setReview(body.review); setPlan(body.review?.plan ?? emptyPlan());
+    const body = await response.json() as { event: SafetyContext; review: Review | null; reviews?: Review[] };
+    setContext(body.event); setReview(body.review); setReviews(body.reviews ?? (body.review ? [body.review] : []));
+    setPlan(body.review?.plan ?? emptyPlan()); setEditingPlan(false);
   }
   useEffect(() => { void load().catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load the safety review.')); }, [api, eventId]);
 
@@ -59,7 +62,7 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
       const response = await api(`/api/event-requests/${eventId}/safety-review`, { method: 'POST', body: JSON.stringify({ plan }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not submit the safety review.');
-      setReview(body.review); setNotice(body.message || 'Safety review submitted.');
+      setNotice(body.message || 'Safety review submitted.'); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not submit the safety review.'); }
     finally { setSaving(false); }
   }
@@ -76,16 +79,19 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
 
   if (error && !context) return <p className="error" role="alert">{error}</p>;
   if (!context) return <p role="status">Loading safety review…</p>;
-  // A current approval closes this review cycle. SPL-136 returns a corrected event to Confirmed;
-  // at that point the same submission action starts a fresh safety-review cycle. A current
-  // pending review is deliberately not duplicated while Safety is deciding it.
-  const canSubmit = context.status === 'confirmed'
-    && (!review || (review.status !== 'submitted' && (review.status !== 'approved' || !review.current)));
+  // A current approved plan can be revised deliberately. Posting the revised plan creates a
+  // fresh submitted version, so Preparation cannot reuse the earlier approval.
+  const canRevise = context.status === 'confirmed' && review?.status === 'approved' && review.current;
+  const canSubmit = context.status === 'confirmed' && (!review
+    || !review.current || review.status !== 'submitted') && (!canRevise || editingPlan);
   const canBegin = context.status === 'confirmed' && review?.status === 'approved' && review.current;
+  if (context.status === 'planning' && reviews.length === 0) return null;
   return <section className="safety-review" aria-labelledby="safety-review-title">
-    <header className="safety-review__header"><div><p className="eyebrow">Safety gate</p><h2 id="safety-review-title">Safety review</h2><p>Preparation can begin only after the current confirmed arrangements are approved by Safety.</p></div><strong className={`safety-review__status safety-review__status--${review?.status ?? 'not-submitted'}`}>{review ? label(review.status) : 'Not submitted'}</strong></header>
+    <header className="safety-review__header"><div><p className="eyebrow">Safety gate</p><h2 id="safety-review-title">Safety review</h2><p>{context.status === 'planning' ? 'Safety rework is recorded. Correct the affected arrangements and reconfirm the event before submitting a renewed review.' : 'Preparation can begin only after the current confirmed arrangements are approved by Safety.'}</p></div><strong className={`safety-review__status safety-review__status--${review?.status ?? 'not-submitted'}`}>{review ? label(review.status) : 'Not submitted'}</strong></header>
     <ArrangementEvidence context={context} />
     {review && <div className="safety-review__decision"><strong>{review.current ? 'Current arrangement' : 'Arrangement changed'}</strong><span>{review.reason || (review.status === 'approved' ? 'Safety approved this submitted arrangement.' : 'Awaiting the Safety Officer’s decision.')}</span>{review.decided_by && <small>Recorded by {review.decided_by.name} on {new Date(review.decided_at || '').toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</small>}</div>}
+    {reviews.length > 1 && <details className="safety-review__history"><summary>Previous safety review decisions ({reviews.length - 1})</summary><ol>{reviews.slice(1).map(item => <li key={item.id}><strong>{label(item.status)}</strong><span>{item.reason || 'No decision reason recorded.'}</span><small>{item.decided_at ? `Recorded ${new Date(item.decided_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}` : `Submitted ${new Date(item.submitted_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}`}</small></li>)}</ol></details>}
+    {canRevise && !editingPlan && <div className="organisation-events__actions"><button className="button button--secondary" type="button" onClick={() => setEditingPlan(true)}>Revise safety plan</button></div>}
     {canSubmit && <fieldset className="safety-review__plan" disabled={saving}><legend>Safety plan</legend>{fields.map(([key, title, hint]) => {
       const notApplicable = Boolean(plan[key]?.not_applicable_reason);
       return <div className="field" key={key}>
@@ -105,7 +111,7 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
       </div>;
     })}</fieldset>}
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    <div className="organisation-events__actions">{canSubmit && <button className="button button--primary" type="button" disabled={saving} onClick={() => void submit()}>{saving ? 'Submitting…' : 'Submit safety review'}</button>}{canBegin && <button className="button button--primary" type="button" disabled={saving} onClick={() => void beginPreparation()}>{saving ? 'Starting…' : 'Begin preparation'}</button>}</div>
+    <div className="organisation-events__actions">{canSubmit && <button className="button button--primary" type="button" disabled={saving} onClick={() => void submit()}>{saving ? 'Submitting…' : editingPlan ? 'Submit revised safety review' : 'Submit safety review'}</button>}{canBegin && !editingPlan && <button className="button button--primary" type="button" disabled={saving} onClick={() => void beginPreparation()}>{saving ? 'Starting…' : 'Begin preparation'}</button>}{editingPlan && <button className="button button--secondary" type="button" disabled={saving} onClick={() => { setEditingPlan(false); setPlan(review?.plan ?? emptyPlan()); }}>Cancel revision</button>}</div>
   </section>;
 }
 

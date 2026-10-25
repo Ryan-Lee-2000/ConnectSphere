@@ -1152,13 +1152,13 @@ def test_qa_spl68_070_the_rule_table_maps_under_review_to_rejected(client):
         "withdraw",
         "confirm",  # SPL-85: planning -> confirmed
         "cancel",  # SPL-86: any active status -> cancelled
-        "significant_change",  # SPL-109: confirmed -> planning
+        "significant_change",  # SPL-109/136: confirmed or preparing -> planning
         "begin_preparation",  # SPL-135: confirmed -> preparing after safety approval
         "safety_rework",  # SPL-135: confirmed -> planning after a safety decision
     }
     significant_change = TRANSITION_RULES["significant_change"]
     assert (significant_change.previous_status, significant_change.resulting_status) == (
-        "confirmed",
+        ("confirmed", "preparing"),
         "planning",
     )
 

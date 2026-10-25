@@ -57,7 +57,11 @@ class TransitionRule:
 
 
 TRANSITION_RULES = {
-    "significant_change": TransitionRule(previous_status=CONFIRMED, resulting_status=PLANNING),
+    # SPL-136: a significant correction made after preparation has started must reopen
+    # planning. The shared change path keeps the same durable history in both cases.
+    "significant_change": TransitionRule(
+        previous_status=(CONFIRMED, PREPARING), resulting_status=PLANNING
+    ),
     BEGIN_REVIEW: TransitionRule(
         previous_status=SUBMITTED,
         resulting_status=UNDER_REVIEW,

@@ -120,7 +120,7 @@ def apply_prepared_change(session, event, values, changes, impacts, equipment=No
 
 
 def return_to_planning(session: Session, event: EventRequest, now: datetime):
-    if event.status != "confirmed":
+    if event.status not in {"confirmed", "preparing"}:
         return None
     # AC4: the durable status-history event is the handoff to SPL-123, in this transaction.
     history = transition_event_status(
@@ -164,7 +164,7 @@ def _preview(event, changes, impacts, snapshot):
         "changes": changes,
         "arrangements": impacts,
         "preview_token": token,
-        "returns_to_planning": bool(changes) and event.status == "confirmed",
+        "returns_to_planning": bool(changes) and event.status in {"confirmed", "preparing"},
     }
 
 
