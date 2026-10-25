@@ -271,15 +271,58 @@ def _latest_review(session: Session, event_id: int, lock: bool = False) -> Safet
 
 
 def _fingerprint(event: EventRequest) -> str:
-    # Hash every arrangement fact the Safety Officer is shown. When any reviewed venue,
-    # restriction, accessibility or equipment evidence changes, the prior approval can no longer
-    # authorise Preparation until a new review has been submitted and decided.
+    # Hash every arrangement fact the Safety Officer is shown *and* the durable schedule and
+    # allocation identities it approved.  The UI context intentionally stays readable, while this
+    # server-side snapshot also prevents a re-confirmation from reviving approval for a changed
+    # date/time or a replacement booking that happens to look the same in the interface.
     context = _event_context(event)
     payload = {
-        "attendance": context["expected_attendance"],
-        "accessibility": context["accessibility_needs"],
-        "venues": context["venues"],
-        "equipment": context["equipment"],
+        "schedule": {
+            "event_id": event.id,
+            "proposed_date": event.proposed_date,
+            "start_time": event.start_time,
+            "end_time": event.end_time,
+        },
+        "safety_context": context,
+        "bookings": [
+            {
+                "id": booking.id,
+                "venue_id": booking.venue_id,
+                "status": booking.status,
+                "requires_review": booking.requires_review,
+                "booking_date": booking.booking_date,
+                "event_slots": booking.event_slots,
+                "setup_date": booking.setup_date,
+                "setup_slot": booking.setup_slot,
+                "turnaround_date": booking.turnaround_date,
+                "turnaround_slot": booking.turnaround_slot,
+                "exact_timing": booking.exact_timing,
+            }
+            for booking in sorted(event.venue_bookings, key=lambda item: item.id)
+            if booking.status == "approved"
+        ],
+        "equipment_allocations": [
+            {
+                "id": line.id,
+                "equipment_type_id": line.equipment_type_id,
+                "quantity": line.quantity,
+                "status": line.status,
+                "required_start_date": line.required_start_date,
+                "required_end_date": line.required_end_date,
+                "reservations": [
+                    {
+                        "id": reservation.id,
+                        "equipment_type_id": reservation.equipment_type_id,
+                        "quantity": reservation.quantity,
+                        "commitment_start_date": reservation.commitment_start_date,
+                        "commitment_end_date": reservation.commitment_end_date,
+                    }
+                    for reservation in sorted(line.reservations, key=lambda item: item.id)
+                ],
+            }
+            for line in sorted(event.equipment_requirements, key=lambda item: item.id)
+            if line.status != "removed"
+        ],
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 

@@ -22,6 +22,7 @@ from app.models import (
     SafetyReview,
     Venue,
     VenueBooking,
+    VenueBookingReviewFinding,
     VenueLayout,
 )
 from sqlalchemy import func, select
@@ -220,6 +221,19 @@ def review_count(app, event_id):
         return session.scalar(
             select(func.count(SafetyReview.id)).where(SafetyReview.event_request_id == event_id)
         )
+
+
+def save_significant_change(client, event_id, values):
+    """Apply the real significant-change workflow, including its server-issued preview token."""
+
+    route = f"/api/event-requests/assigned/{event_id}/significant-changes"
+    preview = client.post(route + "/preview", headers=headers(), json={"values": values})
+    assert preview.status_code == 200, preview.json
+    return client.patch(
+        route,
+        headers=headers(),
+        json={"values": values, "preview_token": preview.json["preview_token"]},
+    )
 
 
 # QA-SPL-135-001 | AC1 | BB
@@ -531,6 +545,68 @@ def test_qa_spl_135_023_safety_queue_returns_the_actual_arrangement_evidence(app
     assert event["venues"][0]["name"] == "Harbour Hall"
     assert event["venues"][0]["restrictions"] == "No open flame or blocked exits."
     assert event["equipment"][0]["name"] == "Wireless Microphone"
+
+
+# QA-SPL-135-024 | AC4 | P1 review-round-2 regression
+def test_qa_spl_135_024_changed_event_timing_invalidates_an_approved_safety_review(app, client):
+    """A Safety approval belongs to the reviewed schedule, not merely its AM booking slot."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        # 10:00 remains within AM, so this isolates stale Safety approval from venue readiness.
+        session.get(EventRequest, event_id).start_time = time(10)
+        session.commit()
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert "no longer current" in response.json["error"]
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event_id).status == "confirmed"
+
+
+# QA-SPL-135-025 | AC4 | P1 review-round-2 integration regression
+def test_qa_spl_135_025_reconfirmation_cannot_resurrect_safety_approval_for_changed_schedule(
+    app, client
+):
+    """The significant-change and reconfirmation flow still requires a fresh Safety review."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+
+    changed = save_significant_change(client, event_id, {"start_time": "10:00"})
+    assert changed.status_code == 200, changed.json
+    assert changed.json["event"]["status"] == "planning"
+    with Session(app.extensions["engine"]) as session:
+        # SPL-109 appropriately asks Venue and Technical Support to revalidate affected
+        # arrangements.  Clearing those separate reviews makes the event confirmable again, but
+        # cannot revive the old Safety decision for the changed schedule.
+        booking = session.scalar(
+            select(VenueBooking).where(VenueBooking.event_request_id == event_id)
+        )
+        booking.requires_review = False
+        # The real revalidation route closes these findings.  The Safety test only needs the
+        # confirmed, revalidated arrangement it leaves behind.
+        session.query(VenueBookingReviewFinding).filter_by(booking_id=booking.id).delete()
+        requirement = session.scalar(
+            select(EquipmentRequirement).where(EquipmentRequirement.event_request_id == event_id)
+        )
+        requirement.status = "reserved"
+        requirement.review_reason = None
+        requirement.review_flagged_at = None
+        session.commit()
+    reconfirmed = client.post(f"/api/event-requests/{event_id}/confirm", headers=headers())
+    assert reconfirmed.status_code == 200, reconfirmed.json
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert "no longer current" in response.json["error"]
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event_id).status == "confirmed"
 
 
 # QA-SPL-135-019 | AC4 | security
