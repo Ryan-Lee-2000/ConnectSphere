@@ -14,10 +14,22 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.authorization import require_roles
 from app.equipment_reservation_state import remaining_quantity
-from app.event_confirmation import booked_times, confirmation_readiness_for
+from app.event_confirmation import (
+    confirmation_readiness_for,
+    derive_confirmation_readiness,
+    lock_for_confirmation,
+)
 from app.event_requests import SINGAPORE
 from app.event_review import InvalidStatusTransition, transition_event_status
-from app.models import EventCoordinatorAssignment, EventRequest, Role, SafetyReview, VenueBooking
+from app.models import (
+    EquipmentRequirement,
+    EventCoordinatorAssignment,
+    EventRequest,
+    Role,
+    SafetyReview,
+    Venue,
+    VenueBooking,
+)
 from app.notifications import add_safety_decision_notice
 
 MAX_REASON_LENGTH = 2000
@@ -36,9 +48,16 @@ def register_safety_review_routes(app: Flask) -> None:
                     joinedload(SafetyReview.event_request)
                     .selectinload(EventRequest.venue_bookings)
                     .joinedload(VenueBooking.venue),
-                    joinedload(SafetyReview.event_request).selectinload(
-                        EventRequest.equipment_requirements
-                    ),
+                    joinedload(SafetyReview.event_request)
+                    .selectinload(EventRequest.venue_bookings)
+                    .joinedload(VenueBooking.venue)
+                    .selectinload(Venue.layouts),
+                    joinedload(SafetyReview.event_request)
+                    .selectinload(EventRequest.equipment_requirements)
+                    .joinedload(EquipmentRequirement.catalogue_type),
+                    joinedload(SafetyReview.event_request)
+                    .selectinload(EventRequest.equipment_requirements)
+                    .selectinload(EquipmentRequirement.reservations),
                 )
                 .order_by(SafetyReview.submitted_at)
             ).all()
@@ -145,10 +164,20 @@ def register_safety_review_routes(app: Flask) -> None:
     @require_roles(Role.EVENT_COORDINATOR)
     def begin_preparation(event_request_id: int):
         with Session(app.extensions["engine"]) as session:
-            event = _assigned_event(session, event_request_id, lock=True)
+            # Reuse the confirmation gate's locking order. A Safety approval is not a permanent
+            # bypass: an approved venue can later be flagged for review, or an essential line can
+            # become unresolved while the event remains Confirmed.
+            event, bookings, lines = lock_for_confirmation(session, event_request_id, g.user_id)
             review = _latest_review(session, event.id, lock=True)
             if event.status != "confirmed" or review is None or review.status != "approved":
                 abort(409, "Safety approval is required before Preparation can begin.")
+            readiness = derive_confirmation_readiness(session, bookings, lines)
+            if not readiness["ready"]:
+                session.rollback()
+                return jsonify(
+                    error="Resolve the current venue and essential technical arrangements first.",
+                    blockers=readiness["blockers"],
+                ), 409
             if review.arrangement_fingerprint != _fingerprint(event):
                 abort(409, "The approved safety review is no longer current. Submit a new review.")
             try:
@@ -242,33 +271,15 @@ def _latest_review(session: Session, event_id: int, lock: bool = False) -> Safet
 
 
 def _fingerprint(event: EventRequest) -> str:
-    venues = [
-        {
-            "venue": booking.venue_id,
-            "status": booking.status,
-            "layout": booking.layout,
-            "attendance": booking.expected_attendance,
-            "times": booked_times(booking, event),
-        }
-        for booking in sorted(event.venue_bookings, key=lambda row: row.id)
-        if booking.status == "approved"
-    ]
-    equipment = [
-        {
-            "id": line.id,
-            "type": line.equipment_type,
-            "quantity": line.quantity,
-            "status": line.status,
-            "essentiality": line.essentiality,
-        }
-        for line in event.equipment_requirements
-        if line.status != "removed"
-    ]
+    # Hash every arrangement fact the Safety Officer is shown. When any reviewed venue,
+    # restriction, accessibility or equipment evidence changes, the prior approval can no longer
+    # authorise Preparation until a new review has been submitted and decided.
+    context = _event_context(event)
     payload = {
-        "attendance": event.expected_attendance,
-        "accessibility": event.accessibility_needs,
-        "venues": venues,
-        "equipment": equipment,
+        "attendance": context["expected_attendance"],
+        "accessibility": context["accessibility_needs"],
+        "venues": context["venues"],
+        "equipment": context["equipment"],
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -340,11 +351,9 @@ def _queue_item(review: SafetyReview) -> dict[str, Any]:
     event = review.event_request
     return {
         "id": review.id,
-        "event": {
-            "id": event.id,
-            "name": event.name,
-            "expected_attendance": event.expected_attendance,
-        },
+        # The decision screen consumes this exact response, so do not reduce it to a card summary.
+        # Safety Officers need the same protected venue and technical evidence before deciding.
+        "event": _event_context(event),
         "plan": review.plan,
         "submitted_at": review.submitted_at.isoformat(),
     }

@@ -477,6 +477,62 @@ def test_qa_spl_135_018_changing_arrangements_invalidates_an_old_approval(app, c
     assert "no longer current" in response.json["error"]
 
 
+# QA-SPL-135-021 | AC4 | regression
+def test_qa_spl_135_021_current_venue_review_requirement_blocks_preparation(app, client):
+    """An approval cannot bypass a venue booking that was flagged after Safety decided."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        session.scalar(
+            select(VenueBooking).where(VenueBooking.event_request_id == event_id)
+        ).requires_review = True
+        session.commit()
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert response.json["blockers"][0]["code"] == "venue_booking_review_required"
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event_id).status == "confirmed"
+
+
+# QA-SPL-135-022 | AC4 | regression
+def test_qa_spl_135_022_changed_venue_restrictions_invalidate_safety_approval(app, client):
+    """Safety must re-review the event when the venue restrictions it saw have changed."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        session.get(
+            EventRequest, event_id
+        ).venue_notes = "West emergency exit is closed; use the east exit."
+        session.commit()
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert "no longer current" in response.json["error"]
+
+
+# QA-SPL-135-023 | AC2, AC3 | integration
+def test_qa_spl_135_023_safety_queue_returns_the_actual_arrangement_evidence(app, client):
+    """The decision queue returns the approved venue and equipment context, not only a title."""
+
+    event_id = ready_event(app)
+    assert submit(client, event_id).status_code == 200
+
+    response = client.get("/api/safety-reviews", headers=headers("safety"))
+
+    assert response.status_code == 200
+    event = response.json["reviews"][0]["event"]
+    assert event["venues"][0]["name"] == "Harbour Hall"
+    assert event["venues"][0]["restrictions"] == "No open flame or blocked exits."
+    assert event["equipment"][0]["name"] == "Wireless Microphone"
+
+
 # QA-SPL-135-019 | AC4 | security
 @pytest.mark.parametrize(("identity", "expected"), [("other", 404), ("lead", 403), ("safety", 403)])
 def test_qa_spl_135_019_every_other_entry_path_is_refused(app, client, identity, expected):

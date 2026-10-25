@@ -100,3 +100,17 @@ it('QA-SPL-135-013 keeps a mandatory decision reason beside the Safety Officer c
   expect(screen.getByRole('button', { name: 'Reject' })).toBeTruthy();
   vi.unstubAllGlobals();
 });
+
+// QA-SPL-135-023 | AC2, AC3 | integration
+it('QA-SPL-135-023 renders the venue and technical evidence returned by the real queue contract', async () => {
+  // This mirrors GET /api/safety-reviews: the queue must supply the context, rather than rely on
+  // a later detail request or a locally invented placeholder.
+  const queueResponse = { reviews: [{ id: 9, event: context, plan, submitted_at: pendingReview.submitted_at }] };
+  vi.stubGlobal('fetch', api({ 'GET /api/safety-reviews': () => response(queueResponse) }));
+  render(<SafetyReviewQueue accessToken="safety-token" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  expect(screen.getByText('Harbour Hall')).toBeTruthy();
+  expect(screen.getByText(/Theatre layout · 180 capacity · 120 attending/)).toBeTruthy();
+  expect(screen.getByText(/4\/4 reserved · Essential · Reserved/)).toBeTruthy();
+  vi.unstubAllGlobals();
+});
