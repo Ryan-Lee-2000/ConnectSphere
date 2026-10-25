@@ -103,6 +103,14 @@ notified once per booking and action, keyed to the booking id; the notice names 
 date, Singapore times and occupied window and opens `/workspace/booking-requests`. See
 [SPL-104](tasks/SPL-104.md).
 
+SPL-124 adds the attendee's notices. `notifications.add_attendee_notices` notifies every
+registration that is Registered when the action happens, so a withdrawn attendee hears nothing more;
+it is called for a cancellation, a significant change to the date or times (from
+`significant_event_changes.apply_prepared_change`, which SPL-112 also uses) and an Approved venue
+added or removed. `add_registration_notice` acknowledges the attendee's own registration and
+withdrawal. Each is written in the action's transaction, keyed to its source row, and opens
+`/workspace/my-registrations`. See [SPL-124](tasks/SPL-124.md).
+
 ## Event review transitions
 
 SPL-70 introduces the first explicit workflow action at

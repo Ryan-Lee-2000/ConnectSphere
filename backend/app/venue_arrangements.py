@@ -40,6 +40,7 @@ def register_venue_arrangement_routes(app: Flask) -> None:
     from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
     from app.event_requests import SINGAPORE
     from app.exact_venue_bookings import cancel_booking, lock_booking
+    from app.notifications import add_venue_change_notices
     from app.venue_booking_requests import NOT_FOUND, serialize_venue_booking
 
     @app.post(f"{BOOKING_URL}/cancel")
@@ -68,6 +69,9 @@ def register_venue_arrangement_routes(app: Flask) -> None:
                 coordinator_id=g.user_id,
                 changed_at=datetime.now(SINGAPORE),
                 note=reason,
+            )
+            add_venue_change_notices(
+                session, session.get(EventRequest, event_request_id), booking.id, added=False
             )
             session.commit()
             venue = session.get(Venue, booking.venue_id)

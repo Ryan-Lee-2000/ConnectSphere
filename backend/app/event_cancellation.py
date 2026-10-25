@@ -93,10 +93,18 @@ def register_event_cancellation_routes(app: Flask) -> None:
             )
             released_bookings = _cancel_bookings(session, bookings, g.user_id, now, note)
             releases = _release_equipment(session, event_request_id, g.user_id, now, note)
-            if releases:
-                # Imported here: notifications imports event_requests, which imports this module.
-                from app.notifications import add_technical_support_notices
+            # Imported here: notifications imports event_requests, which imports this module.
+            from app.notifications import add_attendee_notices, add_technical_support_notices
 
+            # SPL-124 AC2: the reason is written for staff, so attendees are told only the outcome.
+            add_attendee_notices(
+                session,
+                event,
+                kind="event_cancelled",
+                source_id=event_request_id,
+                message=f"{event.name} has been cancelled.",
+            )
+            if releases:
                 # SPL-122 AC2: only an event that was holding reserved units notifies.
                 units = sum(item.quantity for item in releases)
                 add_technical_support_notices(

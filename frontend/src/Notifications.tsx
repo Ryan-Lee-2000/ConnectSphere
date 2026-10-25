@@ -21,10 +21,11 @@ function formatWhen(value: string) {
 }
 
 const EVENT_LINK =
-  /^\/workspace\/(?:(?:assigned|organisation)-events\/\d+|equipment-review-queue|booking-requests)$/;
+  /^\/workspace\/(?:(?:assigned|organisation)-events\/\d+|equipment-review-queue|booking-requests|my-registrations)$/;
 
 // The server picks the page for this recipient (SPL-134: organisers have their own event page;
-// SPL-122: Technical Support opens its review queue; SPL-104: Venue Staff open the booking queue).
+// SPL-122: Technical Support opens its review queue; SPL-104: Venue Staff open the booking queue;
+// SPL-124: attendees open My registrations).
 // Anything that is not a known event page falls back to the coordinator page, which is what every
 // notice opened before the server sent a link.
 function eventPath(notice: Notice) {

@@ -25,6 +25,7 @@ from app.models import (
     Venue,
     VenueBooking,
 )
+from app.notifications import add_schedule_change_notices
 from app.validation import request_json
 from app.venue_requirement_review import assess_event_bookings, requirement_reasons
 
@@ -111,6 +112,10 @@ def apply_prepared_change(session, event, values, changes, impacts, equipment=No
         changed_at=now,
     )
     session.add(audit)
+    if equipment is None:
+        # SPL-124 AC1: direct edits and accepted SPL-112 items both reach registered attendees.
+        session.flush()
+        add_schedule_change_notices(session, event, changes, change_id=audit.id)
     return audit, status_change, released
 
 

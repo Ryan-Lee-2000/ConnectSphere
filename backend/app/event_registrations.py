@@ -50,6 +50,7 @@ from app import registration_settings as settings
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
 from app.models import EventRegistration, EventRequest, Role, Venue, VenueBooking
+from app.notifications import add_registration_notice
 from app.validation import request_json
 
 CONFIRMED = "confirmed"
@@ -115,6 +116,8 @@ def register_event_registration_routes(app: Flask) -> None:
             )
             session.add(registration)
             try:
+                session.flush()
+                add_registration_notice(session, registration, event, withdrawn=False)
                 session.commit()
             except IntegrityError:
                 # Backstop for AC5: the partial unique index refuses a second Registered row for
@@ -156,6 +159,7 @@ def register_event_registration_routes(app: Flask) -> None:
             # Registered rows, so this frees the place without any counter to update.
             registration.status = WITHDRAWN
             registration.withdrawn_at = now
+            add_registration_notice(session, registration, event, withdrawn=True)
             session.commit()
             return jsonify(
                 registration=serialize_registration(registration),

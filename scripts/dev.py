@@ -344,6 +344,8 @@ def main():
             "backend/tests/test_qa_spl121_postgres.py",
             # SPL-104: racing withdrawals and requests notify Venue Staff once.
             "backend/tests/test_qa_spl104_postgres.py",
+            # SPL-124: racing registrations, withdrawals and cancellations notify attendees once.
+            "backend/tests/test_qa_spl124_postgres.py",
             "-q",
         )
     elif cmd == "dev":

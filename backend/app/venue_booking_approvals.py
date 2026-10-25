@@ -24,7 +24,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
 from app.event_requests import SINGAPORE
 from app.models import EventRequest, Role, Venue, VenueBooking, VenueBookingOccupancy
-from app.notifications import add_arrangement_notice
+from app.notifications import add_arrangement_notice, add_venue_change_notices
 from app.venue_booking_history import record_booking_transition
 from app.venue_booking_queue import decision_event_details
 from app.venue_booking_requests import serialize_venue_booking
@@ -107,6 +107,7 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                 source_id=entry.id,
                 message=f"Venue booking for {event.name} at {venue.name} was approved.",
             )
+            add_venue_change_notices(session, event, booking.id, added=True)
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
 
