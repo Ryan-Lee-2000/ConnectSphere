@@ -1103,3 +1103,43 @@ button { touch-action: manipulation; }
 /* SPL-86 event cancellation */
 .event-cancellation .rejection-form textarea { width: 100%; }
 .supervision__cancellation { display: block; margin-top: var(--space-1); color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.4; }
+
+/* SPL-135: Safety uses one clear gate instead of nested cards. Decisions and evidence stay
+   together so the coordinator can see why preparation is allowed or returned to planning. */
+.safety-review, .safety-queue { display: grid; gap: var(--space-4); margin-top: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-mist-surface); }
+.safety-review__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.safety-review__header h2, .safety-queue h1, .safety-queue h2 { margin: var(--space-1) 0; }
+.safety-review__header p, .safety-queue > header > p { max-width: 44rem; margin: 0; color: var(--color-muted-slate); }
+.safety-review__status { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-mineral-teal); border-radius: 999px; color: var(--color-ink-navy); white-space: nowrap; }
+.safety-review__status--approved { background: #e6f4ee; }
+.safety-review__status--changes_requested, .safety-review__status--rejected { border-color: var(--color-refusal-red); background: var(--color-refusal-surface); }
+.safety-review__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.safety-review__facts div, .safety-review__decision { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-page); }
+.safety-review__facts dt { color: var(--color-muted-slate); font-size: .8125rem; }
+.safety-review__facts dd { margin: var(--space-1) 0 0; font-weight: 650; }
+.safety-review__evidence { display: grid; gap: var(--space-3); }
+.safety-review__evidence > section { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-page); }
+.safety-review__evidence h3 { margin: 0 0 var(--space-2); font-size: 1rem; }
+.safety-review__evidence p { margin: 0; color: var(--color-muted-slate); }
+.safety-review__evidence ul { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.safety-review__evidence li { display: grid; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--color-blueprint-line); }
+.safety-review__evidence li:first-child { padding-top: 0; border-top: 0; }
+.safety-review__evidence li span, .safety-review__evidence li small { color: var(--color-muted-slate); }
+.safety-review__decision { display: grid; gap: var(--space-1); }
+.safety-review__decision span { color: var(--color-muted-slate); }
+.safety-review__plan { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
+.safety-review__plan legend { padding: 0 var(--space-2); font-weight: 700; }
+.safety-review__plan .field { display: grid; gap: var(--space-2); }
+.safety-review__plan textarea { width: 100%; box-sizing: border-box; }
+.safety-review__plan small { color: var(--color-muted-slate); }
+.safety-review__na { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-muted-slate); font-size: .875rem; cursor: pointer; }
+.safety-review__na input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-mineral-teal); }
+.safety-queue__list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.safety-queue__list li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); }
+.safety-queue__list li div { display: grid; gap: var(--space-1); }
+.safety-queue__list span, .safety-queue__empty { color: var(--color-muted-slate); }
+.safety-queue__decision { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-blueprint-line); }
+.safety-queue__plan { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.safety-queue__plan div { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-page); }
+.safety-queue__plan dt { color: var(--color-muted-slate); font-size: .8125rem; }.safety-queue__plan dd { margin: var(--space-1) 0 0; }
+@media (max-width: 42rem) { .safety-review__header, .safety-queue__list li { align-items: stretch; flex-direction: column; } .safety-review__facts, .safety-review__plan, .safety-queue__plan { grid-template-columns: 1fr; } }

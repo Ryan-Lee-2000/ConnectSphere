@@ -48,6 +48,8 @@ PRODUCT_TABLES = {
     # SPL-111: organiser change requests and their items.
     "event_change_requests",
     "event_change_request_items",
+    # SPL-135: server-owned safety-review evidence for the preparation gate.
+    "safety_reviews",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

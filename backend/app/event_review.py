@@ -42,6 +42,7 @@ UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
 PLANNING = "planning"
 CONFIRMED = "confirmed"
+PREPARING = "preparing"
 REJECTED = "rejected"
 WITHDRAWN = "withdrawn"
 MAX_CLARIFICATION_LENGTH = 2000
@@ -88,6 +89,10 @@ TRANSITION_RULES = {
         previous_status=PLANNING,
         resulting_status=CONFIRMED,
     ),
+    "begin_preparation": TransitionRule(previous_status=CONFIRMED, resulting_status=PREPARING),
+    # A safety decision does not cancel an event. It sends it back to the stage where affected
+    # arrangements can be corrected and then confirmed again (Week 7 change 6).
+    "safety_rework": TransitionRule(previous_status=CONFIRMED, resulting_status=PLANNING),
     # SPL-86: the assigned coordinator can cancel at any stage from assignment onwards (Q68);
     # a Draft has no coordinator, and Rejected, Withdrawn, Completed and Cancelled are final.
     CANCEL: TransitionRule(

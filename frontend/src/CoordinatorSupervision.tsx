@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Eye } from 'lucide-react';
 import type { ApiRequest } from './VenueCatalogue';
 import { CoordinatorAssignmentQueue } from './CoordinatorAssignmentQueue';
+import { SafetyReviewEvidence } from './SafetyReviews';
 
 export type SupervisedEvent = {
   id: number;
@@ -52,6 +53,7 @@ export function CoordinatorSupervision({ accessToken, request, refreshKey = 0, o
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<SupervisedEvent | null>(null);
+  const [safetyEvent, setSafetyEvent] = useState<SupervisedEvent | null>(null);
 
   const load = async () => {
     setError(null);
@@ -101,10 +103,11 @@ export function CoordinatorSupervision({ accessToken, request, refreshKey = 0, o
           <td>{event.expected_attendance ?? 'Not provided'}</td>
           <td>{event.status_label}{event.cancelled_by && <small className="supervision__cancellation">Cancelled by {event.cancelled_by.name}{event.cancellation_reason ? `: ${event.cancellation_reason}` : ''}</small>}</td>
           <td>{event.coordinator ? event.coordinator.name : 'Awaiting assignment'}</td>
-          <td>{event.reassignable && <button type="button" className="button button--secondary" aria-label={`Reassign coordinator for ${event.name}`} onClick={() => { setNotice(null); setSelected(event); }}>Reassign</button>}</td>
+          <td><div className="organisation-events__actions"><button type="button" className="button button--secondary" onClick={() => setSafetyEvent(event)}>View safety evidence</button>{event.reassignable && <button type="button" className="button button--secondary" aria-label={`Reassign coordinator for ${event.name}`} onClick={() => { setNotice(null); setSelected(event); }}>Reassign</button>}</div></td>
         </tr>)}</tbody>
       </table>
     </div>}
+    {safetyEvent && <SafetyReviewEvidence accessToken={accessToken} eventId={safetyEvent.id} request={api} />}
     {selected && <ReassignPanel
       key={selected.id}
       api={api}

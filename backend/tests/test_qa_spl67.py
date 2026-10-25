@@ -655,6 +655,8 @@ def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
         "confirm",  # SPL-85: planning -> confirmed
         "cancel",  # SPL-86: any active status -> cancelled
         "significant_change",  # SPL-109: confirmed -> planning
+        "begin_preparation",  # SPL-135: confirmed -> preparing after safety approval
+        "safety_rework",  # SPL-135: confirmed -> planning after a safety decision
     }
     significant_change = TRANSITION_RULES["significant_change"]
     assert (significant_change.previous_status, significant_change.resulting_status) == (
@@ -795,7 +797,8 @@ def test_qa_spl67_042_the_planning_status_exists_with_its_label(client):
 
     assert "planning" in EVENT_REQUEST_STATUSES
     assert status_label("planning") == "In planning"
-    assert len(EVENT_REQUEST_STATUSES) == 12
+    # SPL-135 adds Preparing to the shared lifecycle; keep this regression guard explicit.
+    assert len(EVENT_REQUEST_STATUSES) == 13
 
 
 # ---- AC4: the responsible Event Organiser can retrieve the approval outcome ---------------------
