@@ -4,7 +4,7 @@ Every account sees only the notices addressed to it. The recipient always comes 
 session, never from the request, so one account cannot read or change another's inbox.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from flask import Flask, abort, g, jsonify
@@ -17,6 +17,7 @@ from app.models import (
     Account,
     AccountRole,
     EventCoordinatorAssignment,
+    EventRegistration,
     EventRequest,
     Notification,
     Role,
@@ -260,6 +261,116 @@ def add_venue_booking_notices(
         )
 
 
+def add_attendee_notices(
+    session: Session, event: EventRequest, *, kind: str, source_id: str | int, message: str
+) -> None:
+    """Notify every attendee still registered for the event (SPL-124), in the caller's transaction.
+
+    Recipients are the registrations that are Registered when the action happens, read on the
+    server, so an attendee who has withdrawn gets nothing (AC5). The notice commits or rolls back
+    with the action, and the source in the dedupe key stops a repeat adding a second (AC4).
+    """
+
+    now = datetime.now(SINGAPORE)
+    for recipient_id in session.scalars(
+        select(EventRegistration.attendee_account_id).where(
+            EventRegistration.event_request_id == event.id,
+            EventRegistration.status == "registered",
+        )
+    ).all():
+        session.add(
+            Notification(
+                recipient_account_id=recipient_id,
+                event_request_id=event.id,
+                message=message,
+                dedupe_key=f"attendee_{kind}:{source_id}",
+                created_at=now,
+            )
+        )
+
+
+def add_registration_notice(
+    session: Session, registration: EventRegistration, event: EventRequest, *, withdrawn: bool
+) -> None:
+    """AC3: acknowledge an attendee's own registration or withdrawal, keyed to the registration."""
+
+    if withdrawn:
+        kind, message = "withdrawn", f"You withdrew your registration for {event.name}."
+    else:
+        kind = "registered"
+        message = (
+            f"You are registered for {event.name} on {_day(event.proposed_date)}, "
+            f"{event.start_time:%H:%M}–{event.end_time:%H:%M} SGT."
+        )
+    session.add(
+        Notification(
+            recipient_account_id=registration.attendee_account_id,
+            event_request_id=event.id,
+            message=message,
+            dedupe_key=f"attendee_{kind}:{registration.id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
+def add_schedule_change_notices(
+    session: Session, event: EventRequest, changes: dict[str, dict], *, change_id: int
+) -> None:
+    """AC1: tell registered attendees the event's new date or times, with the old ones.
+
+    ``changes`` is the saved change record ({field: {"previous", "new"}}); only the date and the
+    times are public, so a change to anything else notifies nobody.
+    """
+
+    parts = []
+    if "proposed_date" in changes:
+        previous = date.fromisoformat(changes["proposed_date"]["previous"])
+        parts.append(f"date now {_day(event.proposed_date)} (was {_day(previous)})")
+    if "start_time" in changes or "end_time" in changes:
+        previous_start, previous_end = (
+            time.fromisoformat(changes[key]["previous"]) if key in changes else getattr(event, key)
+            for key in ("start_time", "end_time")
+        )
+        parts.append(
+            f"time now {event.start_time:%H:%M}–{event.end_time:%H:%M} SGT "
+            f"(was {previous_start:%H:%M}–{previous_end:%H:%M} SGT)"
+        )
+    if parts:
+        add_attendee_notices(
+            session,
+            event,
+            kind="schedule_changed",
+            source_id=change_id,
+            message=f"{event.name} has changed: {'; '.join(parts)}.",
+        )
+
+
+def add_venue_change_notices(
+    session: Session, event: EventRequest, booking_id: int, *, added: bool
+) -> None:
+    """AC1: an Approved venue was added to or removed from the event; name the venues it now holds.
+
+    A booking is approved once and cancelled once, so its id keys each notice.
+    """
+
+    session.flush()
+    names = session.scalars(
+        select(Venue.name)
+        .join(VenueBooking, VenueBooking.venue_id == Venue.id)
+        .where(VenueBooking.event_request_id == event.id, VenueBooking.status == "approved")
+        .distinct()
+        .order_by(Venue.name)
+    ).all()
+    add_attendee_notices(
+        session,
+        event,
+        kind="venue_added" if added else "venue_removed",
+        source_id=booking_id,
+        message=f"The venue for {event.name} has changed. Venues now: "
+        f"{', '.join(names) if names else 'none confirmed yet'}.",
+    )
+
+
 def _active_role_holders(session: Session, role: Role) -> list[str]:
     return session.scalars(
         select(Account.id)
@@ -409,6 +520,9 @@ def _event_link(notice: Notification) -> str:
     if kind.startswith("venue_booking_"):
         # SPL-104: Venue Staff cannot open coordinator pages; their booking queue holds the work.
         return "/workspace/booking-requests"
+    if kind.startswith("attendee_"):
+        # SPL-124 AC6: attendees cannot open event pages; their registrations are listed here.
+        return "/workspace/my-registrations"
     page = "organisation-events" if kind.startswith("organiser_") else "assigned-events"
     return f"/workspace/{page}/{notice.event_request_id}"
 
