@@ -39,10 +39,12 @@ function AttendeeTable({ attendees, caption }: { attendees: RegistrationAttendee
 export function RegistrationAttendees({
   accessToken,
   eventId,
+  endpoint,
   request,
 }: {
   accessToken: string;
   eventId: number;
+  endpoint?: string;
   request?: RegistrationRequest;
 }) {
   const [registrationList, setRegistrationList] = useState<RegistrationList | null>(null);
@@ -60,7 +62,7 @@ export function RegistrationAttendees({
 
     async function load() {
       try {
-        const response = await api(`/api/organisation/events/${eventId}/registrations`);
+        const response = await api(endpoint ?? `/api/organisation/events/${eventId}/registrations`);
         const body = await response.json().catch(() => null);
         if (!active) return;
         if (!response.ok || !body?.registration_list) {
@@ -75,7 +77,7 @@ export function RegistrationAttendees({
 
     void load();
     return () => { active = false; };
-  }, [accessToken, attempt, eventId, request]);
+  }, [accessToken, attempt, endpoint, eventId, request]);
 
   return <section className="registration-attendees" aria-labelledby="registration-attendees-title">
     <div className="registration-attendees__heading">

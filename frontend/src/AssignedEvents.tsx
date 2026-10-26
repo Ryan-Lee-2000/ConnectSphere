@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'r
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 import { ChangeRequestsPanel } from './ChangeRequests';
+import { RegistrationAttendees } from './RegistrationAttendees';
 import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { SignificantEventChanges } from './SignificantEventChanges';
@@ -379,6 +380,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
   const [events, setEvents] = useState<AssignedEvent[] | null>(null);
   const [event, setEvent] = useState<AssignedEventDetail | null>(null);
+  const [registrationListAvailable, setRegistrationListAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -410,6 +412,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     let active = true;
     setEvents(null);
     setEvent(null);
+    setRegistrationListAvailable(false);
     setError(null);
     setNotice(null);
     setClarification('');
@@ -433,6 +436,11 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         } else if (eventId === undefined && Array.isArray(body?.events)) {
           setEvents(body.events);
         } else if (eventId !== undefined && body?.event) {
+          // Capability-gating avoids calling a route that an older backend revision does not yet
+          // have while frontend and backend revisions overlap during a rolling deployment.
+          setRegistrationListAvailable(
+            response.headers?.get('X-ConnectSphere-Registration-List') === 'available',
+          );
           setEvent(body.event);
           setBookingStageOnLoad(VENUE_BOOKING_STAGES.has(body.event.status));
         } else {
@@ -760,6 +768,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
+      {/* SPL-120: the read-only list is useful throughout the assigned event lifecycle. Its API
+          independently rechecks the current assignment before returning attendee information. */}
+      {registrationListAvailable && <RegistrationAttendees accessToken={accessToken} eventId={event.id}
+        endpoint={`/api/event-requests/assigned/${event.id}/registrations`} request={api} />}
       {/* SPL-112: decisions refresh event readiness and arrangement flags. */}
       {showChangeRequests
         ? <ChangeRequestsPanel api={api} eventId={event.id} eventStatus={event.status}
