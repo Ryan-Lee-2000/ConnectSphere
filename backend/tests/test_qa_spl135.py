@@ -609,6 +609,49 @@ def test_qa_spl_135_025_reconfirmation_cannot_resurrect_safety_approval_for_chan
         assert session.get(EventRequest, event_id).status == "confirmed"
 
 
+# QA-SPL-136-001 | AC1 | BB
+def test_qa_spl_136_001_assigned_detail_marks_only_a_safety_return_as_safety_rework(app, client):
+    """The coordinator sees why Planning reopened when Safety requests a correction."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert (
+        decide(
+            client, review_id, "changes_requested", "Move the cable route away from the exit."
+        ).status_code
+        == 200
+    )
+
+    response = client.get(f"/api/event-requests/assigned/{event_id}", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "planning"
+    assert response.json["event"]["safety_rework"] is True
+
+
+# QA-SPL-136-002 | AC2 | regression
+def test_qa_spl_136_002_old_safety_rejection_does_not_mislabel_a_later_significant_change(
+    app, client
+):
+    """Planning's reason follows the newest durable transition, not an old review record."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "rejected", "Use the east exit instead.").status_code == 200
+    assert (
+        client.post(f"/api/event-requests/{event_id}/confirm", headers=headers()).status_code == 200
+    )
+
+    changed = save_significant_change(client, event_id, {"start_time": "10:00"})
+    assert changed.status_code == 200, changed.json
+
+    response = client.get(f"/api/event-requests/assigned/{event_id}", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "planning"
+    assert response.json["event"]["safety_rework"] is False
+
+
 # QA-SPL-135-019 | AC4 | security
 @pytest.mark.parametrize(("identity", "expected"), [("other", 404), ("lead", 403), ("safety", 403)])
 def test_qa_spl_135_019_every_other_entry_path_is_refused(app, client, identity, expected):
