@@ -657,6 +657,7 @@ def test_qa_spl67_035_the_transition_rule_is_under_review_to_planning(client):
         "significant_change",  # SPL-109: confirmed -> planning
         "begin_preparation",  # SPL-135: confirmed -> preparing after safety approval
         "safety_rework",  # SPL-135: confirmed -> planning after a safety decision
+        "complete",  # SPL-105: preparing -> completed after the event has ended
     }
     significant_change = TRANSITION_RULES["significant_change"]
     assert (significant_change.previous_status, significant_change.resulting_status) == (
