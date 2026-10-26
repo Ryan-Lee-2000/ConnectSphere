@@ -336,3 +336,15 @@ arbitrary-minute preparation boundaries against quarter-hour booking guides and 
 closed or unconfirmed timing from available operating time. `EXACT_VENUE_TIMING_ENABLED`
 continues to gate this slice; shared release activation and future hold expiry remain their existing
 integration responsibilities. See [SPL-107](development/SPL-107.md) for verification and limitations.
+
+
+## SPL-123 review clarification
+
+SPL-123 checks the stored notice recipient’s current Event Organiser role and membership in
+that event’s organisation before creating a notice, skipping a former recipient without a
+fallback. This creation-time check does not retract historical inbox entries. The source-row
+flush belongs to the notice helper, so history and item notices use a persisted source ID.
+A batch that accepts an event rename applies it before any significant-change notices, giving
+its Planning-return and item notices the same resulting event name. SPL-102 retains its
+existing recipient policy; only the final row-construction function is shared. Safety-rework
+organiser notices remain outside this story’s current SPL-109 trigger scope.

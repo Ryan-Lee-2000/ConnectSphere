@@ -63,12 +63,6 @@ def register_event_change_decision_routes(app: Flask):
             event, change_request = plan["event"], plan["request"]
             now = datetime.now(SINGAPORE)
             # AC2: all accepted values, impacts and decisions commit together or not at all.
-            if plan["significant"] is not None:
-                _, values, changes, impacts, _, equipment = plan["significant"]
-                if changes:
-                    significant.apply_prepared_change(
-                        session, event, values, changes, impacts, equipment
-                    )
             ordinary_changes = {}
             for field, value in plan["ordinary"].items():
                 if getattr(event, field) != value:
@@ -76,6 +70,13 @@ def register_event_change_decision_routes(app: Flask):
                     setattr(event, field, value)
             if ordinary_changes:
                 _audit(session, event, ordinary_changes, now)
+            # SPL-123: apply an accepted name before any notice from this decision batch.
+            if plan["significant"] is not None:
+                _, values, changes, impacts, _, equipment = plan["significant"]
+                if changes:
+                    significant.apply_prepared_change(
+                        session, event, values, changes, impacts, equipment
+                    )
             for operation, payload in plan["equipment"]:
                 if operation == "update":
                     _, values, changes, impacts, _, equipment = payload
@@ -119,13 +120,15 @@ def register_event_change_decision_routes(app: Flask):
                 item.decided_by_account_id = g.user_id
                 item.decided_at = now
                 # SPL-123 AC4: the values themselves stay in SPL-113's outcome view.
-                outcome = f"declined. Reason: {reason}" if reason else f"{decision}."
+                outcome = (
+                    f"declined. Reason: {reason}" if decision == "declined" else f"{decision}."
+                )
                 add_organiser_notice(
                     session,
                     event,
                     actor_id=g.user_id,
                     kind="change_item_decided",
-                    source_id=item.id,
+                    source=item,
                     message=f"Your change request for {event.name}: {_field_label(item.field)} "
                     f"was {outcome}",
                     recipient_id=change_request.submitted_by_account_id,

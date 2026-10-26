@@ -101,13 +101,12 @@ def register_event_cancellation_routes(app: Flask) -> None:
             )
 
             # SPL-123 AC3: the organiser is told the reason.
-            session.flush()
             add_organiser_notice(
                 session,
                 event,
                 actor_id=g.user_id,
                 kind="event_cancelled",
-                source_id=audit.id,
+                source=audit,
                 message=f"{event.name} has been cancelled. Reason: {reason}",
             )
             # SPL-124 AC2: the reason is written for staff, so attendees are told only the outcome.

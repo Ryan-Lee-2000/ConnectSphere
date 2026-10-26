@@ -264,3 +264,59 @@ Before adding the Jira link, the fully loaded card showed no Web links. Added on
 Exit: PASS for selected SPL-123 acceptance on the measured snapshot: all 41 case IDs / 52 final acceptance executions passed; final PostgreSQL 172/172 passed. Initial QA PG failure 1 -> final 0; initial new UAT helper failure 1 -> final 0. Whole-browser baseline and feature remain 49 passed / 1 pre-existing SPL-135 setup failure / 14 existing fixture skips; these are not counted as SPL-123 failures or disguised as passes. Recommendation remains separate SPL-135 portability maintenance, PO acknowledgement of the SPL-113 scope split, and remeasurement if SPL-125 lands before merge. No additional approval is pending for the four authorised SPL-122 assertions.
 
 The ticket remains QA. Next workflow is $devops SPL-123 when the user chooses; no devops action, commit, push, PR, merge or deployment was performed here. All previously listed owned QA servers/databases/container/worktrees and synthetic fixtures remain retained. No shared service was reset or stopped.
+
+## Review round 1 — 26 October 2026 (Added after review)
+
+Earlier results and approvals above are historical and retained. Lin requested changes on
+PR #104 at commit `269a1fd58c669bac4ef8cb0e757d3deb2786fa93`. This round supersedes that
+snapshot for the affected implementation; it does not claim that its prior browser recording,
+100% added-code coverage or seven mutation measurements were repeated on the review fix.
+
+- Mixed accepted rename/significant-change saves now apply the accepted name before notices,
+  so Planning-return and accepted/declined item messages use one resulting name. New BB case
+  QA-SPL-123-031 exercises both submitted item orders and checks four messages and value privacy.
+- Clive chose the recommended privacy handling: create SPL-123 notices only while the stored
+  recipient remains an Event Organiser in the event's organisation; skip without fallback.
+  New WB cases 033/034 cover role and organisation removal, the original and alternate stored
+  submitter, and the responsible organiser. Historical inbox entries are not retracted.
+- New WB case 032 checks two unflushed status-history sources with autoflush disabled: the
+  helper flushes each and creates distinct durable keys. All four callers now pass source rows.
+- The decline branch checks the decision explicitly. SPL-102 and SPL-123 share only row
+  construction; SPL-102's existing recipient behaviour is preserved. Its 75 tests passed.
+- SPL-122 case IDs and assertions remain intact. Cases 021/024 were renamed to say they send
+  Technical Support nothing. A local wrapper supplies their intended organiser membership;
+  the shared SPL-91 fixture and production authorisation are unchanged.
+- Safety rework is recorded as a separate PO follow-up, as recommended and accepted by Clive.
+  It is outside AC2's SPL-109 trigger scope and no SPL-135 code was changed.
+
+### Append-only failures and retests in this round
+
+1. Initial red attempt: 8 failed, 41 deselected. Two name assertions and two responsible-recipient
+   privacy assertions failed as expected; four submitter cases instead hit a test setup error
+   (`test_event_change_requests` exposes `TOKENS`, not `IDENTITIES`). This attempt is not counted
+   as eight product reproductions.
+2. First focused fix attempt: **7 failed, 107 passed**. Four were the same new fixture lookup
+   error; three SPL-122 expectations received no organiser notice because their inherited
+   account fixture lacked client membership. No failed assertion was removed or weakened.
+3. Corrected red run against an independent copy of the original `269a1fd` application:
+   **8 assertion failures, 42 deselected, no setup errors**. This is the valid before-fix
+   reproduction of the mixed-name and former-recipient behaviour.
+4. Corrected focused retest: **114 passed** (50 SPL-123 parameterised executions, including
+   nine new executions across four new IDs, plus 64 SPL-122 executions).
+5. Full `npm run verify`: lint PASS; format **240 files PASS**; backend **2773 passed,
+   172 PostgreSQL-dependent skips** in 242.82 s; frontend **546 passed / 55 files**;
+   typecheck and production build PASS. Existing React warnings and Vite advisory remain.
+6. `npm run integration`: new disposable PostgreSQL database verified to have **0 application
+   tables** beforehand; **159 passed, 0 failed/skipped**, 9 existing Alembic warnings in
+   183.60 s. Only this new database was removed after success (matching database count 0).
+7. Single Alembic head: `s4_safety_reviews`. `git diff --check` passed. Budget UNKNOWN;
+   no optional Actions rerun. Coverage measured against this review diff with SPL-123 and
+   SPL-102 suites: **13/14 changed executable statements; 6/8 changed branch exits**.
+   Missing coverage is the invalid-source error guard and an accepted significant no-op branch.
+
+Raw logs, red/green XML and coverage JSON are retained under ignored
+`artifacts/spl-123-review-round1/`. Browser/UAT, deliberate mutations, the extra 13 PG tests
+omitted by the standard integration runner, and hosted journeys were **NOT RUN in this round**;
+its required local gates are the full verify and standard empty-database integration above.
+The follow-up commit and new CI run are recorded in PR #104 and appended to the external
+QA and DevOps reports. Jira status, original report rows and original PR description are kept.

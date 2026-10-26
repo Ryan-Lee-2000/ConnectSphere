@@ -6,6 +6,7 @@ import test_event_confirmation as confirmation
 import test_qa_spl112 as decisions
 from app import notifications
 from app.models import (
+    Account,
     AccountRole,
     EventChangeRequest,
     EventChangeRequestItem,
@@ -13,8 +14,9 @@ from app.models import (
     EventRequest,
     EventStatusHistory,
     Notification,
+    Organisation,
 )
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -494,3 +496,107 @@ def test_qa_spl_123_030_client_cannot_choose_notice_recipient(app, client):
     )
     assert response.status_code == 400
     assert rows(app, event_id) == []
+
+
+@pytest.mark.parametrize("name_first", [True, False])
+# QA-SPL-123-031 | AC2 AC4 AC5 | BB review regression
+def test_qa_spl_123_031_mixed_rename_uses_one_name_for_all_notices(
+    decision_app, decision_client, name_first
+):
+    event_id = decisions.base.make_event(decision_app, "confirmed")
+    accepted = [decisions.item("name", "New programme"), decisions.item("expected_attendance", 151)]
+    if not name_first:
+        accepted.reverse()
+    request = decisions.request(
+        decision_client, event_id, *accepted, decisions.item("description", "Private proposal")
+    )
+    choices = decisions.choices(request)
+    choices[-1].update(decision="declined", decline_reason="Keep the original description.")
+    response = decisions.save(decision_client, event_id, request, choices)
+    assert response.status_code == 200, response.json
+    assert response.json["event"]["name"] == "New programme"
+    assert response.json["event"]["status"] == "planning"
+    notices = rows(decision_app, event_id)
+    assert len(notices) == 4
+    assert all("New programme" in message for _, _, message in notices), notices
+    assert all("Harbour Lights Gala" not in message for _, _, message in notices)
+    assert any("Reason: Keep the original description." in message for _, _, message in notices)
+    assert all("Private proposal" not in message for _, _, message in notices)
+
+
+def revoke_organiser_access(session, account_id, change):
+    if change == "role":
+        session.execute(
+            delete(AccountRole).where(
+                AccountRole.account_id == account_id, AccountRole.role == "event_organiser"
+            )
+        )
+    else:
+        other = Organisation(name="Former organiser's new organisation")
+        session.add(other)
+        session.flush()
+        session.get(Account, account_id).organisation_id = other.id
+
+
+@pytest.mark.parametrize("change", ["role", "organisation"])
+@pytest.mark.parametrize("submitter", ["organiser", "colleague"])
+# QA-SPL-123-033 | AC4 | WB review privacy regression
+def test_qa_spl_123_033_former_submitter_gets_no_notice_or_fallback(
+    decision_app, decision_client, change, submitter
+):
+    event_id = decisions.base.make_event(decision_app)
+    request = decisions.request(decision_client, event_id)
+    recipient = decisions.base.ORGANISER if submitter == "organiser" else decisions.base.COLLEAGUE
+    with Session(decision_app.extensions["engine"]) as session:
+        session.get(EventChangeRequest, request["id"]).submitted_by_account_id = recipient
+        revoke_organiser_access(session, recipient, change)
+        session.commit()
+    response = decisions.save(
+        decision_client, event_id, request, decisions.choices(request, "declined", "Private reason")
+    )
+    assert response.status_code == 200, response.json
+    assert rows(decision_app, event_id) == []
+    assert response.json["change_request"]["items"][0]["decision"] == "declined"
+
+
+@pytest.mark.parametrize("change", ["role", "organisation"])
+# QA-SPL-123-034 | AC1 | WB review privacy regression
+def test_qa_spl_123_034_former_responsible_organiser_gets_no_confirmation(app, client, change):
+    event_id = confirmation.ready_event(app)
+    with Session(app.extensions["engine"]) as session:
+        revoke_organiser_access(session, confirmation.ORGANISER, change)
+        session.commit()
+    response = confirmation.confirm(client, event_id)
+    assert response.status_code == 200, response.json
+    assert rows(app, event_id) == []
+
+
+# QA-SPL-123-032 | AC1 AC5 | WB review helper contract
+def test_qa_spl_123_032_unflushed_sources_get_distinct_durable_keys(app):
+    from app.event_review import transition_event_status
+
+    event_ids = [confirmation.add_event(app), confirmation.add_event(app)]
+    with Session(app.extensions["engine"], autoflush=False) as session:
+        for event_id in event_ids:
+            event = session.get(EventRequest, event_id)
+            source = transition_event_status(
+                session,
+                event_request_id=event_id,
+                action="confirm",
+                actor_account_id=confirmation.COORDINATOR,
+                changed_at=confirmation.NOW,
+            )
+            assert source.id is None
+            notifications.add_organiser_notice(
+                session,
+                event,
+                actor_id=confirmation.COORDINATOR,
+                kind="event_confirmed",
+                source=source,
+                message=f"{event.name} has been confirmed.",
+            )
+            assert source.id is not None
+        session.commit()
+    keys = [rows(app, event_id)[0][1] for event_id in event_ids]
+    assert len(set(keys)) == 2
+    assert all(key.startswith("organiser_event_confirmed:") and ":None" not in key for key in keys)

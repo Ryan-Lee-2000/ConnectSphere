@@ -89,13 +89,12 @@ def register_event_confirmation_routes(app: Flask) -> None:
             # Imported here: notifications imports event_requests, which imports this module.
             from app.notifications import add_organiser_notice
 
-            session.flush()
             add_organiser_notice(
                 session,
                 event,
                 actor_id=g.user_id,
                 kind="event_confirmed",
-                source_id=audit.id,
+                source=audit,
                 message=f"{event.name} has been confirmed.",
             )
             session.commit()

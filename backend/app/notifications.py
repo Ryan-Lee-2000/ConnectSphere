@@ -16,9 +16,11 @@ from app.event_requests import SINGAPORE
 from app.models import (
     Account,
     AccountRole,
+    EventChangeRequestItem,
     EventCoordinatorAssignment,
     EventRegistration,
     EventRequest,
+    EventStatusHistory,
     Notification,
     Role,
     Venue,
@@ -117,14 +119,8 @@ def add_review_outcome_notice(
     cannot add a second notice. The ``organiser_`` prefix opens the organiser's event page.
     """
 
-    session.add(
-        Notification(
-            recipient_account_id=event.organiser_account_id,
-            event_request_id=event.id,
-            message=message,
-            dedupe_key=f"organiser_{kind}:{source_id}",
-            created_at=datetime.now(SINGAPORE),
-        )
+    _add_organiser_notice(
+        session, event, event.organiser_account_id, kind=kind, source_id=source_id, message=message
     )
 
 
@@ -134,7 +130,7 @@ def add_organiser_notice(
     *,
     actor_id: str,
     kind: str,
-    source_id: int,
+    source: EventStatusHistory | EventChangeRequestItem,
     message: str,
     recipient_id: str | None = None,
 ) -> None:
@@ -143,16 +139,46 @@ def add_organiser_notice(
     The recipient is the event's organiser, or ``recipient_id`` (the organiser who submitted a
     change request), both read on the server. Nobody is told of their own action. Runs in the
     caller's transaction, so a refused or failed action leaves no notice, and the source row in
-    the dedupe key stops a repeat adding a second (AC5). The ``organiser_`` prefix opens the
-    organiser's event page.
+    the dedupe key stops a repeat adding a second (AC5). The source is flushed here so callers
+    cannot accidentally key a notice to ``None``. Recipients must still have organiser access
+    in the event's organisation; a former recipient is skipped without a fallback. The
+    ``organiser_`` prefix opens the organiser's event page.
     """
 
     recipient = recipient_id or event.organiser_account_id
     if recipient == actor_id:
         return
+    eligible = session.scalar(
+        select(Account.id)
+        .join(AccountRole, AccountRole.account_id == Account.id)
+        .where(
+            Account.id == recipient,
+            Account.organisation_id == event.organisation_id,
+            AccountRole.role == Role.EVENT_ORGANISER.value,
+        )
+    )
+    if eligible is None:
+        return
+    session.flush()
+    if source.id is None:
+        raise ValueError("An organiser notice requires a persisted source row.")
+    _add_organiser_notice(
+        session, event, recipient, kind=kind, source_id=source.id, message=message
+    )
+
+
+def _add_organiser_notice(
+    session: Session,
+    event: EventRequest,
+    recipient_id: str,
+    *,
+    kind: str,
+    source_id: int,
+    message: str,
+) -> None:
     session.add(
         Notification(
-            recipient_account_id=recipient,
+            recipient_account_id=recipient_id,
             event_request_id=event.id,
             message=message,
             dedupe_key=f"organiser_{kind}:{source_id}",
