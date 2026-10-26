@@ -6,10 +6,11 @@ import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { SignificantEventChanges } from './SignificantEventChanges';
 import { VenueArrangements } from './VenueArrangements';
+import { SafetyReviewPanel } from './SafetyReviews';
 
 const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
 const ACTIVE_EVENT_STATUSES = new Set([
-  'submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'postponed',
+  'submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'preparing', 'postponed',
 ]);
 import { slotLabel } from './slots';
 
@@ -739,6 +740,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       <EquipmentReadinessPanel event={event} />
       {ACTIVE_EVENT_STATUSES.has(event.status) && <SignificantEventChanges key={event.id} event={event} api={api} onSaved={updated => { setEvent(updated); setConfirmingEvent(false); setArrangementRevision(value => value + 1); }} />}
       {event.status === 'confirmed' && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
+      {event.status === 'confirmed' && <SafetyReviewPanel accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}
       {event.status === 'planning' && <EventConfirmationPanel readiness={event.confirmation_readiness}
         confirming={confirmingEvent} transitioning={transitioning}
         onStart={() => { setError(null); setConfirmingEvent(true); }}

@@ -66,6 +66,7 @@ class Role(StrEnum):
     EVENT_COORDINATOR = "event_coordinator"
     VENUE_STAFF = "venue_staff"
     TECHNICAL_SUPPORT_STAFF = "technical_support_staff"
+    SAFETY_OFFICER = "safety_officer"
     ATTENDEE = "attendee"
 
 
@@ -348,6 +349,9 @@ class EventRequest(Base):
     clarification_requests: Mapped[list["ClarificationRequest"]] = relationship(
         order_by="desc(ClarificationRequest.created_at), desc(ClarificationRequest.id)",
         cascade="all, delete-orphan",
+    )
+    safety_reviews: Mapped[list["SafetyReview"]] = relationship(
+        back_populates="event_request", cascade="all, delete-orphan", order_by="SafetyReview.id"
     )
 
 
@@ -969,6 +973,44 @@ class EventStatusHistory(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SafetyReview(Base):
+    """An immutable Safety Officer decision over one confirmed arrangement snapshot.
+
+    The plan belongs to the review submission rather than an untracked browser draft.  Its
+    arrangement fingerprint prevents an old approval from unlocking Preparation after venue,
+    attendance, or equipment details have changed.
+    """
+
+    __tablename__ = "safety_reviews"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('submitted', 'approved', 'changes_requested', 'rejected')",
+            name="ck_safety_reviews_known_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_request_id: Mapped[int] = mapped_column(
+        ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Four operational statements, each either has a value or a justified not-applicable choice.
+    plan: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    arrangement_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    submitted_by_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decided_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    event_request: Mapped[EventRequest] = relationship(back_populates="safety_reviews")
+    submitter: Mapped[Account] = relationship(foreign_keys=[submitted_by_account_id])
+    decider: Mapped[Account | None] = relationship(foreign_keys=[decided_by_account_id])
 
 
 class EventDetailChange(Base):

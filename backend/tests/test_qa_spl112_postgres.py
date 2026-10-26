@@ -99,7 +99,8 @@ def test_qa_spl_112_062_downgrade_preserves_decisions(prepared, pg_url):
         assert conn.scalar(text("SELECT decision FROM event_change_request_items")) == "accepted"
         assert (
             conn.scalar(text("SELECT version_num FROM alembic_version"))
-            == "s4_change_request_decisions"
+            # SPL-135 is the current head. A refused downgrade must preserve that head.
+            == "s4_safety_reviews"
         )
 
 

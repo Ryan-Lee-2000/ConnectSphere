@@ -4,6 +4,7 @@ export const ACCOUNT_ROLES = [
   'event_coordinator',
   'venue_staff',
   'technical_support_staff',
+  'safety_officer',
   'attendee',
 ] as const;
 
@@ -15,6 +16,7 @@ export const ROLE_LABELS: Record<AccountRole, string> = {
   event_coordinator: 'Event Coordinator',
   venue_staff: 'Venue Staff',
   technical_support_staff: 'Technical Support Staff',
+  safety_officer: 'Safety Officer',
   attendee: 'Attendee',
 };
 
@@ -24,6 +26,7 @@ export const ROLE_DESCRIPTIONS: Record<AccountRole, string> = {
   event_coordinator: 'Review venue information for the events you coordinate.',
   venue_staff: 'Maintain venue profiles, room layouts, and operating details.',
   technical_support_staff: 'Coordinate equipment and technical support responsibilities.',
+  safety_officer: 'Review confirmed operational arrangements before preparation begins.',
   attendee: 'Access attendee services as they become available.',
 };
 

@@ -56,6 +56,11 @@ fixtures = {
         "organisation": None,
         "roles": ("technical_support_staff",),
     },
+    "safety.officer@example.test": {
+        "display_name": "Samira Hassan",
+        "organisation": None,
+        "roles": ("safety_officer",),
+    },
     # Attendee only, on purpose: developer@example.test is also an organiser, so testing
     # registration (SPL-114 to 118) with it could hide a leak of organiser-only information.
     "attendee@example.test": {

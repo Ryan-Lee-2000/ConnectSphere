@@ -1056,6 +1056,8 @@ def test_qa_spl65_051_transition_rule_allows_only_under_review_to_returned(world
         "confirm",  # SPL-85: planning -> confirmed
         "cancel",  # SPL-86: any active status -> cancelled
         "significant_change",  # SPL-109: confirmed -> planning
+        "begin_preparation",  # SPL-135: confirmed -> preparing after safety approval
+        "safety_rework",  # SPL-135: confirmed -> planning after a safety decision
     }
     significant_change = TRANSITION_RULES["significant_change"]
     assert (significant_change.previous_status, significant_change.resulting_status) == (
@@ -1132,7 +1134,8 @@ def test_qa_spl65_055_new_status_has_wording_and_a_check_constraint_entry(world)
     explanation = status_explanation("returned_for_clarification")
     assert "\n" not in explanation and "_" not in explanation and explanation.strip()
     assert "'returned_for_clarification'" in status_check_constraint()
-    assert len(EVENT_REQUEST_STATUSES) == 12
+    # SPL-135 adds Preparing to the shared lifecycle; keep this regression guard explicit.
+    assert len(EVENT_REQUEST_STATUSES) == 13
 
 
 # SPL-65 AC-4 Test-056
