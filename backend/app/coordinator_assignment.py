@@ -20,6 +20,7 @@ from app.equipment_readiness import (
     serialize_equipment_requirement,
 )
 from app.event_cancellation import serialize_cancellation
+from app.event_completion import completion_available_at, serialize_completion
 from app.event_confirmation import confirmation_readiness_for, serialize_confirmation
 from app.event_requests import (
     SINGAPORE,
@@ -561,6 +562,9 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         **serialize_confirmation(event),
         # SPL-86 AC6: who cancelled the event, when and why.
         **serialize_cancellation(event),
+        # SPL-105 AC4: who completed it, when and the closing note; and when it may be completed.
+        **serialize_completion(event, include_note=True),
+        "completion_available_at": completion_available_at(event),
     }
 
 

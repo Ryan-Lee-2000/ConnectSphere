@@ -1102,6 +1102,8 @@ button { touch-action: manipulation; }
 .equipment-requirements__editor-error { margin: var(--space-2) 0 0; }
 /* SPL-86 event cancellation */
 .event-cancellation .rejection-form textarea { width: 100%; }
+/* SPL-105 event completion */
+.event-completion .rejection-form textarea { width: 100%; }
 .supervision__cancellation { display: block; margin-top: var(--space-1); color: var(--color-muted-slate); font-size: .8125rem; line-height: 1.4; }
 
 /* SPL-135: Safety uses one clear gate instead of nested cards. Decisions and evidence stay

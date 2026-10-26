@@ -37,6 +37,7 @@ REJECT = "reject"
 WITHDRAW = "withdraw"
 CONFIRM = "confirm"
 CANCEL = "cancel"
+COMPLETE = "complete"
 SUBMITTED = "submitted"
 UNDER_REVIEW = "under_review"
 RETURNED_FOR_CLARIFICATION = "returned_for_clarification"
@@ -107,6 +108,9 @@ TRANSITION_RULES = {
         ),
         resulting_status="cancelled",
     ),
+    # SPL-105 AC1: only a safety-approved event in Preparing can have taken place (Week 7
+    # change 6), so completion starts there and nowhere else.
+    COMPLETE: TransitionRule(previous_status=PREPARING, resulting_status="completed"),
 }
 
 
