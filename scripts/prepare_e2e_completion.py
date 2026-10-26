@@ -61,7 +61,9 @@ def account(session: Session, email: str, role: Role) -> Account:
 def remove_existing(session: Session) -> None:
     ids = session.scalars(select(EventRequest.id).where(EventRequest.name.like(f"{PREFIX}%"))).all()
     if ids:
-        session.execute(delete(EventStatusHistory).where(EventStatusHistory.event_request_id.in_(ids)))
+        session.execute(
+            delete(EventStatusHistory).where(EventStatusHistory.event_request_id.in_(ids))
+        )
         for event in session.scalars(select(EventRequest).where(EventRequest.id.in_(ids))).all():
             session.delete(event)
         session.flush()
@@ -77,14 +79,20 @@ try:
         )
         manager = account(
             session,
-            os.getenv("VITE_LOCAL_DEMO_OPERATIONS_MANAGER_EMAIL", "operations.manager@example.test"),
+            os.getenv(
+                "VITE_LOCAL_DEMO_OPERATIONS_MANAGER_EMAIL", "operations.manager@example.test"
+            ),
             Role.EVENT_OPERATIONS_MANAGER,
         )
         organiser = account(
-            session, os.getenv("VITE_LOCAL_DEMO_EMAIL", "developer@example.test"), Role.EVENT_ORGANISER
+            session,
+            os.getenv("VITE_LOCAL_DEMO_EMAIL", "developer@example.test"),
+            Role.EVENT_ORGANISER,
         )
         staff = account(
-            session, os.getenv("VITE_LOCAL_DEMO_VENUE_STAFF_EMAIL", "venue.staff@example.test"), Role.VENUE_STAFF
+            session,
+            os.getenv("VITE_LOCAL_DEMO_VENUE_STAFF_EMAIL", "venue.staff@example.test"),
+            Role.VENUE_STAFF,
         )
         remove_existing(session)
         venue = session.scalar(select(Venue).where(Venue.layouts.any()).order_by(Venue.id))
