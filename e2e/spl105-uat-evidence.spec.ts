@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 
 // SPL-105 recorded UAT, QA-SPL-105-200. Real local Auth and two disposable Preparing events
 // assigned to the local coordinator (scripts/prepare_e2e_completion.py): one ended two days ago,
@@ -20,15 +19,16 @@ test.use({
   video: { mode: 'on', size: { width: 1920, height: 1080 } },
 });
 
-const python = path.join(process.cwd(), '.venv', 'Scripts', 'python.exe');
+// uv picks the project interpreter on Windows and macOS alike, as scripts/run-e2e.mjs does.
+const runPython = (script: string) => execFileSync('uv', ['run', '--frozen', 'python', script], { stdio: 'inherit' });
 
 test.beforeAll(() => {
   // The walkthrough owns its disposable events so it can run in the complete browser suite.
-  execFileSync(python, ['scripts/prepare_e2e_completion.py'], { stdio: 'inherit' });
+  runPython('scripts/prepare_e2e_completion.py');
 });
 
 test.afterAll(() => {
-  execFileSync(python, ['scripts/cleanup_e2e_completion.py'], { stdio: 'inherit' });
+  runPython('scripts/cleanup_e2e_completion.py');
 });
 
 // Keep each visible state on screen long enough to read in the captured video.
