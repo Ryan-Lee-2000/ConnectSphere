@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.authorization import require_roles
 from app.equipment_reservation_state import remaining_quantity
 from app.event_cancellation import serialize_cancellation
+from app.event_completion import serialize_completion
 from app.event_confirmation import (
     booked_times,
     serialize_confirmation,
@@ -875,6 +876,8 @@ def _serialize_event_request(event: EventRequest) -> dict[str, Any]:
         "confirmed_arrangements": serialize_confirmed_arrangements(event),
         # CS-E07-S5 (SPL-86) AC6: who cancelled the event, when and why.
         **serialize_cancellation(event),
+        # SPL-105 AC6: who completed the event and when; the closing note stays internal.
+        **serialize_completion(event),
         "preferred_room_layout": event.preferred_room_layout,
         "required_facilities": event.required_facilities,
         "facilities_notes": event.facilities_notes,

@@ -348,6 +348,8 @@ def main():
             "backend/tests/test_qa_spl124_postgres.py",
             # SPL-123: organiser notices commit once with their lifecycle action.
             "backend/tests/test_qa_spl123_postgres.py",
+            # SPL-105: racing completions complete once; the completion migration round-trips.
+            "backend/tests/test_qa_spl105_postgres.py",
             "-q",
         )
     elif cmd == "dev":
