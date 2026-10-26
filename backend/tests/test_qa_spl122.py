@@ -28,7 +28,21 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-app = spl91.app
+
+@pytest.fixture
+def app(tmp_path, monkeypatch):
+    fixture = spl91.app.__wrapped__(tmp_path, monkeypatch)
+    application = next(fixture)
+    try:
+        # SPL-123 review: cancellation notices require the organiser's real client membership.
+        with Session(application.extensions["engine"]) as session:
+            session.get(Account, IDENTITIES["organiser"]).organisation_id = 1
+            session.commit()
+        yield application
+    finally:
+        next(fixture, None)
+
+
 client = spl91.client
 event_id = spl91.event_id
 IDENTITIES = spl91.IDENTITIES
@@ -365,12 +379,18 @@ def test_qa_spl_122_020_cancelling_an_event_holding_units_notifies_once(app, cli
 
 
 # QA-SPL-122-021 | AC2 | BB
-def test_qa_spl_122_021_cancelling_an_event_holding_nothing_sends_nothing(app, client, event_id):
+def test_qa_spl_122_021_cancelling_an_event_holding_nothing_sends_technical_support_nothing(
+    app, client, event_id
+):
     spl91.add_line(app, event_id)  # Requested: no units held
     unmapped_line(app, event_id)
     response = cancel(client, event_id)
     assert response.status_code == 200, response.json
-    assert count(app) == 0
+    assert count(app, "technical") == 0
+    [(recipient, key, message)] = notices(app)
+    assert recipient == IDENTITIES["organiser"]
+    assert key.startswith("organiser_event_cancelled:")
+    assert message == f"{EVENT_NAME} has been cancelled. Reason: Venue flooded."
 
 
 # QA-SPL-122-022 | AC2 | BB
@@ -401,9 +421,15 @@ def test_qa_spl_122_023_only_units_still_held_are_counted(app, client, event_id)
 
 
 # QA-SPL-122-024 | AC2 | BB
-def test_qa_spl_122_024_an_event_with_no_lines_sends_nothing(app, client, event_id):
+def test_qa_spl_122_024_an_event_with_no_lines_sends_technical_support_nothing(
+    app, client, event_id
+):
     assert cancel(client, event_id).status_code == 200
-    assert count(app) == 0
+    assert count(app, "technical") == 0
+    [(recipient, key, message)] = notices(app)
+    assert recipient == IDENTITIES["organiser"]
+    assert key.startswith("organiser_event_cancelled:")
+    assert message == f"{EVENT_NAME} has been cancelled. Reason: Venue flooded."
 
 
 # QA-SPL-122-025 | AC2 | BB
@@ -453,8 +479,12 @@ def test_qa_spl_122_031_other_roles_receive_nothing(app, client, event_id):
     spl91.reserve(app, line, 4)
     assert cancel(client, event_id).status_code == 200
     recipients = {recipient for recipient, _, _ in notices(app)}
-    assert recipients == {IDENTITIES["technical"]}
-    for who in ("coordinator", "other-coordinator", "organiser", "venue", "manager"):
+    assert recipients == {IDENTITIES["technical"], IDENTITIES["organiser"]}
+    assert all(key.startswith("technical_") for _, key, _ in notices(app, "technical"))
+    [(_, key, message)] = notices(app, "organiser")
+    assert key.startswith("organiser_event_cancelled:")
+    assert message == f"{EVENT_NAME} has been cancelled. Reason: Venue flooded."
+    for who in ("coordinator", "other-coordinator", "venue", "manager"):
         assert inbox(client, who)["notifications"] == [], who
 
 

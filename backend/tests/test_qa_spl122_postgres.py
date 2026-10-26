@@ -100,7 +100,11 @@ def test_qa_spl_122_071_simultaneous_cancellations_notify_once(engine, pg_url):
             )
             results = spl85._race(app, [_cancel(event_id), _cancel(event_id, "Duplicate click.")])
             assert sorted(status for status, _ in results) == [200, 409], results
-            assert _per_recipient(engine, ids, event_id) == {"technical": 1, "technical-2": 1}
+            assert _per_recipient(engine, ids, event_id) == {
+                "technical": 1,
+                "technical-2": 1,
+                "organiser": 1,
+            }
             with Session(engine) as session:
                 [message] = session.scalars(
                     select(Notification.message).where(

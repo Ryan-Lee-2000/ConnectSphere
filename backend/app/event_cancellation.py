@@ -94,8 +94,21 @@ def register_event_cancellation_routes(app: Flask) -> None:
             released_bookings = _cancel_bookings(session, bookings, g.user_id, now, note)
             releases = _release_equipment(session, event_request_id, g.user_id, now, note)
             # Imported here: notifications imports event_requests, which imports this module.
-            from app.notifications import add_attendee_notices, add_technical_support_notices
+            from app.notifications import (
+                add_attendee_notices,
+                add_organiser_notice,
+                add_technical_support_notices,
+            )
 
+            # SPL-123 AC3: the organiser is told the reason.
+            add_organiser_notice(
+                session,
+                event,
+                actor_id=g.user_id,
+                kind="event_cancelled",
+                source=audit,
+                message=f"{event.name} has been cancelled. Reason: {reason}",
+            )
             # SPL-124 AC2: the reason is written for staff, so attendees are told only the outcome.
             add_attendee_notices(
                 session,

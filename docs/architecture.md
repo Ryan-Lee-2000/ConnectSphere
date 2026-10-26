@@ -111,6 +111,14 @@ added or removed. `add_registration_notice` acknowledges the attendee's own regi
 withdrawal. Each is written in the action's transaction, keyed to its source row, and opens
 `/workspace/my-registrations`. See [SPL-124](tasks/SPL-124.md).
 
+SPL-123 adds the organiser's confirmation-state notices through `notifications.add_organiser_notice`:
+confirmation (`event_confirmation.confirm_event`), the return to Planning in SPL-109's
+`significant_event_changes.return_to_planning` (also reached from SPL-112's decisions),
+cancellation with its reason, and one notice per decided change-request item, sent to the
+organiser who submitted the request. Nobody is notified of their own action. Each notice is keyed
+to its status-history row or item and opens the organiser's event page. See
+[SPL-123](tasks/SPL-123.md).
+
 ## Event review transitions
 
 SPL-70 introduces the first explicit workflow action at
@@ -328,3 +336,15 @@ arbitrary-minute preparation boundaries against quarter-hour booking guides and 
 closed or unconfirmed timing from available operating time. `EXACT_VENUE_TIMING_ENABLED`
 continues to gate this slice; shared release activation and future hold expiry remain their existing
 integration responsibilities. See [SPL-107](development/SPL-107.md) for verification and limitations.
+
+
+## SPL-123 review clarification
+
+SPL-123 checks the stored notice recipient’s current Event Organiser role and membership in
+that event’s organisation before creating a notice, skipping a former recipient without a
+fallback. This creation-time check does not retract historical inbox entries. The source-row
+flush belongs to the notice helper, so history and item notices use a persisted source ID.
+A batch that accepts an event rename applies it before any significant-change notices, giving
+its Planning-return and item notices the same resulting event name. SPL-102 retains its
+existing recipient policy; only the final row-construction function is shared. Safety-rework
+organiser notices remain outside this story’s current SPL-109 trigger scope.
