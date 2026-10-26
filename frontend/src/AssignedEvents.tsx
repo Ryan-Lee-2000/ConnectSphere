@@ -365,6 +365,9 @@ function EventCancellationPanel({ open, reason, error, transitioning, onStart, o
 // SPL-105: the assigned coordinator closes a Preparing event once it has ended, with an optional
 // note. The panel shows when that becomes possible; the server decides.
 const MAX_COMPLETION_NOTE = 2000;
+// setTimeout overflows above 2^31 - 1 ms (~24.8 days) and would fire at once, so long waits are
+// taken in steps.
+const MAX_TIMER_DELAY = 2_147_483_647;
 
 function EventCompletionPanel({ availableAt, open, note, error, transitioning, onStart, onNote, onKeep, onComplete }: {
   availableAt: string | null;
@@ -377,7 +380,20 @@ function EventCompletionPanel({ availableAt, open, note, error, transitioning, o
   onKeep: () => void;
   onComplete: () => void;
 }) {
-  const available = availableAt !== null && Date.now() >= new Date(availableAt).getTime();
+  const opensAt = availableAt === null ? null : new Date(availableAt).getTime();
+  const [now, setNow] = useState(() => Date.now());
+  // Re-render when the end passes, so a page left open enables the action without a reload.
+  useEffect(() => {
+    if (opensAt === null || now >= opensAt) return;
+    const wait = opensAt - Date.now();
+    if (wait <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait, MAX_TIMER_DELAY));
+    return () => clearTimeout(timer);
+  }, [opensAt, now]);
+  const available = opensAt !== null && now >= opensAt;
   return <section className="equipment-readiness event-completion" aria-labelledby="event-completion-title">
     <header className="equipment-readiness__header">
       <div><p className="eyebrow">Event completion</p><h2 id="event-completion-title">Mark this event completed</h2></div>

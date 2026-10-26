@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AssignedEvents } from './AssignedEvents';
 
@@ -134,4 +134,55 @@ it('[QA-SPL-105-073] only a Preparing event shows the completion panel', async (
     expect(screen.queryByRole('region', { name: 'Mark this event completed' })).toBeNull();
     cleanup();
   }
+});
+
+// Review round 1 (26 Oct 2026, Clive, PR #105): a page opened before the end must enable itself.
+// Real timers keep advancing (shouldAdvanceTime) so the page can load; the tests then jump the clock.
+function useTimerClock(at: string) {
+  vi.useRealTimers();
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+  vi.setSystemTime(new Date(at));
+}
+
+// QA-SPL-105-074 | AC1 | BB
+it('[QA-SPL-105-074] a page opened before the end enables completion once the end passes', async () => {
+  useTimerClock('2026-11-20T16:59:30+08:00');
+  render(<AssignedEvents accessToken="token" eventId={12} request={api(preparing)} onNavigate={vi.fn()} />);
+  const panel = within(await screen.findByRole('region', { name: 'Mark this event completed' }));
+  expect((panel.getByRole('button', { name: 'Mark as completed' }) as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => {}); // let the panel register its refresh before the clock moves
+  expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+  await act(async () => { vi.advanceTimersByTime(31_000); });
+
+  expect((panel.getByRole('button', { name: 'Mark as completed' }) as HTMLButtonElement).disabled).toBe(false);
+  expect(panel.getByText(/^Completing closes the event as a historical record/)).toBeTruthy();
+});
+
+// QA-SPL-105-074 | AC1 | WB
+it('[QA-SPL-105-074] an end years away stays disabled instead of overflowing the timer', async () => {
+  useTimerClock('2026-11-20T16:59:30+08:00');
+  const request = api({ ...preparing, completion_available_at: '2031-01-22T12:00:00+08:00' });
+  render(<AssignedEvents accessToken="token" eventId={12} request={request} onNavigate={vi.fn()} />);
+  const panel = within(await screen.findByRole('region', { name: 'Mark this event completed' }));
+  await act(async () => {});
+
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+
+  expect((panel.getByRole('button', { name: 'Mark as completed' }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+// QA-SPL-105-074 | AC1 | WB
+it('[QA-SPL-105-074] leaving the page cancels the pending refresh', async () => {
+  useTimerClock('2026-11-20T16:59:30+08:00');
+  const clear = vi.spyOn(globalThis, 'clearTimeout');
+  const { unmount } = render(<AssignedEvents accessToken="token" eventId={12} request={api(preparing)} onNavigate={vi.fn()} />);
+  await screen.findByRole('region', { name: 'Mark this event completed' });
+  await act(async () => {});
+  const before = clear.mock.calls.length;
+
+  unmount();
+
+  expect(clear.mock.calls.length).toBeGreaterThan(before);
+  clear.mockRestore();
 });
