@@ -86,13 +86,18 @@ def _history(session: Session, booking_id: int) -> list[dict[str, Any]]:
     ).all()
     history = []
     for entry in entries:
-        actor = session.get(Account, entry.actor_account_id)
+        # SPL-133: expiry is a system action with no account behind it.
+        actor = session.get(Account, entry.actor_account_id) if entry.actor_account_id else None
         history.append(
             {
                 "action": entry.action,
                 "status": entry.resulting_status,
                 "status_label": booking_status_label(entry.resulting_status),
-                "actor": {"id": actor.id, "name": actor.display_name},
+                "actor": (
+                    {"id": actor.id, "name": actor.display_name}
+                    if actor
+                    else {"id": None, "name": "ConnectSphere"}
+                ),
                 "changed_at": _timestamp(entry.changed_at),
                 "note": entry.note,
             }

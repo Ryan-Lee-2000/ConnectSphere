@@ -18,6 +18,8 @@ export type VenueBooking = {
   id: number; venue: { id: number; name: string }; date: string; event_slots: string[];
   setup: BookedSlot | null; turnaround: BookedSlot | null; layout: string; expected_attendance: number; status: string;
   required_facilities?: string[];
+  // SPL-133: when the tentative hold expires (Requested bookings only).
+  expires_at?: string | null;
 };
 
 const SLOT_NAMES: Record<string, string> = { AM: 'AM', PM: 'PM', NIGHT: 'Night' };

@@ -18,6 +18,7 @@ BOOKING_STATUS_LABELS = {
     "rejected": "Rejected",
     "withdrawn": "Withdrawn",
     "cancelled": "Cancelled",
+    "expired": "Expired",
 }
 
 
@@ -32,7 +33,7 @@ def record_booking_transition(
     action: str,
     previous_status: str | None,
     resulting_status: str,
-    actor_account_id: str,
+    actor_account_id: str | None,
     changed_at: datetime,
     note: str | None = None,
 ) -> VenueBookingStatusHistory:

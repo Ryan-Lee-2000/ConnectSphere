@@ -369,7 +369,7 @@ class EventRequest(Base):
     )
 
 
-BOOKING_STATUSES = ("requested", "approved", "rejected", "withdrawn", "cancelled")
+BOOKING_STATUSES = ("requested", "approved", "rejected", "withdrawn", "cancelled", "expired")
 ACTIVE_BOOKING_STATUSES = ("requested", "approved")
 
 
@@ -382,6 +382,8 @@ class VenueBooking(Base):
             "status in (" + ", ".join(repr(status) for status in BOOKING_STATUSES) + ")",
             name="ck_venue_bookings_known_status",
         ),
+        # SPL-133: finds the holds whose deadline has passed without scanning every booking.
+        Index("ix_venue_bookings_status_expires_at", "status", "expires_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -435,6 +437,9 @@ class VenueBooking(Base):
         Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # SPL-133. When a Requested booking (the tentative hold) expires. Null for bookings made
+    # before holds had deadlines and never set on Approved ones, which do not expire.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # SPL-81. Who approved a Requested booking, when, and the optional note; null unless approved.
     approved_by_account_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id")
@@ -535,8 +540,9 @@ class VenueBookingStatusHistory(Base):
     action: Mapped[str] = mapped_column(String(40), nullable=False)
     previous_status: Mapped[str | None] = mapped_column(String(40))
     resulting_status: Mapped[str] = mapped_column(String(40), nullable=False)
-    actor_account_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    # Null only for a system action (SPL-133 expiry), which no account performed.
+    actor_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id")
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # The reason (rejection) or note (approval) recorded with this action, if any.

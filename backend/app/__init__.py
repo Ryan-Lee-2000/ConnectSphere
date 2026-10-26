@@ -41,6 +41,7 @@ from .venue_booking_queue import register_venue_booking_queue_routes
 from .venue_booking_requests import register_venue_booking_request_routes
 from .venue_booking_status import register_venue_booking_status_routes
 from .venue_booking_withdrawals import register_venue_booking_withdrawal_routes
+from .venue_hold_expiry import register_hold_expiry
 from .venue_occupancy_calendar import register_venue_occupancy_calendar_routes
 from .venue_operational_blocks import register_venue_operational_block_routes
 from .venues import register_venue_routes
@@ -96,6 +97,8 @@ def create_app(test_config=None):
         if not g.user_id:
             abort(401)
         associate_account_roles(engine, app.view_functions.get(request.endpoint))
+        # SPL-133 AC5: expire due holds before any read or write can see their held time.
+        app.extensions["process_due_holds"]()
 
     @app.errorhandler(400)
     @app.errorhandler(401)
@@ -133,6 +136,8 @@ def create_app(test_config=None):
     register_venue_operational_block_routes(app)
     register_venue_availability_routes(app)
     register_venue_booking_request_routes(app)
+    # SPL-133: hold deadlines, and expiry of due holds before each authenticated request.
+    register_hold_expiry(app)
     register_venue_booking_withdrawal_routes(app)
     # SPL-131: booking-level cancellation for events holding several venues.
     register_venue_arrangement_routes(app)

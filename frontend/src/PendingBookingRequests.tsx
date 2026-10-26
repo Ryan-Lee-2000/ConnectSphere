@@ -21,6 +21,8 @@ type PendingRequest = {
   expected_attendance: number | null;
   requested_by: Person | null;
   requested_at: string | null;
+  // SPL-133: when the hold expires; Venue Staff decide before then.
+  expires_at?: string | null;
   requires_review: boolean;
 };
 type QueueBody = { requests: PendingRequest[]; count: number; message?: string };
@@ -131,7 +133,10 @@ export function PendingBookingRequests({ accessToken, onOpen, request }: {
             <td>{item.layout ? layoutName(item.layout) : 'Not recorded'}</td>
             <td>{item.expected_attendance ?? 'Not recorded'}</td>
             <td>{item.requested_by?.name ?? 'Not recorded'}</td>
-            <td>{item.requested_at ? timeName(item.requested_at) : 'Not recorded'}</td>
+            <td>
+              {item.requested_at ? timeName(item.requested_at) : 'Not recorded'}
+              {item.expires_at && <span className="request-preparation">Hold expires {timeName(item.expires_at)}</span>}
+            </td>
             <td>
               <button
                 aria-label={`Review the booking request for ${item.event.name}`}

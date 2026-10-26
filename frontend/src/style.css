@@ -1145,3 +1145,10 @@ button { touch-action: manipulation; }
 .safety-queue__plan div { padding: var(--space-3); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-sm); background: var(--color-page); }
 .safety-queue__plan dt { color: var(--color-muted-slate); font-size: .8125rem; }.safety-queue__plan dd { margin: var(--space-1) 0 0; }
 @media (max-width: 42rem) { .safety-review__header, .safety-queue__list li { align-items: stretch; flex-direction: column; } .safety-review__facts, .safety-review__plan, .safety-queue__plan { grid-template-columns: 1fr; } }
+
+/* SPL-133 tentative hold deadline */
+.venue-booking-panel__summary > .venue-booking-panel__deadline { color: var(--color-ink-navy); font-weight: 600; }
+.hold-deadline { display: grid; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-4); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-md); background: var(--color-raised-surface); }
+.hold-deadline__summary { display: flex; gap: var(--space-2); align-items: flex-start; margin: 0; line-height: 1.5; }
+.hold-deadline .button { justify-self: start; }
+.hold-deadline input[type="datetime-local"] { max-width: 18rem; }
