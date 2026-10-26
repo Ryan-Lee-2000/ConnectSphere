@@ -111,6 +111,14 @@ added or removed. `add_registration_notice` acknowledges the attendee's own regi
 withdrawal. Each is written in the action's transaction, keyed to its source row, and opens
 `/workspace/my-registrations`. See [SPL-124](tasks/SPL-124.md).
 
+SPL-123 adds the organiser's confirmation-state notices through `notifications.add_organiser_notice`:
+confirmation (`event_confirmation.confirm_event`), the return to Planning in SPL-109's
+`significant_event_changes.return_to_planning` (also reached from SPL-112's decisions),
+cancellation with its reason, and one notice per decided change-request item, sent to the
+organiser who submitted the request. Nobody is notified of their own action. Each notice is keyed
+to its status-history row or item and opens the organiser's event page. See
+[SPL-123](tasks/SPL-123.md).
+
 ## Event review transitions
 
 SPL-70 introduces the first explicit workflow action at

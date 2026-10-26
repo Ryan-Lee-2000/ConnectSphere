@@ -128,6 +128,39 @@ def add_review_outcome_notice(
     )
 
 
+def add_organiser_notice(
+    session: Session,
+    event: EventRequest,
+    *,
+    actor_id: str,
+    kind: str,
+    source_id: int,
+    message: str,
+    recipient_id: str | None = None,
+) -> None:
+    """Notify an organiser that their event's confirmation state changed (SPL-123).
+
+    The recipient is the event's organiser, or ``recipient_id`` (the organiser who submitted a
+    change request), both read on the server. Nobody is told of their own action. Runs in the
+    caller's transaction, so a refused or failed action leaves no notice, and the source row in
+    the dedupe key stops a repeat adding a second (AC5). The ``organiser_`` prefix opens the
+    organiser's event page.
+    """
+
+    recipient = recipient_id or event.organiser_account_id
+    if recipient == actor_id:
+        return
+    session.add(
+        Notification(
+            recipient_account_id=recipient,
+            event_request_id=event.id,
+            message=message,
+            dedupe_key=f"organiser_{kind}:{source_id}",
+            created_at=datetime.now(SINGAPORE),
+        )
+    )
+
+
 def add_clarification_answered_notice(
     session: Session, event: EventRequest, *, author_id: str, clarification_id: int
 ) -> None:

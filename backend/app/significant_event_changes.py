@@ -25,7 +25,7 @@ from app.models import (
     Venue,
     VenueBooking,
 )
-from app.notifications import add_schedule_change_notices
+from app.notifications import add_organiser_notice, add_schedule_change_notices
 from app.validation import request_json
 from app.venue_requirement_review import assess_event_bookings, requirement_reasons
 
@@ -134,6 +134,16 @@ def return_to_planning(session: Session, event: EventRequest, now: datetime):
     event.status_changed_at = now
     event.confirmed_by_account_id = None
     event.confirmed_at = None
+    session.flush()
+    add_organiser_notice(
+        session,
+        event,
+        actor_id=g.user_id,
+        kind="returned_to_planning",
+        source_id=history.id,
+        message=f"{event.name} has returned to Planning after a significant change and must be "
+        "confirmed again.",
+    )
     return history
 
 

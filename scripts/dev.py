@@ -346,6 +346,8 @@ def main():
             "backend/tests/test_qa_spl104_postgres.py",
             # SPL-124: racing registrations, withdrawals and cancellations notify attendees once.
             "backend/tests/test_qa_spl124_postgres.py",
+            # SPL-123: organiser notices commit once with their lifecycle action.
+            "backend/tests/test_qa_spl123_postgres.py",
             "-q",
         )
     elif cmd == "dev":

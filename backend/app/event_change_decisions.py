@@ -22,6 +22,7 @@ from app.event_change_requests import (
     MAX_ITEMS,
     _current_value,
     _equipment_snapshot,
+    _field_label,
     _requested_value,
     serialize_change_request,
 )
@@ -36,6 +37,7 @@ from app.models import (
     EventRequest,
     Role,
 )
+from app.notifications import add_organiser_notice
 from app.validation import request_json, required_text
 
 
@@ -116,6 +118,18 @@ def register_event_change_decision_routes(app: Flask):
                 item.decline_reason = reason
                 item.decided_by_account_id = g.user_id
                 item.decided_at = now
+                # SPL-123 AC4: the values themselves stay in SPL-113's outcome view.
+                outcome = f"declined. Reason: {reason}" if reason else f"{decision}."
+                add_organiser_notice(
+                    session,
+                    event,
+                    actor_id=g.user_id,
+                    kind="change_item_decided",
+                    source_id=item.id,
+                    message=f"Your change request for {event.name}: {_field_label(item.field)} "
+                    f"was {outcome}",
+                    recipient_id=change_request.submitted_by_account_id,
+                )
             if all(item.decision is not None for item in change_request.items):
                 change_request.status = "closed"
             session.commit()
