@@ -81,7 +81,10 @@ def register_safety_review_routes(app: Flask) -> None:
             return jsonify(
                 event=_event_context(event),
                 review=_serialize_review(review, event),
-                reviews=[_serialize_review(item, event) for item in reviews],
+                reviews=[
+                    _serialize_review(item, event, superseded=item.id != review.id)
+                    for item in reviews
+                ],
             )
 
     @app.post("/api/event-requests/<int:event_request_id>/safety-review")
@@ -410,7 +413,9 @@ def _event_context(event: EventRequest) -> dict[str, Any]:
     }
 
 
-def _serialize_review(review: SafetyReview | None, event: EventRequest) -> dict[str, Any] | None:
+def _serialize_review(
+    review: SafetyReview | None, event: EventRequest, *, superseded: bool = False
+) -> dict[str, Any] | None:
     if review is None:
         return None
     return {
@@ -425,7 +430,7 @@ def _serialize_review(review: SafetyReview | None, event: EventRequest) -> dict[
             if review.decider
             else None
         ),
-        "current": review.arrangement_fingerprint == _fingerprint(event),
+        "current": not superseded and review.arrangement_fingerprint == _fingerprint(event),
     }
 
 

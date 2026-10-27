@@ -804,6 +804,20 @@ def test_qa_spl_136_005_read_returns_latest_review_and_accountable_history(app, 
     assert response.json["reviews"][0]["reason"] == "Use the east exit."
 
 
+def test_spl136_superseded_approval_is_not_current_in_history(app, client):
+    """A newer Safety review supersedes an earlier decision even for the same arrangement."""
+    event_id = ready_event(app)
+    original = submit(client, event_id).json["review"]["id"]
+    assert decide(client, original, "approved").status_code == 200
+    revised = plan(crowd_movement={"value": "Use the east entrance.", "not_applicable_reason": ""})
+    result = submit(client, event_id, payload=revised)
+    assert result.status_code == 200, result.json
+    history = client.get(f"/api/event-requests/{event_id}/safety-review", headers=headers()).json
+    assert history["reviews"][0]["current"] is True
+    assert history["reviews"][1]["id"] == original
+    assert history["reviews"][1]["current"] is False
+
+
 # QA-SPL-135-019 | AC4 | security
 @pytest.mark.parametrize(("identity", "expected"), [("other", 404), ("lead", 403), ("safety", 403)])
 def test_qa_spl_135_019_every_other_entry_path_is_refused(app, client, identity, expected):
