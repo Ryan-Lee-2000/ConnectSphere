@@ -340,6 +340,11 @@ def test_tc_spl_64_01_assigned_coordinator_reads_every_request_field(app, client
         "cancelled_by": None,
         "cancelled_at": None,
         "cancellation_reason": None,
+        # SPL-105 AC4: completion fields, and when completion becomes possible (event end).
+        "completed_by": None,
+        "completed_at": None,
+        "completion_note": None,
+        "completion_available_at": "2026-10-12T12:00:00+08:00",
     }
     assert confirmation["ready"] is False
     assert equipment[0]["equipment_type"] == "Podium"

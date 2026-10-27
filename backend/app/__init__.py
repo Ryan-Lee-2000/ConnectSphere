@@ -21,6 +21,7 @@ from .equipment_unavailability import register_equipment_unavailability_routes
 from .event_cancellation import register_event_cancellation_routes
 from .event_change_decisions import register_event_change_decision_routes
 from .event_change_requests import register_event_change_request_routes
+from .event_completion import register_event_completion_routes
 from .event_confirmation import register_event_confirmation_routes
 from .event_information import register_event_information_routes
 from .event_registrations import register_event_registration_routes
@@ -155,6 +156,7 @@ def create_app(test_config=None):
     register_safety_review_routes(app)
     # SPL-86: whole-event cancellation releases every venue booking and equipment unit.
     register_event_cancellation_routes(app)
+    register_event_completion_routes(app)
     register_event_information_routes(app)
     register_significant_event_change_routes(app)
     register_registration_settings_routes(app)

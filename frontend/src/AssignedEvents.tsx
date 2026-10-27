@@ -98,6 +98,10 @@ export type AssignedEventDetail = AssignedEvent & Partial<{
   cancelled_by: { id: string; name: string } | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  completed_by: { id: string; name: string } | null;
+  completed_at: string | null;
+  completion_note: string | null;
+  completion_available_at: string | null;
   registration_required: boolean;
   registration_notes: string | null;
   client_organisation: string;
@@ -156,6 +160,10 @@ function detailRows(event: AssignedEventDetail): [string, string, [string, React
       ...(event.cancelled_by ? [
         ['Cancelled by', `${event.cancelled_by.name}, ${formatTimestamp(event.cancelled_at)}`] as [string, ReactNode],
         ['Cancellation reason', formatText(event.cancellation_reason)] as [string, ReactNode],
+      ] : []),
+      ...(event.completed_by ? [
+        ['Completed by', `${event.completed_by.name}, ${formatTimestamp(event.completed_at)}`] as [string, ReactNode],
+        ['Closing note', formatText(event.completion_note)] as [string, ReactNode],
       ] : []),
       ...(event.withdrawn_by ? [
         ['Withdrawal recorded by', `${event.withdrawn_by.name}, ${formatTimestamp(event.withdrawn_at)}`] as [string, ReactNode],
@@ -355,6 +363,72 @@ function EventCancellationPanel({ open, reason, error, transitioning, onStart, o
   </section>;
 }
 
+// SPL-105: the assigned coordinator closes a Preparing event once it has ended, with an optional
+// note. The panel shows when that becomes possible; the server decides.
+const MAX_COMPLETION_NOTE = 2000;
+// setTimeout overflows above 2^31 - 1 ms (~24.8 days) and would fire at once, so long waits are
+// taken in steps.
+const MAX_TIMER_DELAY = 2_147_483_647;
+
+function EventCompletionPanel({ availableAt, open, note, error, transitioning, onStart, onNote, onKeep, onComplete }: {
+  availableAt: string | null;
+  open: boolean;
+  note: string;
+  error: string | null;
+  transitioning: boolean;
+  onStart: () => void;
+  onNote: (value: string) => void;
+  onKeep: () => void;
+  onComplete: () => void;
+}) {
+  const opensAt = availableAt === null ? null : new Date(availableAt).getTime();
+  const [now, setNow] = useState(() => Date.now());
+  // Re-render when the end passes, so a page left open enables the action without a reload.
+  useEffect(() => {
+    if (opensAt === null || now >= opensAt) return;
+    const wait = opensAt - Date.now();
+    if (wait <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait, MAX_TIMER_DELAY));
+    return () => clearTimeout(timer);
+  }, [opensAt, now]);
+  const available = opensAt !== null && now >= opensAt;
+  return <section className="equipment-readiness event-completion" aria-labelledby="event-completion-title">
+    <header className="equipment-readiness__header">
+      <div><p className="eyebrow">Event completion</p><h2 id="event-completion-title">Mark this event completed</h2></div>
+    </header>
+    <p className="equipment-readiness__scope">
+      {available
+        ? 'Completing closes the event as a historical record. Its information, arrangements and registrations can no longer be changed.'
+        : availableAt
+          ? `You can mark this event completed from ${formatTimestamp(availableAt)}, once it has ended.`
+          : 'This event cannot be completed until its end time is recorded.'}
+    </p>
+    {!open && <div className="organisation-events__actions">
+      <button type="button" className="button button--secondary" disabled={transitioning || !available} onClick={onStart}>Mark as completed</button>
+    </div>}
+    {error && !open && <p className="error" role="alert">{error}</p>}
+    {open && <form className="rejection-form" aria-label="Complete the event" onSubmit={submit => { submit.preventDefault(); onComplete(); }}>
+      <div className="field">
+        <label htmlFor="completion-note">Closing note (optional)</label>
+        <textarea id="completion-note" rows={3} maxLength={MAX_COMPLETION_NOTE} value={note}
+          aria-describedby="completion-note-hint" onChange={change => onNote(change.target.value)} />
+        <p className="hint" id="completion-note-hint">Attendance, operational notes or issues. Only you can see this note.</p>
+      </div>
+      <p><strong>Mark this event completed?</strong> This cannot be undone.</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="organisation-events__actions">
+        <button type="button" className="button button--secondary" disabled={transitioning} onClick={onKeep}>Keep open</button>
+        <button type="submit" className="button button--primary" disabled={transitioning}>
+          {transitioning ? 'Completing…' : 'Confirm completion'}
+        </button>
+      </div>
+    </form>}
+  </section>;
+}
+
 function EquipmentEvidence({ line }: { line: EquipmentLine }) {
   const unavailability = (line.unavailability_history ?? []).filter(record => record.reason);
   const hasEvidence = Boolean(line.notes)
@@ -397,6 +471,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const [cancellingEvent, setCancellingEvent] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationError, setCancellationError] = useState<string | null>(null);
+  // SPL-105: whether the completion form is open, and its optional note.
+  const [completingEvent, setCompletingEvent] = useState(false);
+  const [completionNote, setCompletionNote] = useState('');
+  const [completionError, setCompletionError] = useState<string | null>(null);
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
   const [arrangementRevision, setArrangementRevision] = useState(0);
@@ -608,6 +686,34 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     }
   }
 
+  async function completeEvent() {
+    if (!event || transitioning) return;
+    setTransitioning(true);
+    setCompletionError(null);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api(`/api/event-requests/${event.id}/complete`, {
+        method: 'POST', body: JSON.stringify({ note: completionNote.trim() || null }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setCompletionError(body?.error || 'Could not complete the event. Try again.');
+      } else if (body?.event) {
+        setEvent(current => ({ ...current, ...body.event }));
+        setCompletingEvent(false);
+        setCompletionNote('');
+        setNotice(body.message || 'Event completed.');
+      } else {
+        setCompletionError('Could not complete the event. Try again.');
+      }
+    } catch {
+      setCompletionError('Could not complete the event. Try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   function reviewRejection() {
     if (!rejectionReason.trim()) {
       setError('Enter a reason for rejecting the request.');
@@ -760,6 +866,12 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         onReason={setCancellationReason}
         onKeep={() => { setCancellingEvent(false); setCancellationReason(''); setCancellationError(null); }}
         onCancel={() => { void cancelEvent(); }} />}
+      {event.status === 'preparing' && <EventCompletionPanel availableAt={event.completion_available_at ?? null}
+        open={completingEvent} note={completionNote} error={completionError} transitioning={transitioning}
+        onStart={() => { setError(null); setNotice(null); setCompletionError(null); setCompletingEvent(true); }}
+        onNote={setCompletionNote}
+        onKeep={() => { setCompletingEvent(false); setCompletionNote(''); setCompletionError(null); }}
+        onComplete={() => { void completeEvent(); }} />}
       {/* SPL-79/SPL-131: every venue booking of the event, each with its status and history. A
           request can only be made once the event is in Planning (SPL-77), so earlier stages have
           nothing to show. The panel follows the event as loaded, so approving on this page
