@@ -38,6 +38,26 @@ const enabledList = {
   withdrawn: [],
 };
 
+const confirmedEvent = { ...event, status: 'confirmed', status_label: 'Confirmed' };
+const registrationOff = {
+  enabled: false,
+  state: 'off',
+  opens_at: null,
+  closes_at: null,
+  capacity: null,
+  max_capacity: 100,
+  event_starts_at: '2026-11-20T14:00:00+08:00',
+  history: [],
+};
+const registrationEnabled = {
+  ...registrationOff,
+  enabled: true,
+  state: 'not_yet_open',
+  opens_at: '2026-11-01T09:00:00+08:00',
+  closes_at: '2026-11-19T18:00:00+08:00',
+  capacity: 80,
+};
+
 function detailResponse(capability = true) {
   return Promise.resolve({
     ok: true,
@@ -130,4 +150,69 @@ it('QA-SPL-120-019: displays count, capacity and every approved attendee field',
   ]) {
     expect(screen.getByText(value)).toBeTruthy();
   }
+});
+
+// QA-SPL-120-020 | AC3 | WB registration enablement refresh
+it('QA-SPL-120-020: refreshes the attendee list after registration is enabled', async () => {
+  let listReads = 0;
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/event-requests/assigned/120') {
+      return { ok: true, headers: new Headers({ 'X-ConnectSphere-Registration-List': 'available' }), json: async () => ({ event: confirmedEvent }) } as Response;
+    }
+    if (path.endsWith('/registrations')) {
+      listReads += 1;
+      return listResponse(listReads === 1
+        ? { enabled: false, capacity: null, registered_count: 0, registered: [], withdrawn: [] }
+        : { ...enabledList, capacity: 80 });
+    }
+    if (path.endsWith('/registration') && init?.method === 'PUT') {
+      return { ok: true, json: async () => ({ registration: registrationEnabled }) } as Response;
+    }
+    if (path.endsWith('/registration')) {
+      return { ok: true, json: async () => ({ registration: registrationOff }) } as Response;
+    }
+    return { ok: true, json: async () => ({}) } as Response;
+  });
+  render(<AssignedEvents accessToken="token" eventId={120} request={request} onNavigate={vi.fn()} />);
+
+  expect(await screen.findByText('Registration is not enabled for this event.')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Registration opens'), { target: { value: '2026-11-01T09:00' } });
+  fireEvent.change(screen.getByLabelText('Registration closes'), { target: { value: '2026-11-19T18:00' } });
+  fireEvent.change(screen.getByLabelText('Capacity'), { target: { value: '80' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enable registration' }));
+
+  expect(await screen.findByLabelText('1 of 80 places registered')).toBeTruthy();
+  expect(screen.queryByText('Registration is not enabled for this event.')).toBeNull();
+  expect(listReads).toBe(2);
+});
+
+// QA-SPL-120-021 | AC3 | WB capacity refresh
+it('QA-SPL-120-021: refreshes attendee capacity after registration settings change', async () => {
+  let listReads = 0;
+  const saved = { ...registrationEnabled, capacity: 90 };
+  const request = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === '/api/event-requests/assigned/120') {
+      return { ok: true, headers: new Headers({ 'X-ConnectSphere-Registration-List': 'available' }), json: async () => ({ event: confirmedEvent }) } as Response;
+    }
+    if (path.endsWith('/registrations')) {
+      listReads += 1;
+      return listResponse({ ...enabledList, capacity: listReads === 1 ? 80 : 90 });
+    }
+    if (path.endsWith('/registration') && init?.method === 'PUT') {
+      return { ok: true, json: async () => ({ registration: saved }) } as Response;
+    }
+    if (path.endsWith('/registration')) {
+      return { ok: true, json: async () => ({ registration: registrationEnabled }) } as Response;
+    }
+    return { ok: true, json: async () => ({}) } as Response;
+  });
+  render(<AssignedEvents accessToken="token" eventId={120} request={request} onNavigate={vi.fn()} />);
+
+  expect(await screen.findByLabelText('1 of 80 places registered')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Capacity'), { target: { value: '90' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+  expect(await screen.findByLabelText('1 of 90 places registered')).toBeTruthy();
+  expect(screen.queryByLabelText('1 of 80 places registered')).toBeNull();
+  expect(listReads).toBe(2);
 });

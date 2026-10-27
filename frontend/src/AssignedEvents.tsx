@@ -478,6 +478,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
   const [arrangementRevision, setArrangementRevision] = useState(0);
+  const [registrationListRevision, setRegistrationListRevision] = useState(0);
   const [editingInformation, setEditingInformation] = useState(false);
   const [savingInformation, setSavingInformation] = useState(false);
   const [information, setInformation] = useState({
@@ -879,10 +880,13 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {bookingStageOnLoad && <VenueArrangements key={`${event.id}-${arrangementRevision}`} api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
-      {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
+      {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id}
+        // The settings and attendee list have separate APIs, so a successful save must invalidate
+        // the read-only list explicitly instead of leaving its enabled state or capacity stale.
+        onSaved={() => setRegistrationListRevision(value => value + 1)} />}
       {/* SPL-120: the read-only list is useful throughout the assigned event lifecycle. Its API
           independently rechecks the current assignment before returning attendee information. */}
-      {registrationListAvailable && <RegistrationAttendees accessToken={accessToken} eventId={event.id}
+      {registrationListAvailable && <RegistrationAttendees key={`registration-${event.id}-${registrationListRevision}`} accessToken={accessToken} eventId={event.id}
         endpoint={`/api/event-requests/assigned/${event.id}/registrations`} request={api} />}
       {/* SPL-112: decisions refresh event readiness and arrangement flags. */}
       {showChangeRequests
