@@ -41,7 +41,11 @@ function stateLine(settings: RegistrationSettings) {
 const summary = (values: SettingsValues) =>
   `opens ${timeName(values.opens_at!)}, closes ${timeName(values.closes_at!)}, ${values.capacity} places`;
 
-export function RegistrationSettingsPanel({ api, eventId }: { api: ApiRequest; eventId: number }) {
+export function RegistrationSettingsPanel({ api, eventId, onSaved }: {
+  api: ApiRequest;
+  eventId: number;
+  onSaved?: () => void;
+}) {
   const [settings, setSettings] = useState<RegistrationSettings | null>(null);
   const [opensAt, setOpensAt] = useState('');
   const [closesAt, setClosesAt] = useState('');
@@ -96,6 +100,7 @@ export function RegistrationSettingsPanel({ api, eventId }: { api: ApiRequest; e
       if (!body.registration) throw new Error('Invalid response');
       show(body.registration);
       setNotice(wasEnabled ? 'Registration settings saved.' : 'Registration enabled.');
+      onSaved?.();
     } catch { setError('Could not save the registration settings. Try again.'); }
     finally { setSaving(false); }
   }
