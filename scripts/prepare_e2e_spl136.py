@@ -2,6 +2,7 @@
 
 import os
 import sys
+import uuid
 from datetime import date, datetime, time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,6 +34,10 @@ from app.safety_reviews import _fingerprint  # noqa: E402
 database_url = os.environ["DATABASE_URL"]
 if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
     raise SystemExit("SPL-136 fixtures are local-only and refuse a non-local database.")
+try:
+    run_id = str(uuid.UUID(os.environ["SPL136_E2E_RUN_ID"]))
+except (KeyError, ValueError):
+    raise SystemExit("A valid SPL136_E2E_RUN_ID is required for isolated fixtures.") from None
 
 
 def account(session: Session, email: str, role: Role) -> Account:
@@ -174,10 +179,6 @@ def add_event(
 engine = create_engine(database_url)
 try:
     with Session(engine) as session, session.begin():
-        for event in session.scalars(
-            select(EventRequest).where(EventRequest.name.like("E2E SPL-136 %"))
-        ).all():
-            session.delete(event)
         coordinator = account(
             session,
             os.getenv(
@@ -221,7 +222,7 @@ try:
 
         add_event(
             session,
-            name="E2E SPL-136 Harbour Futures Leadership Forum",
+            name=f"E2E SPL-136 {run_id} Harbour Futures Leadership Forum",
             status="confirmed",
             day=date(2031, 2, 12),
             coordinator=coordinator,
@@ -235,7 +236,7 @@ try:
         )
         add_event(
             session,
-            name="E2E SPL-136 Community Access Briefing",
+            name=f"E2E SPL-136 {run_id} Community Access Briefing",
             status="confirmed",
             day=date(2031, 2, 19),
             coordinator=coordinator,
@@ -249,7 +250,7 @@ try:
         )
         add_event(
             session,
-            name="E2E SPL-136 Community Capacity Update",
+            name=f"E2E SPL-136 {run_id} Community Capacity Update",
             status="confirmed",
             day=date(2031, 2, 22),
             coordinator=coordinator,
@@ -263,7 +264,7 @@ try:
         )
         add_event(
             session,
-            name="E2E SPL-136 Volunteer Operations Briefing",
+            name=f"E2E SPL-136 {run_id} Volunteer Operations Briefing",
             status="preparing",
             day=date(2031, 2, 26),
             coordinator=coordinator,

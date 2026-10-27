@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 // QA-SPL-136-200: deliberately paced visual UAT. The local fixture is disposable and this
@@ -7,14 +8,24 @@ import path from 'node:path';
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinator = process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
 const safetyOfficer = process.env.VITE_LOCAL_DEMO_SAFETY_OFFICER_EMAIL ?? 'safety.officer@example.test';
-const eventName = 'E2E SPL-136 Community Access Briefing';
+const runId = randomUUID();
+const fixtureEnv = { ...process.env, SPL136_E2E_RUN_ID: runId };
+const eventName = `E2E SPL-136 ${runId} Community Access Briefing`;
 const pause = (page: Page) => page.waitForTimeout(2_000);
 
 test.use({ video: { mode: 'on', size: { width: 1920, height: 1080 } }, viewport: { width: 1920, height: 1080 } });
-// Use this worktree's interpreter directly: Windows may deny a PATH-resolved launcher from Playwright.
-const python = path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe');
-test.beforeAll(() => execFileSync(python, ['scripts/prepare_e2e_spl136.py'], { stdio: 'inherit' }));
-// Test infrastructure removes this distinctive local fixture after the recording has closed.
+// Use this worktree's interpreter on both supported development platforms.
+const python = process.platform === 'win32'
+  ? path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe')
+  : path.resolve(process.cwd(), '.venv', 'bin', 'python');
+let fixturesCreated = false;
+test.beforeAll(() => {
+  execFileSync(python, ['scripts/prepare_e2e_spl136.py'], { stdio: 'inherit', env: fixtureEnv });
+  fixturesCreated = true;
+});
+test.afterAll(() => {
+  if (fixturesCreated) execFileSync(python, ['scripts/cleanup_e2e_spl136.py'], { stdio: 'inherit', env: fixtureEnv });
+});
 
 async function caption(page: Page, text: string) {
   await page.evaluate(message => {
