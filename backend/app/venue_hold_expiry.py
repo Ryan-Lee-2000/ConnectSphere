@@ -8,6 +8,9 @@ A Requested booking is the tentative hold. The system gives it a deadline when i
   the hold's claimed time. No separate worker is needed for correctness.
 * AC4/AC10 - expiry and approval lock the booking in the shared SPL-137 order (event, venue,
   booking), so exactly one of them wins. The loser re-reads the committed status and refuses.
+  Approval takes its decision time after its blocking checks, so checks that run past the
+  deadline cannot approve an expired hold. Each due hold is expired in its own transaction, so
+  the batch never keeps one event's locks while waiting for another event's.
 * AC9/AC10 - expiry runs at most once per booking: the status changes only from Requested, the
   notice is keyed to the booking, and only that booking's own claims are released, so processing
   late after downtime never frees a booking made after the expiry.
@@ -29,6 +32,7 @@ EXPIRED = "expired"
 DEFAULT_HOLD = timedelta(days=7)
 MAX_HOLD = timedelta(days=14)
 HOLD_EXPIRED = "This hold expired at {deadline}, so it can no longer be approved."
+HOLD_TOO_LATE = "This booking's time has already started, so it can no longer be held."
 
 
 def _now() -> datetime:
@@ -67,12 +71,12 @@ def booking_event_start(booking: VenueBooking, event: EventRequest) -> datetime 
 def default_deadline(start: datetime | None, now: datetime) -> datetime:
     """AC1: 7 days after the request, or the booking's event start if that is earlier.
 
-    The event-start cap applies only while the start is still ahead: a hold capped to a time
-    already passed would be born expired.
+    A new hold is never requested at or after its start (``hold_created`` refuses it), so the cap
+    always applies. The deployment cutover has its own no-backdating rule in the migration.
     """
 
     deadline = now + DEFAULT_HOLD
-    if start is not None and now < start < deadline:
+    if start is not None and start < deadline:
         return start
     return deadline
 
@@ -87,7 +91,13 @@ def hold_created(session: Session, booking: VenueBooking, event: EventRequest) -
 
     from app.notifications import add_arrangement_notice
 
-    booking.expires_at = default_deadline(booking_event_start(booking, event), _now())
+    # AC1: a hold for a time that has already started would be born expired; refuse it instead.
+    # The caller has not committed, so the refusal leaves no booking, claim or notice behind.
+    start = booking_event_start(booking, event)
+    now = _now()
+    if start is not None and now >= start:
+        abort(409, HOLD_TOO_LATE)
+    booking.expires_at = default_deadline(start, now)
     venue = session.get(Venue, booking.venue_id)
     add_arrangement_notice(
         session,
@@ -134,7 +144,12 @@ def expire_booking(session: Session, booking: VenueBooking, now: datetime) -> bo
 
 
 def process_due_holds(session: Session, now: datetime) -> int:
-    """Expire every hold whose deadline has passed, in id order, each under its own locks."""
+    """Expire every hold whose deadline has passed, in id order, each in its own transaction.
+
+    Each hold is locked, expired and committed (or released) before the next is locked. Keeping
+    them all to one final commit would hold event A and its venue while waiting for event B, and
+    a booking operation already holding event B and waiting for that venue would deadlock it.
+    """
 
     from app.exact_venue_bookings import lock_booking
 
@@ -147,7 +162,10 @@ def process_due_holds(session: Session, now: datetime) -> int:
     for booking_id in due:
         booking = lock_booking(session, booking_id)
         if booking is not None and expire_booking(session, booking, now):
+            session.commit()
             expired += 1
+        else:
+            session.rollback()
     return expired
 
 
@@ -156,8 +174,7 @@ def register_hold_expiry(app: Flask) -> None:
 
     def run_due_expiry() -> None:
         with Session(app.extensions["engine"]) as session:
-            if process_due_holds(session, _now()):
-                session.commit()
+            process_due_holds(session, _now())
 
     app.extensions["process_due_holds"] = run_due_expiry
 

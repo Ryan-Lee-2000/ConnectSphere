@@ -11,7 +11,7 @@ from datetime import date, datetime, time, timedelta
 
 import pytest
 import test_venue_booking_requests as base
-from app import venue_hold_expiry
+from app import venue_booking_approvals, venue_hold_expiry
 from app.event_requests import SINGAPORE
 from app.models import (
     EventRequest,
@@ -170,11 +170,11 @@ def test_qa_spl_133_004_the_coordinator_cannot_send_a_deadline(app, client, cloc
     assert count(app, VenueBooking) == 0
 
 
-# QA-SPL-133-005 | AC1 | WB
-def test_qa_spl_133_005_a_start_already_passed_does_not_cap_the_deadline():
+# QA-SPL-133-005 | AC1 | WB (changed in review round 1: the start cap always applies)
+def test_qa_spl_133_005_the_start_cap_always_applies_and_no_start_means_seven_days():
     past_start = NOW - timedelta(days=1)
 
-    assert venue_hold_expiry.default_deadline(past_start, NOW) == DEFAULT
+    assert venue_hold_expiry.default_deadline(past_start, NOW) == past_start
     assert venue_hold_expiry.default_deadline(None, NOW) == DEFAULT
 
 
@@ -190,6 +190,34 @@ def test_qa_spl_133_006_an_exact_booking_uses_its_own_start():
     assert venue_hold_expiry.booking_event_start(booking, event) == start
     assert venue_hold_expiry.booking_event_start(unreadable, event) is None
     assert venue_hold_expiry.default_deadline(start, NOW) == start
+
+
+# QA-SPL-133-007 | AC1 | BB boundary (review round 1)
+@pytest.mark.parametrize(
+    ("request_offset", "expected_status"),
+    [(timedelta(seconds=-1), 201), (timedelta(0), 409), (timedelta(hours=1), 409)],
+    ids=["one-second-before-start", "at-start", "after-start"],
+)
+def test_qa_spl_133_007_a_hold_cannot_be_requested_at_or_after_the_booking_start(
+    app, client, clock, request_offset, expected_status
+):
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=SINGAPORE)
+    event_id = make_event(app, day=start.date(), start=start.time(), end=time(12))
+    venue_id = add_venue(app)
+    clock.at(start + request_offset)
+
+    response = request_booking(client, event_id, venue_id)
+
+    assert response.status_code == expected_status, response.json
+    if expected_status == 201:
+        assert response.json["booking"]["expires_at"] == iso(start)
+    else:
+        assert response.json["error"] == (
+            "This booking's time has already started, so it can no longer be held."
+        )
+        assert count(app, VenueBooking) == 0
+        assert count(app, VenueBookingOccupancy) == 0
+        assert notices(app) == []
 
 
 # AC2: both sides can see the deadline -------------------------------------------------------
@@ -439,6 +467,34 @@ def test_qa_spl_133_032_approval_expires_a_due_hold_the_hook_has_not_reached(
     assert len(notices(app, "expired at")) == 1
 
 
+# QA-SPL-133-033 | AC4/AC10 | BB boundary (review round 1)
+def test_qa_spl_133_033_approval_checks_that_cross_the_deadline_cannot_approve(
+    app, client, monkeypatch, clock
+):
+    _, _, booking = hold(app, client)
+    clock.at(DEFAULT - timedelta(seconds=1))
+    recheck = venue_booking_approvals._recheck_recorded_slots
+
+    def slow_recheck(session, row):
+        recheck(session, row)
+        clock.at(DEFAULT + timedelta(seconds=1))  # the blocking checks finish after the deadline
+
+    monkeypatch.setattr(venue_booking_approvals, "_recheck_recorded_slots", slow_recheck)
+
+    response = approve(client, booking["id"])
+
+    assert response.status_code == 409
+    assert response.json["error"] == (
+        "This hold expired at 8 Nov 2026, 10:00 SGT, so it can no longer be approved."
+    )
+    row = booking_row(app, booking["id"])
+    assert (row.status, row.approved_at, row.approved_by_account_id) == ("expired", None, None)
+    assert [entry[0] for entry in history(app, booking["id"])] == ["request", "expire"]
+    assert claims(app, booking["id"]) == []
+    assert len(notices(app, "expired at")) == 1
+    assert notices(app, "was approved") == []
+
+
 # AC5: an expired hold stops blocking at once ------------------------------------------------
 
 
@@ -653,3 +709,27 @@ def test_qa_spl_133_082_withdraw_and_reject_cannot_revive_an_expired_hold(app, c
     assert reject.status_code == 409
     assert booking_row(app, booking["id"]).status == "expired"
     assert [entry[0] for entry in history(app, booking["id"])] == ["request", "expire"]
+
+
+# QA-SPL-133-083 | AC10 | WB (review round 1)
+def test_qa_spl_133_083_each_due_hold_is_committed_before_the_next_is_locked(
+    app, client, monkeypatch, clock
+):
+    _, _, first = hold(app, client)
+    _, _, second = hold(app, client, name="Harbour Forum")
+    expire = venue_hold_expiry.expire_booking
+
+    def fail_on_second(session, row, now):
+        if row.id == second["id"]:
+            raise RuntimeError("database went away")
+        return expire(session, row, now)
+
+    monkeypatch.setattr(venue_hold_expiry, "expire_booking", fail_on_second)
+
+    with Session(app.extensions["engine"]) as session, pytest.raises(RuntimeError):
+        venue_hold_expiry.process_due_holds(session, DEFAULT)
+
+    # The first hold's expiry was committed on its own, so the failure on the second kept it.
+    assert booking_row(app, first["id"]).status == "expired"
+    assert booking_row(app, second["id"]).status == "requested"
+    assert len(notices(app, "expired at")) == 1

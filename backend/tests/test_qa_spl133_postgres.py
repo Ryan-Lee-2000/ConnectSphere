@@ -9,11 +9,15 @@ clock is after it.
 import os
 import subprocess
 import sys
+import threading
+import time as clock
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 import test_event_confirmation_postgres as spl85
+from app import venue_hold_expiry
+from app.exact_venue_bookings import lock_event, lock_venue
 from app.models import (
     EventCoordinatorAssignment,
     EventRequest,
@@ -331,3 +335,81 @@ def test_qa_spl_133_105_migration_downgrades_and_upgrades_cleanly_when_empty(fre
         check.dispose()
     up = _alembic(fresh_url, "upgrade", "head")
     assert up.returncode == 0, up.stderr
+
+
+def _wait_for_a_lock_wait(engine, timeout=15):
+    """Block until some session in this database is waiting on a row lock."""
+
+    deadline = clock.monotonic() + timeout
+    with engine.connect() as connection:
+        while clock.monotonic() < deadline:
+            waiting = connection.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+                    "AND wait_event_type = 'Lock'"
+                )
+            )
+            if waiting:
+                return
+            clock.sleep(0.05)
+    raise AssertionError("The expiry batch never waited for the second event's lock.")
+
+
+# QA-SPL-133-106 | AC10 | BB concurrency (review round 1)
+def test_qa_spl_133_106_the_expiry_batch_cannot_deadlock_a_booking_operation(engine, pg_url):
+    """Two due holds for different events at one venue, while another operation holds event B.
+
+    That operation then needs the venue (SPL-137 order for event B: event, then venue). Expiry
+    must not still hold the venue from event A while it waits for event B.
+    """
+
+    ids, organisation_id, venue_id, _ = spl85._seed_accounts(engine)
+    first = _due_hold(engine, ids, organisation_id, venue_id, date(2027, 9, 6))
+    second = _due_hold(engine, ids, organisation_id, venue_id, date(2027, 9, 7))
+    with Session(engine) as session:
+        second_event = session.get(VenueBooking, second).event_request_id
+    app = spl85._app(pg_url, ids)
+    errors = []
+
+    def expire_batch():
+        try:
+            with app.app_context(), Session(engine) as session:
+                venue_hold_expiry.process_due_holds(session, datetime.now(SGT))
+        except Exception as error:  # recorded and asserted below
+            errors.append(error)
+
+    operation = Session(engine)
+    try:
+        lock_event(operation, second_event)
+        worker = threading.Thread(target=expire_batch)
+        worker.start()
+        _wait_for_a_lock_wait(engine)
+        try:
+            lock_venue(operation, venue_id)
+            operation.commit()
+        except Exception as error:  # a deadlock is reported to one of the two sessions
+            errors.append(error)
+            operation.rollback()
+    finally:
+        operation.close()
+    worker.join(timeout=30)
+
+    try:
+        assert not worker.is_alive()
+        assert errors == []
+        with Session(engine) as session:
+            assert [session.get(VenueBooking, item).status for item in (first, second)] == [
+                "expired",
+                "expired",
+            ]
+            for booking_id in (first, second):
+                assert (
+                    session.scalar(
+                        select(func.count(Notification.id)).where(
+                            Notification.dedupe_key == f"arrangement_hold_expired:{booking_id}"
+                        )
+                    )
+                    == 1
+                )
+    finally:
+        app.extensions["engine"].dispose()
