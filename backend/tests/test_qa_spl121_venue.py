@@ -35,6 +35,8 @@ def notices(app, account=base.COORDINATOR):
                 .where(
                     Notification.recipient_account_id == account,
                     Notification.dedupe_key.like("arrangement_%"),
+                    # SPL-133's hold notices are asserted in its own suite.
+                    ~Notification.dedupe_key.like("arrangement_hold_%"),
                 )
                 .order_by(Notification.id)
             )
@@ -396,9 +398,10 @@ def test_qa_spl_121_052_an_unassigned_event_notifies_nobody(app, client):
     with Session(app.extensions["engine"]) as session:
         # SPL-104's Venue Staff notice of the booking request is the only notice; no one is told
         # of the rejection.
-        assert session.scalars(select(Notification.dedupe_key)).all() == [
-            f"venue_booking_requested:{booking['id']}"
-        ]
+        keys = select(Notification.dedupe_key).where(
+            ~Notification.dedupe_key.like("arrangement_hold_%")
+        )
+        assert session.scalars(keys).all() == [f"venue_booking_requested:{booking['id']}"]
 
 
 # QA-SPL-121-054 | AC5 | BB

@@ -5,6 +5,7 @@ import { defaultRequest, responseError, type ApiRequest } from './api';
 import type { VenueBooking } from './VenueBookingRequest';
 import { ExactBookingTiming, BookingReviewReasons } from './ExactBookingTiming';
 import { BookingReviewFindings, type BookingReviewFinding } from './BookingReviewFindings';
+import { HoldDeadline, holdTime } from './HoldDeadline';
 
 // SPL-81 (CS-E10-S3): Venue Staff review one venue-booking request and approve it with an optional
 // note. SPL-80's pending list links here. SPL-82 (CS-E10-S4) adds Reject beside Approve, with a
@@ -13,7 +14,7 @@ import { BookingReviewFindings, type BookingReviewFinding } from './BookingRevie
 
 type Person = { id: string; name: string };
 type ReviewedBooking = VenueBooking & {
-  requested_by: Person | null; requested_at: string | null;
+  requested_by: Person | null; requested_at: string | null; expires_at?: string | null;
   approved_by: Person | null; approved_at: string | null; approval_note: string | null;
   rejected_by: Person | null; rejected_at: string | null; rejection_reason: string | null;
   rejection_alternative_suggestion: string | null;
@@ -38,6 +39,7 @@ const MAX_REASON_LENGTH = 1000;
 const MAX_SUGGESTION_LENGTH = 1000;
 const STATUS_NAMES: Record<string, string> = {
   requested: 'Requested', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled',
+  expired: 'Expired',
 };
 const SLOT_NAMES: Record<string, string> = { AM: 'AM', PM: 'PM', NIGHT: 'Night' };
 const slotName = (slot: string) => SLOT_NAMES[slot] || slot;
@@ -63,6 +65,8 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
   const [rejecting, setRejecting] = useState(false);
   const [resolvingTiming, setResolvingTiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // SPL-133: reload after a refusal, so a hold that expired meanwhile is shown as Expired.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -76,7 +80,7 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       if (active) setBody(next);
     }).catch(() => { if (active) setError('Could not load this venue-booking request.'); });
     return () => { active = false; };
-  }, [api, bookingId]);
+  }, [api, bookingId, reload]);
 
   async function approve() {
     if (!body || approving) return;
@@ -85,7 +89,11 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
       const response = await api(`/api/venue-bookings/${bookingId}/approve`, {
         method: 'POST', body: JSON.stringify(note.trim() ? { note } : {}),
       });
-      if (!response.ok) { setError(await responseError(response, 'Could not approve this request. Try again.')); return; }
+      if (!response.ok) {
+        setError(await responseError(response, 'Could not approve this request. Try again.'));
+        if (response.status === 409) setReload(value => value + 1);
+        return;
+      }
       const next = await response.json() as { booking?: ReviewedBooking };
       if (!next.booking) throw new Error('Invalid response');
       setBody({ ...body, booking: next.booking });
@@ -153,6 +161,10 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     ['Requested by', booking.requested_by?.name ?? 'Not recorded'],
     ['Requested at', booking.requested_at ? timeName(booking.requested_at) : 'Not recorded'],
     ['Status', STATUS_NAMES[booking.status] || booking.status],
+    // SPL-133 AC2: the hold's deadline while it is Requested, and when it lapsed once Expired.
+    ...(booking.expires_at && (booking.status === 'requested' || booking.status === 'expired')
+      ? [[booking.status === 'expired' ? 'Hold expired' : 'Hold expires', `${holdTime(booking.expires_at)} SGT`] as [string, string]]
+      : []),
   ];
   // SPL-80 AC3: what the event needs of a venue, so the decision can be made here rather than by
   // chasing the coordinator. Empty values are dropped rather than shown as "None", because an
@@ -224,6 +236,14 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
         </span>
       </p>
     )}
+    {booking.status === 'expired' && (
+      <p className="venue-booking-review__outcome venue-booking-review__outcome--rejected" role="status">
+        <X size={16} aria-hidden="true" />
+        <span>This hold expired{booking.expires_at ? ` on ${holdTime(booking.expires_at)} SGT` : ''} before it was approved. Its time is free for other events; the coordinator can request it again.</span>
+      </p>
+    )}
+    {booking.status === 'requested' && booking.expires_at && <HoldDeadline api={api} bookingId={booking.id} expiresAt={booking.expires_at}
+      onChanged={next => setBody({ ...body, booking: next as ReviewedBooking })} />}
     {booking.status === 'requested' && <div className="venue-booking-review__decision">
       {!rejectingForm && (
         <label>Approval note (optional)

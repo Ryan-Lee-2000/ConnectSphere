@@ -209,12 +209,18 @@ def booked_exact(client, event_id, venue_id, start="10:00", end="12:00"):
 def inbox(client, token):
     response = client.get("/api/notifications", headers=headers(token))
     assert response.status_code == 200, response.json
-    return response.json["notifications"]
+    # SPL-133 also tells the requesting coordinator the hold's deadline ("... is held for ...");
+    # that notice is asserted in SPL-133's suite, so this suite reads only SPL-104's.
+    return [n for n in response.json["notifications"] if " is held for " not in n["message"]]
+
+
+# SPL-133 tells the coordinator a hold was created; this suite asserts SPL-104's own notices.
+NOT_HOLD = ~Notification.dedupe_key.like("arrangement_hold_%")
 
 
 def notices(app, *, recipient=None):
     with Session(app.extensions["engine"]) as session:
-        query = select(Notification).order_by(Notification.id)
+        query = select(Notification).where(NOT_HOLD).order_by(Notification.id)
         if recipient:
             query = query.where(Notification.recipient_account_id == recipient)
         return [
@@ -285,7 +291,7 @@ def test_qa_spl_104_005_request_notice_is_keyed_to_the_new_booking(app, client):
     event_id, venue_id = make_event(app), add_venue(app)
     booking_id = booked(client, event_id, venue_id)
     with Session(app.extensions["engine"]) as session:
-        rows = session.scalars(select(Notification)).all()
+        rows = session.scalars(select(Notification).where(NOT_HOLD)).all()
     assert sorted(row.recipient_account_id for row in rows) == sorted([STAFF_A, STAFF_B])
     assert {row.event_request_id for row in rows} == {event_id}
     assert {row.dedupe_key for row in rows} == {f"venue_booking_requested:{booking_id}"}

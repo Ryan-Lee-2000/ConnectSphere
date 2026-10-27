@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactN
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 import { ChangeRequestsPanel } from './ChangeRequests';
+import { RegistrationAttendees } from './RegistrationAttendees';
 import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { SignificantEventChanges } from './SignificantEventChanges';
@@ -457,6 +458,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
   const [events, setEvents] = useState<AssignedEvent[] | null>(null);
   const [event, setEvent] = useState<AssignedEventDetail | null>(null);
+  const [registrationListAvailable, setRegistrationListAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -480,6 +482,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
   // SPL-79: whether the event, as loaded, was already at a stage that can hold a venue booking.
   const [bookingStageOnLoad, setBookingStageOnLoad] = useState(false);
   const [arrangementRevision, setArrangementRevision] = useState(0);
+  const [registrationListRevision, setRegistrationListRevision] = useState(0);
   const [editingInformation, setEditingInformation] = useState(false);
   const [savingInformation, setSavingInformation] = useState(false);
   const [information, setInformation] = useState({
@@ -512,6 +515,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     let active = true;
     setEvents(null);
     setEvent(null);
+    setRegistrationListAvailable(false);
     setError(null);
     setNotice(null);
     setClarification('');
@@ -535,6 +539,11 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         } else if (eventId === undefined && Array.isArray(body?.events)) {
           setEvents(body.events);
         } else if (eventId !== undefined && body?.event) {
+          // Capability-gating avoids calling a route that an older backend revision does not yet
+          // have while frontend and backend revisions overlap during a rolling deployment.
+          setRegistrationListAvailable(
+            response.headers?.get('X-ConnectSphere-Registration-List') === 'available',
+          );
           setEvent(body.event);
           setBookingStageOnLoad(VENUE_BOOKING_STAGES.has(body.event.status));
         } else {
@@ -929,7 +938,14 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {bookingStageOnLoad && <VenueArrangements key={`${event.id}-${arrangementRevision}`} api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
-      {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id} />}
+      {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id}
+        // The settings and attendee list have separate APIs, so a successful save must invalidate
+        // the read-only list explicitly instead of leaving its enabled state or capacity stale.
+        onSaved={() => setRegistrationListRevision(value => value + 1)} />}
+      {/* SPL-120: the read-only list is useful throughout the assigned event lifecycle. Its API
+          independently rechecks the current assignment before returning attendee information. */}
+      {registrationListAvailable && <RegistrationAttendees key={`registration-${event.id}-${registrationListRevision}`} accessToken={accessToken} eventId={event.id}
+        endpoint={`/api/event-requests/assigned/${event.id}/registrations`} request={api} />}
       {/* SPL-112: decisions refresh event readiness and arrangement flags. */}
       {showChangeRequests
         ? <ChangeRequestsPanel api={api} eventId={event.id} eventStatus={event.status}

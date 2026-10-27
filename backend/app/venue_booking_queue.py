@@ -134,6 +134,8 @@ def _queue_item(session: Session, booking: VenueBooking, event: EventRequest) ->
             {"id": requester.id, "name": requester.display_name} if requester else None
         ),
         "requested_at": _timestamp(booking.requested_at),
+        # SPL-133 AC2: when the hold expires, so Venue Staff can decide before then.
+        "expires_at": _timestamp(booking.expires_at),
         # SPL-89's stored marker, so a request an operational block has invalidated is visible as
         # such in the queue rather than only after opening it (Q120).
         "requires_review": booking.requires_review,
