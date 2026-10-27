@@ -432,6 +432,7 @@ def test_qa_spl_135_009_context_presents_venue_capacity_layout_restrictions_acce
         "reserved": 4,
         "essentiality": "essential",
         "status": "reserved",
+        "notes": None,
     }
 
 
