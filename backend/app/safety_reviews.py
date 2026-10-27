@@ -394,6 +394,7 @@ def _event_context(event: EventRequest) -> dict[str, Any]:
             "reserved": sum(remaining_quantity(reservation) for reservation in line.reservations),
             "essentiality": line.essentiality,
             "status": line.status,
+            "notes": line.notes,
         }
         for line in event.equipment_requirements
         if line.status != "removed"

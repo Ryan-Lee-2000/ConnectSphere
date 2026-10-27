@@ -222,10 +222,10 @@ def _prepare(session, event_id, request_id):
                 )
             value = _requested_value(item.field, item.requested_value)
             (values if item.field in significant.FIELDS else ordinary)[item.field] = value
-    if equipment_items and event.status not in {"planning", "confirmed"}:
+    if equipment_items and event.status not in {"planning", "confirmed", "preparing"}:
         abort(
             409,
-            "Equipment proposals can be accepted in Planning or Confirmed. "
+            "Equipment proposals can be accepted in Planning, Confirmed or Preparing. "
             "Leave them pending or decline them until then.",
         )
     added_type_ids = {

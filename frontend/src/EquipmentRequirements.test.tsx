@@ -29,6 +29,23 @@ function payload(requirements: unknown[] = [unmappedRequirement], removed_requir
 }
 
 describe('EquipmentRequirements', () => {
+  it('[QA-SPL-136] previews a Preparing equipment edit and explains the return to Planning', async () => {
+    const line = { ...unmappedRequirement, equipment_type: microphone, status: 'requested' };
+    const data = { ...payload([line]), event: { ...payload().event, status: 'preparing' } };
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path.endsWith('/significant-changes/preview')) return response({ changes: { quantity: { previous: 4, new: 5 } }, arrangements: [], preview_token: 'token', returns_to_planning: true });
+      if (init?.method === 'PATCH') return response({ released_quantity: 0 });
+      return response(data);
+    });
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<EquipmentRequirements accessToken="fixture" eventId={2} onNavigate={vi.fn()} request={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit requirement' }));
+    fireEvent.change(screen.getByLabelText('Quantity Required'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save requirement' }));
+    await waitFor(() => expect(confirmation).toHaveBeenCalledWith(expect.stringContaining('return from Preparing to Planning')));
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/2/significant-changes', expect.objectContaining({ method: 'PATCH' })));
+  });
+
   // TC-SPL-93-009 — AC2/AC3: the coordinator receives and can read the immutable support history.
   it('[TC-SPL-93-009] shows an unavailable reason, suggestion and later restoration on its own line', async () => {
     const unavailable = {

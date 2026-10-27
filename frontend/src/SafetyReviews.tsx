@@ -7,7 +7,7 @@ type Review = { id: number; status: string; plan: Plan; reason: string | null; s
 type SafetyContext = {
   id: number; name: string; status: string; expected_attendance: number | null; accessibility_needs: string[];
   venues: { name: string; layout: string | null; capacity: number | null; attendance: number | null; restrictions: string | null }[];
-  equipment: { name: string; required: number; reserved: number; essentiality: string | null; status: string }[];
+  equipment: { name: string; required: number; reserved: number; essentiality: string | null; status: string; notes?: string | null }[];
 };
 type QueueItem = { id: number; event: SafetyContext; plan: Plan; submitted_at: string };
 
@@ -29,7 +29,7 @@ function ArrangementEvidence({ context }: { context: SafetyContext }) {
   return <div className="safety-review__evidence" aria-label="Confirmed arrangement evidence">
     <dl className="safety-review__facts"><div><dt>Expected attendance</dt><dd>{context.expected_attendance ?? 'Not recorded'}</dd></div><div><dt>Accessibility needs</dt><dd>{accessibilityNeeds.length ? accessibilityNeeds.join(', ') : 'None recorded'}</dd></div></dl>
     <section><h3>Approved venue arrangements</h3>{venues.length === 0 ? <p>No approved venue arrangement is recorded.</p> : <ul>{venues.map(venue => <li key={`${venue.name}-${venue.layout}`}><strong>{venue.name}</strong><span>{venue.layout ? `${label(venue.layout)} layout` : 'Layout not recorded'} · {venue.capacity ?? 'Capacity not recorded'} capacity · {venue.attendance ?? 'Attendance not recorded'} attending</span><small>{venue.restrictions || 'No venue restrictions recorded; address this in the safety plan.'}</small></li>)}</ul>}</section>
-    <section><h3>Technical arrangements</h3>{equipment.length === 0 ? <p>No equipment requirements are recorded.</p> : <ul>{equipment.map(item => <li key={`${item.name}-${item.status}`}><strong>{item.name}</strong><span>{item.reserved}/{item.required} reserved · {label(item.essentiality || 'undecided')} · {label(item.status)}</span></li>)}</ul>}</section>
+    <section><h3>Technical arrangements</h3>{equipment.length === 0 ? <p>No equipment requirements are recorded.</p> : <ul>{equipment.map(item => <li key={`${item.name}-${item.status}`}><strong>{item.name}</strong><span>{item.reserved}/{item.required} reserved · {label(item.essentiality || 'undecided')} · {label(item.status)}</span>{item.notes && <small>Technical notes: {item.notes}</small>}</li>)}</ul>}</section>
   </div>;
 }
 

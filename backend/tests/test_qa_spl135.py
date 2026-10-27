@@ -223,6 +223,72 @@ def review_count(app, event_id):
         )
 
 
+def test_spl136_technical_notes_change_invalidates_safety_approval(app, client):
+    """Changing technical notes must make the previous Safety decision stale."""
+    event_id = ready_event(app)
+    submitted = submit(client, event_id)
+    assert submitted.status_code == 200, submitted.json
+    review_id = submitted.json["review"]["id"]
+    assert decide(client, review_id, "approved").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        line = session.scalar(
+            select(EquipmentRequirement).where(EquipmentRequirement.event_request_id == event_id)
+        )
+        line.notes = "Keep cables clear of the exit"
+        session.commit()
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+    assert response.status_code == 409, response.json
+    assert "no longer current" in response.json["error"]
+
+
+def test_spl136_preparing_notes_change_requires_new_safety_decision(app, client):
+    """A nonessential unreserved line must still invalidate the old Safety approval."""
+    event_id = ready_event(app)
+    with Session(app.extensions["engine"]) as session:
+        line = EquipmentRequirement(
+            event_request_id=event_id,
+            equipment_type="Display screen",
+            equipment_type_id=1,
+            quantity=1,
+            required_start_date=EVENT_DATE,
+            required_end_date=EVENT_DATE,
+            status="requested",
+            essentiality="non_essential",
+        )
+        session.add(line)
+        session.commit()
+        line_id = line.id
+    submitted = submit(client, event_id)
+    assert submitted.status_code == 200, submitted.json
+    review_id = submitted.json["review"]["id"]
+    assert decide(client, review_id, "approved").status_code == 200
+    assert (
+        client.post(
+            f"/api/event-requests/{event_id}/begin-preparation", headers=headers()
+        ).status_code
+        == 200
+    )
+    endpoint = f"/api/event-requests/assigned/{event_id}/significant-changes"
+    payload = {"equipment_requirement_id": line_id, "values": {"notes": "Keep exit clear"}}
+    preview = client.post(endpoint + "/preview", headers=headers(), json=payload)
+    assert preview.status_code == 200 and preview.json["returns_to_planning"]
+    saved = client.patch(
+        endpoint,
+        headers=headers(),
+        json={**payload, "preview_token": preview.json["preview_token"]},
+    )
+    assert saved.status_code == 200, saved.json
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event.status == "planning"
+        # Model successful reconfirmation; the unchanged stock must not hide the notes change.
+        event.status = "confirmed"
+        session.commit()
+    result = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+    assert result.status_code == 409, result.json
+    assert "no longer current" in result.json["error"]
+
+
 def save_significant_change(client, event_id, values):
     """Apply the real significant-change workflow, including its server-issued preview token."""
 

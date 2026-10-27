@@ -318,7 +318,9 @@ def _assigned_planning_event(
     )
     if event is None or not is_assigned_coordinator(session, event_request_id, g.user_id):
         abort(404, "Assigned event not found.")
-    if event.status != PLANNING and not (allow_confirmed and event.status == "confirmed"):
+    if event.status != PLANNING and not (
+        allow_confirmed and event.status in {"confirmed", "preparing"}
+    ):
         abort(409, "Equipment requirements can only be planned for an event in Planning.")
     if event.proposed_date is None:
         abort(409, "Record the event date before planning equipment requirements.")

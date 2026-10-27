@@ -208,8 +208,8 @@ def prepare_change(
     if equipment_id is not None:
         if isinstance(equipment_id, bool) or not isinstance(equipment_id, int) or equipment_id <= 0:
             abort(400, "Choose a valid equipment requirement.")
-        if event.status not in {"planning", "confirmed"}:
-            abort(409, "Equipment requirements can only be edited in Planning or Confirmed.")
+        if event.status not in {"planning", "confirmed", "preparing"}:
+            abort(409, "Equipment can only be edited in Planning, Confirmed or Preparing.")
         line, equipment_type = _locked_editable_requirement(session, event, equipment_id)
         values = _update_attributes(session, event, line, raw)
         changed = _changed_values(line, values)

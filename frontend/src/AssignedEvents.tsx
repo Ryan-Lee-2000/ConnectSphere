@@ -910,7 +910,7 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {event.status === 'planning' && event.safety_rework && <SafetyReviewPanel key={`safety-${event.id}-${event.status}-rework`} accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}
       <EquipmentReadinessPanel event={event} />
       {ACTIVE_EVENT_STATUSES.has(event.status) && <SignificantEventChanges key={event.id} event={event} api={api} onSaved={updated => { setEvent(updated); setConfirmingEvent(false); setArrangementRevision(value => value + 1); }} />}
-      {event.status === 'confirmed' && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
+      {['confirmed', 'preparing'].includes(event.status) && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
       {/* SPL-136: Planning normally has no Safety panel. A Safety decision that reopened it is
           rendered above with its reason; otherwise the Safety panel returns after reconfirmation. */}
       {event.status === 'confirmed' && <SafetyReviewPanel key={`safety-${event.id}-${event.status}-current`} accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}

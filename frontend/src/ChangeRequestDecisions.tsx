@@ -9,7 +9,7 @@ type Preview = {
   arrangements: { kind: string; id: number; name: string; reason: string }[];
   returns_to_planning: boolean;
 };
-const ACTIVE = new Set(['submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'postponed']);
+const ACTIVE = new Set(['submitted', 'under_review', 'returned_for_clarification', 'approved', 'planning', 'confirmed', 'preparing', 'postponed']);
 
 export function ChangeRequestDecisions({ api, eventId, eventStatus, request, onSaved, onReload }: {
   api: ApiRequest; eventId: number; eventStatus: string; request: ChangeRequest;
@@ -57,7 +57,7 @@ export function ChangeRequestDecisions({ api, eventId, eventStatus, request, onS
     <p><strong>{request.status === 'closed' ? 'Closed' : 'Pending'}</strong> · submitted {new Date(request.submitted_at).toLocaleString()}</p>
     {request.items.map(item => {
       const decided = item.decision && item.decision !== 'pending';
-      const equipmentBlocked = item.field.startsWith('equipment:') && !['planning', 'confirmed'].includes(eventStatus);
+      const equipmentBlocked = item.field.startsWith('equipment:') && !['planning', 'confirmed', 'preparing'].includes(eventStatus);
       return <div key={item.id}>
         <ChangeRequestItems items={[item]} />
         {decided ? <div>
@@ -74,7 +74,7 @@ export function ChangeRequestDecisions({ api, eventId, eventStatus, request, onS
               <option value="declined">Decline</option>
             </select>
           </label>
-          {equipmentBlocked && <p className="notice">Equipment acceptance is available in Planning or Confirmed. You can leave this item pending or decline it.</p>}
+          {equipmentBlocked && <p className="notice">Equipment acceptance is available in Planning, Confirmed or Preparing. You can leave this item pending or decline it.</p>}
           {choices[item.id]?.decision === 'declined' && <label className="field"><span>Decline reason for {item.field_label}</span>
             <textarea maxLength={1000} value={choices[item.id]?.reason ?? ''} onChange={e => update(item.id, { reason: e.target.value })} />
           </label>}
