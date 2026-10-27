@@ -92,7 +92,7 @@ it('QA-SPL-120-014: renders the registration list inside the assigned event page
 it('QA-SPL-120-015: loads the panel through the assigned-event endpoint', async () => {
   const request = renderPage();
   await screen.findByRole('heading', { name: 'Registered attendees' });
-  expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/120/registrations');
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/event-requests/assigned/120/registrations'));
   expect(request).not.toHaveBeenCalledWith('/api/organisation/events/120/registrations');
 });
 
