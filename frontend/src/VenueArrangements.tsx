@@ -108,6 +108,9 @@ function ArrangementCard({ api, eventId, eventStatus, arrangement, onChanged }: 
       <span>{booking.timing ? dateName(booking.date) : `${dateName(booking.date)} · ${booking.event_slots.map(slot => SLOT_NAMES[slot] || slot).join(', ')}`} · {layoutName(booking.layout)}</span>
       <span>{booking.expected_attendance} attendees{facilities.length ? ` · Facilities: ${facilities.join(', ')}` : ''}</span>
       <span className="venue-booking-panel__status">Status: <strong>{status.label}</strong></span>
+      {/* SPL-133 AC2/AC6: the hold's deadline while Requested; once Expired, a new request is needed. */}
+      {booking.status === 'requested' && booking.expires_at && <span className="venue-booking-panel__deadline">Hold expires {timeName(booking.expires_at)} SGT unless Venue Staff approve it first.</span>}
+      {booking.status === 'expired' && <span className="venue-booking-panel__deadline">The hold expired{booking.expires_at ? ` on ${timeName(booking.expires_at)} SGT` : ''}. Its time is released; request the venue again if it is still needed.</span>}
     </div>
     {booking.timing && <ExactBookingTiming timing={booking.timing} />}
     <BookingReviewReasons reasons={booking.review_reasons} />
@@ -136,7 +139,8 @@ function ArrangementCard({ api, eventId, eventStatus, arrangement, onChanged }: 
       <p className="venue-booking-history__heading">History</p>
       <ol className="venue-booking-history__list" aria-label={`History of ${booking.venue.name} booking`}>
         {history.map((entry, index) => <li key={`${entry.changed_at}-${index}`}>
-          <strong>{entry.status_label}</strong>
+          {/* SPL-133 AC3: a deadline move keeps the status, so name the action instead. */}
+          <strong>{entry.action === 'change_deadline' ? 'Hold deadline changed' : entry.status_label}</strong>
           <span>{entry.actor.name} · {timeName(entry.changed_at)}</span>
           {entry.note && <span className="venue-booking-history__note">{entry.note}</span>}
         </li>)}

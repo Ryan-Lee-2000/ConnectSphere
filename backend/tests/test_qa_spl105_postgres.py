@@ -91,10 +91,18 @@ def test_qa_spl_105_081_migration_adds_paired_completion_columns(engine):
     )
     checks = {check["name"] for check in inspector.get_check_constraints("event_requests")}
     assert "ck_event_requests_completion_recorded" in checks
+    # The database is at the repository head, which includes s4_event_completion; naming the head
+    # itself would break with every later migration.
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
+    head = scripts.get_current_head()
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "s4_event_completion"
-        )
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == head
+    assert "s4_event_completion" in {
+        rev.revision for rev in scripts.iterate_revisions(head, "base")
+    }
 
 
 # QA-SPL-105-082 | AC4 | WB

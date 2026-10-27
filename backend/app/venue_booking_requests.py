@@ -38,6 +38,7 @@ from app.venue_arrangements import (
 )
 from app.venue_booking_history import record_booking_transition
 from app.venue_conflicts import VenueOccupancyConflict, claim_venue_occupancy
+from app.venue_hold_expiry import hold_created
 
 PLANNING = "planning"
 REQUESTED = "requested"
@@ -134,6 +135,8 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 changed_at=booking.requested_at,
             )
             add_venue_booking_notices(session, booking, event, kind="requested")
+            # SPL-133 AC1/AC8: the hold's deadline, and the coordinator is told it.
+            hold_created(session, booking, event)
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking)), 201
 
@@ -183,6 +186,8 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
             {"id": requester.id, "name": requester.display_name} if requester else None
         ),
         "requested_at": _timestamp(booking.requested_at),
+        # SPL-133 AC2: when the hold expires. Kept after approval, but applies only while Requested.
+        "expires_at": _timestamp(booking.expires_at),
         "requires_review": booking.requires_review,
         "review_trigger_block_id": booking.review_trigger_block_id,
         "review_marked_at": _timestamp(booking.review_marked_at),
@@ -384,5 +389,7 @@ def _request_exact(session, event, venue, layout_name, attendee_count, facilitie
         changed_at=booking.requested_at,
     )
     add_venue_booking_notices(session, booking, event, kind="requested")
+    # SPL-133 AC1/AC8: the hold's deadline, and the coordinator is told it.
+    hold_created(session, booking, event)
     session.commit()
     return jsonify(booking=serialize_venue_booking(session, booking)), 201

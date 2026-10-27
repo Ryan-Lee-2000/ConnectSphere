@@ -350,6 +350,8 @@ def main():
             "backend/tests/test_qa_spl123_postgres.py",
             # SPL-105: racing completions complete once; the completion migration round-trips.
             "backend/tests/test_qa_spl105_postgres.py",
+            # SPL-133: expiry racing approval expires once; the hold-expiry migration and cutover.
+            "backend/tests/test_qa_spl133_postgres.py",
             "-q",
         )
     elif cmd == "dev":

@@ -20,6 +20,7 @@ from flask import Flask, abort, g, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import venue_hold_expiry
 from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID
 from app.event_requests import SINGAPORE
@@ -30,6 +31,7 @@ from app.venue_booking_queue import decision_event_details
 from app.venue_booking_requests import serialize_venue_booking
 from app.venue_booking_status import _review
 from app.venue_conflicts import VenueOccupancyConflict, transition_booking_status
+from app.venue_hold_expiry import EXPIRED, HOLD_EXPIRED, aware, expire_booking, format_deadline
 from app.venue_slot_locks import lock_venue_slots
 
 PLANNING = "planning"
@@ -69,6 +71,12 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session:
             # Row lock: a concurrent approval or withdrawal waits here, then sees the outcome (AC7).
             booking = _booking(session, booking_id, lock=True)
+            # SPL-133 AC4/AC10: approval must commit strictly before the deadline. A due hold
+            # that the request hook has not reached yet is expired here, under the same lock.
+            if expire_booking(session, booking, venue_hold_expiry._now()):
+                session.commit()
+            if booking.status == EXPIRED:
+                abort(409, HOLD_EXPIRED.format(deadline=format_deadline(booking.expires_at)))
             if booking.status != REQUESTED:
                 abort(409, ONLY_REQUESTED)
             event = session.get(EventRequest, booking.event_request_id)
@@ -85,6 +93,15 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                     f"{SLOT_NAMES.get(conflict.slot, conflict.slot)}.",
                     conflict={"date": conflict.day.isoformat(), "slot": conflict.slot},
                 ), 409
+            # SPL-133 AC4/AC10: the decision is taken now, after the blocking checks above. If they
+            # ran past the deadline, nothing of the approval is kept and the hold expires instead.
+            decided_at = venue_hold_expiry._now()
+            if booking.expires_at is not None and decided_at >= aware(booking.expires_at):
+                session.rollback()
+                booking = _booking(session, booking_id, lock=True)
+                if expire_booking(session, booking, decided_at):
+                    session.commit()
+                abort(409, HOLD_EXPIRED.format(deadline=format_deadline(booking.expires_at)))
             booking.approved_by_account_id = g.user_id
             booking.approved_at = datetime.now(SINGAPORE)
             booking.approval_note = note
