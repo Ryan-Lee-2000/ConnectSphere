@@ -652,6 +652,91 @@ def test_qa_spl_136_002_old_safety_rejection_does_not_mislabel_a_later_significa
     assert response.json["event"]["safety_rework"] is False
 
 
+# QA-SPL-136-003 | AC3 | regression
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("preferred_room_layout", "theatre"),
+        ("required_facilities", ["PA system"]),
+        ("location_preference", "Marina Centre"),
+    ],
+)
+def test_qa_spl_136_003_revalidated_arrangement_preferences_cannot_reuse_old_safety_approval(
+    app, client, field, value
+):
+    """Every safety-relevant venue preference needs a renewed Safety decision after Planning."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    assert (
+        client.post(
+            f"/api/event-requests/{event_id}/begin-preparation", headers=headers()
+        ).status_code
+        == 200
+    )
+
+    changed = save_significant_change(client, event_id, {field: value})
+    assert changed.status_code == 200, changed.json
+    assert changed.json["event"]["status"] == "planning"
+    with Session(app.extensions["engine"]) as session:
+        booking = session.scalar(
+            select(VenueBooking).where(VenueBooking.event_request_id == event_id)
+        )
+        # This models the separate venue/technical revalidation workflows.  They make the event
+        # confirmable again, but must not make the old safety approval current.
+        booking.requires_review = False
+        session.query(VenueBookingReviewFinding).filter_by(booking_id=booking.id).delete()
+        requirement = session.scalar(
+            select(EquipmentRequirement).where(EquipmentRequirement.event_request_id == event_id)
+        )
+        requirement.status = "reserved"
+        requirement.review_reason = None
+        requirement.review_flagged_at = None
+        session.commit()
+
+    assert (
+        client.post(f"/api/event-requests/{event_id}/confirm", headers=headers()).status_code == 200
+    )
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert "no longer current" in response.json["error"]
+
+
+# QA-SPL-136-004 | AC3 | boundary
+def test_qa_spl_136_004_name_only_correction_keeps_an_approved_safety_review_current(app, client):
+    """A cosmetic name correction is deliberately outside the Safety arrangement boundary."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, event_id).name = "Northstar Leadership Forum 2026"
+        session.commit()
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "preparing"
+
+
+# QA-SPL-136-005 | AC4 | API contract
+def test_qa_spl_136_005_read_returns_latest_review_and_accountable_history(app, client):
+    """The current review is convenient at the top level while the complete audit history remains readable."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "changes_requested", "Use the east exit.").status_code == 200
+
+    response = client.get(f"/api/event-requests/{event_id}/safety-review", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["review"]["id"] == review_id
+    assert [item["id"] for item in response.json["reviews"]] == [review_id]
+    assert response.json["reviews"][0]["reason"] == "Use the east exit."
+
+
 # QA-SPL-135-019 | AC4 | security
 @pytest.mark.parametrize(("identity", "expected"), [("other", 404), ("lead", 403), ("safety", 403)])
 def test_qa_spl_135_019_every_other_entry_path_is_refused(app, client, identity, expected):

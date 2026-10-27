@@ -114,3 +114,16 @@ it('QA-SPL-135-023 renders the venue and technical evidence returned by the real
   expect(screen.getByText(/4\/4 reserved · Essential · Reserved/)).toBeTruthy();
   vi.unstubAllGlobals();
 });
+
+// QA-SPL-136-006 | AC1, AC4 | UI regression
+it('QA-SPL-136-006 explains a returned-to-Planning safety decision and retains its evidence', async () => {
+  const rejected = { ...pendingReview, status: 'changes_requested', reason: 'Keep the cable route clear of the east exit.', decided_at: '2026-10-25T10:00:00+08:00', decided_by: { id: 'safety', name: 'Samira Hassan' } };
+  const planningContext = { ...context, status: 'planning' };
+  vi.stubGlobal('fetch', api({ 'GET /api/event-requests/71/safety-review': () => response({ event: planningContext, review: rejected, reviews: [rejected] }) }));
+  render(<SafetyReviewPanel accessToken="token" eventId={71} onStatusChange={() => undefined} />);
+  expect(await screen.findByText('Safety decision needs action')).toBeTruthy();
+  expect(screen.getByText('Keep the cable route clear of the east exit.')).toBeTruthy();
+  expect(screen.getByLabelText('Safety rework next steps')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Begin preparation' })).toBeNull();
+  vi.unstubAllGlobals();
+});

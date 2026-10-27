@@ -348,6 +348,9 @@ def _prepare(session, event_id, request_id):
         "preview": {
             "preview_token": token,
             "arrangements": arrangements,
-            "returns_to_planning": has_significant_change and event.status == "confirmed",
+            # Keep the preview aligned with the shared significant-change transition.  A
+            # Preparing event is also returned to Planning before accepted changes are saved.
+            "returns_to_planning": has_significant_change
+            and event.status in {"confirmed", "preparing"},
         },
     }

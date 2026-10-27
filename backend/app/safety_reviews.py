@@ -74,8 +74,9 @@ def register_safety_review_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session:
             event = _visible_event(session, event_request_id)
             review = _latest_review(session, event.id)
-            # SPL-136 AC4: the active review controls the gate, while earlier review
-            # versions remain available as accountable evidence of the rework cycle.
+            # SPL-136 AC4: `review` is the convenient latest-item alias; `reviews` deliberately
+            # includes that item as the complete newest-first accountable history.  The UI omits
+            # reviews[0] from its "previous" list rather than asking API clients to reconstruct it.
             reviews = _review_history(session, event.id)
             return jsonify(
                 event=_event_context(event),
@@ -300,6 +301,19 @@ def _fingerprint(event: EventRequest) -> str:
     # server-side snapshot also prevents a re-confirmation from reviving approval for a changed
     # date/time or a replacement booking that happens to look the same in the interface.
     context = _event_context(event)
+    # Keep the reviewer-facing context readable and complete, but hash only facts that affect
+    # the safe arrangement.  Cosmetic fields such as the event name and workflow status must
+    # not expire a valid approval; venue preferences must, even after other teams revalidate
+    # the affected booking or equipment line.
+    safety_context = {
+        "expected_attendance": context["expected_attendance"],
+        "accessibility_needs": context["accessibility_needs"],
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": sorted(event.required_facilities or [], key=str.casefold),
+        "location_preference": event.location_preference,
+        "venues": context["venues"],
+        "equipment": context["equipment"],
+    }
     payload = {
         "schedule": {
             "event_id": event.id,
@@ -307,7 +321,7 @@ def _fingerprint(event: EventRequest) -> str:
             "start_time": event.start_time,
             "end_time": event.end_time,
         },
-        "safety_context": context,
+        "safety_context": safety_context,
         "bookings": [
             {
                 "id": booking.id,
