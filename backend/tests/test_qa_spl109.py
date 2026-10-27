@@ -99,6 +99,11 @@ def test_spl136_preparing_equipment_change_returns_to_planning(app, client):
     with Session(app.extensions["engine"]) as session:
         session.get(EventRequest, event).status = "preparing"
         session.commit()
+    # The coordinator must be able to open the page before editing the requirement.
+    page = client.get(
+        f"/api/event-requests/{event}/equipment-requirements", headers=venue.base.headers()
+    )
+    assert page.status_code == 200, page.json
     check = preview(client, event, {"quantity": 5}, equipment_requirement_id=line)
     assert check.status_code == 200, check.json
     assert check.json["returns_to_planning"] is True
