@@ -44,6 +44,7 @@ from app.models import (
     Role,
 )
 from app.notifications import add_assignment_change_notices, add_coordinator_assigned_notice
+from app.registration_lists import serialize_registration_list
 from app.slots import slots_for_range
 
 SUBMITTED = "submitted"
@@ -118,7 +119,31 @@ def register_coordinator_assignment_routes(app: Flask) -> None:
             # response never confirms that a protected request exists.
             if event is None:
                 abort(404, "Assigned event not found.")
-            return jsonify(event=_serialize_assigned_event_detail(event))
+            response = jsonify(event=_serialize_assigned_event_detail(event))
+            response.headers["X-ConnectSphere-Registration-List"] = "available"
+            return response
+
+    @app.get("/api/event-requests/assigned/<int:event_request_id>/registrations")
+    @require_roles(Role.EVENT_COORDINATOR)
+    def get_my_assigned_event_registrations(event_request_id: int):
+        """List registrations for an event currently assigned to the caller."""
+
+        if event_request_id > MAX_EVENT_REQUEST_ID:
+            abort(404, "Assigned event not found.")
+        with Session(app.extensions["engine"]) as session:
+            event = session.scalar(
+                select(EventRequest)
+                .join(EventCoordinatorAssignment)
+                .where(
+                    EventRequest.id == event_request_id,
+                    EventCoordinatorAssignment.coordinator_account_id == g.user_id,
+                )
+            )
+            # A missing event and another coordinator's event share one response so probing an
+            # identifier never reveals either the event or its attendee information.
+            if event is None:
+                abort(404, "Assigned event not found.")
+            return jsonify(registration_list=serialize_registration_list(session, event))
 
     @app.get("/api/event-requests/awaiting-assignment")
     @require_roles(Role.EVENT_OPERATIONS_MANAGER)
