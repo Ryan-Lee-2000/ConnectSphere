@@ -79,7 +79,7 @@ export function SignificantEventChanges<T extends EventValues>({ event, api, onS
         {preview.arrangements.length ? <ul>{preview.arrangements.map(item => <li key={`${item.kind}-${item.id}`}>
           <strong>{item.name} ({item.kind} #{item.id})</strong>: {item.reason}
         </li>)}</ul> : <p>No existing arrangement requires review for these changes.</p>}
-        {preview.returns_to_planning && <p><strong>This event will return from Confirmed to Planning.</strong></p>}
+        {preview.returns_to_planning && <p><strong>This event will return from {event.status === 'preparing' ? 'Preparing' : 'Confirmed'} to Planning.</strong></p>}
         <p>Cancel saves nothing.</p>
       </div>}
       {error && <p className="error" role="alert">{error}</p>}

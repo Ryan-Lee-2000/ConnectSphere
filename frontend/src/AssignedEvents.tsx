@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { defaultRequest, type ApiRequest } from './api';
 import { ClarificationHistory, type Clarification } from './ClarificationHistory';
 import { ChangeRequestsPanel } from './ChangeRequests';
@@ -93,6 +93,7 @@ export type AssignedEventDetail = AssignedEvent & Partial<{
   equipment_requirements: EquipmentLine[];
   equipment_readiness: EquipmentReadiness;
   confirmation_readiness: ConfirmationReadiness;
+  safety_rework: boolean;
   confirmed_by: { id: string; name: string } | null;
   confirmed_at: string | null;
   cancelled_by: { id: string; name: string } | null;
@@ -283,8 +284,9 @@ function EquipmentReadinessPanel({ event }: { event: AssignedEventDetail }) {
 
 // SPL-85 (CS-E07-S3): the confirmation checklist and the two-step Confirm action. The button is
 // only enabled when the server reports no blockers, and the server re-checks on every attempt.
-function EventConfirmationPanel({ readiness, confirming, transitioning, onStart, onCancel, onConfirm }: {
+function EventConfirmationPanel({ readiness, safetyRework, confirming, transitioning, onStart, onCancel, onConfirm }: {
   readiness: ConfirmationReadiness | undefined;
+  safetyRework?: boolean;
   confirming: boolean;
   transitioning: boolean;
   onStart: () => void;
@@ -292,29 +294,31 @@ function EventConfirmationPanel({ readiness, confirming, transitioning, onStart,
   onConfirm: () => void;
 }) {
   if (!readiness) return null;
+  const action = safetyRework ? 'Confirm corrected arrangements' : 'Confirm event';
+  const title = safetyRework ? 'Confirm corrected arrangements' : 'Confirm this event';
   return <section className="equipment-readiness event-confirmation" aria-labelledby="event-confirmation-title">
     <header className="equipment-readiness__header">
-      <div><p className="eyebrow">Event confirmation</p><h2 id="event-confirmation-title">Confirm this event</h2></div>
+      <div><p className="eyebrow">Event confirmation</p><h2 id="event-confirmation-title">{title}</h2></div>
       <strong className={`equipment-readiness__status equipment-readiness__status--${readiness.ready ? 'ready' : 'blocked'}`}>
         {readiness.ready ? 'Ready to confirm' : 'Not ready to confirm'}
       </strong>
     </header>
-    <p className="equipment-readiness__scope">Confirmation needs an Approved venue booking and every essential equipment requirement fully reserved, with nothing awaiting review. Registration can be set up afterwards.</p>
+    <p className="equipment-readiness__scope">{safetyRework ? 'Safety returned this event to Planning. Reconfirming checks that its corrected venue and essential technical arrangements are ready before a renewed safety review.' : 'Confirmation needs an Approved venue booking and every essential equipment requirement fully reserved, with nothing awaiting review. Registration can be set up afterwards.'}</p>
     {readiness.blockers.length > 0 && <div className="equipment-readiness__blockers">
       <h3>What still blocks confirmation</h3>
       <ul>{readiness.blockers.map(blocker => <li key={`${blocker.code}-${blocker.booking_id ?? blocker.requirement_id ?? 'event'}`}>{blocker.message}</li>)}</ul>
     </div>}
     {!confirming && <div className="organisation-events__actions">
       <button type="button" className="button button--primary" disabled={!readiness.ready || transitioning} onClick={onStart}>
-        Confirm event
+        {action}
       </button>
     </div>}
-    {confirming && <div className="rejection-form" role="group" aria-label="Confirm the event">
-      <p><strong>Confirm this event?</strong> The organiser will see that it is going ahead with these arrangements. Registration can then be set up.</p>
+    {confirming && <div className="rejection-form" role="group" aria-label={safetyRework ? action : 'Confirm the event'}>
+      <p><strong>{title}?</strong> {safetyRework ? 'This does not start preparation. It makes the corrected arrangement available for a renewed Safety review.' : 'The organiser will see that it is going ahead with these arrangements. Registration can then be set up.'}</p>
       <div className="organisation-events__actions">
         <button type="button" className="button button--secondary" disabled={transitioning} onClick={onCancel}>Keep planning</button>
         <button type="button" className="button button--primary" disabled={transitioning} onClick={onConfirm}>
-          {transitioning ? 'Confirming…' : 'Confirm'}
+          {transitioning ? 'Confirming…' : safetyRework ? 'Confirm corrected arrangements' : 'Confirm'}
         </button>
       </div>
     </div>}
@@ -486,6 +490,26 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     event_contact_name: '', event_contact_email: '', event_contact_phone: '',
   });
 
+  // Safety decisions are made by a different role. Refresh the authoritative event snapshot when
+  // a coordinator returns to this page so Planning hides confirmed-only controls immediately.
+  const refreshEventDetail = useCallback(async (showError = false) => {
+    if (eventId === undefined) return false;
+    try {
+      const response = await api(`/api/event-requests/assigned/${eventId}`);
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.event) {
+        if (showError) setError('This assigned event is unavailable.');
+        return false;
+      }
+      setEvent(body.event);
+      setBookingStageOnLoad(VENUE_BOOKING_STAGES.has(body.event.status));
+      return true;
+    } catch {
+      if (showError) setError('Could not refresh this event. Try again.');
+      return false;
+    }
+  }, [api, eventId]);
+
   // Refresh recorded requirements on navigation, including entry into search without a remount.
   useEffect(() => {
     let active = true;
@@ -531,6 +555,19 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
     })();
     return () => { active = false; };
   }, [api, eventId, view]);
+
+  useEffect(() => {
+    if (eventId === undefined || view !== 'detail') return;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshEventDetail();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [eventId, refreshEventDetail, view]);
 
   function follow(click: MouseEvent<HTMLAnchorElement>, path: string) {
     click.preventDefault();
@@ -628,6 +665,10 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
 
   async function confirmEvent() {
     if (!event || event.status !== 'planning' || transitioning) return;
+    // A safety return needs the full newly-confirmed detail so its renewed review panel can
+    // appear immediately. Ordinary confirmations already receive everything their existing
+    // view needs from the transition response, so keep that established, single-request flow.
+    const returningFromSafetyReview = event.safety_rework === true;
     setTransitioning(true);
     setError(null);
     setNotice(null);
@@ -642,8 +683,16 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         }
         setConfirmingEvent(false);
       } else if (body?.event) {
-        setEvent(current => ({ ...current, ...body.event, confirmation_readiness: undefined }));
         setConfirmingEvent(false);
+        if (returningFromSafetyReview) {
+          // The confirmation endpoint returns a concise transition payload. Reload the complete
+          // detail record so the renewed Safety panel sees the new Confirmed state immediately.
+          if (!await refreshEventDetail()) {
+            setEvent(current => current && ({ ...current, ...body.event, safety_rework: false, confirmation_readiness: undefined }));
+          }
+        } else {
+          setEvent(current => current && ({ ...current, ...body.event, confirmation_readiness: undefined }));
+        }
         setNotice(body.message || 'Event confirmed.');
       } else {
         setError('Could not confirm the event. Try again.');
@@ -851,12 +900,21 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
         <p className="eyebrow">Event Coordinator</p>
         <h1 id="assigned-events-title">{event.name}</h1>
       </header>
+      {event.status === 'planning' && event.safety_rework && <section className="safety-rework-banner" role="status" aria-label="Safety rework required">
+        <div><p className="eyebrow">Safety rework required</p><h2>This event needs reconfirmation</h2><p>Safety returned it to Planning. Review the decision below, correct the affected arrangements, then confirm the corrected arrangements before submitting a renewed Safety review.</p></div>
+        <a href="#safety-review-title">View Safety decision</a>
+      </section>}
       <EventBrief event={event} />
+      {/* Put the Safety reason ahead of planning controls: this is why a previously Confirmed
+          event came back here, and the coordinator needs it before deciding what to correct. */}
+      {event.status === 'planning' && event.safety_rework && <SafetyReviewPanel key={`safety-${event.id}-${event.status}-rework`} accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}
       <EquipmentReadinessPanel event={event} />
       {ACTIVE_EVENT_STATUSES.has(event.status) && <SignificantEventChanges key={event.id} event={event} api={api} onSaved={updated => { setEvent(updated); setConfirmingEvent(false); setArrangementRevision(value => value + 1); }} />}
-      {event.status === 'confirmed' && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
-      {event.status === 'confirmed' && <SafetyReviewPanel accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}
-      {event.status === 'planning' && <EventConfirmationPanel readiness={event.confirmation_readiness}
+      {['confirmed', 'preparing'].includes(event.status) && <button type="button" className="button button--secondary" onClick={() => onNavigate(`/workspace/assigned-events/${event.id}/equipment-requirements`)}>Edit equipment requirements</button>}
+      {/* SPL-136: Planning normally has no Safety panel. A Safety decision that reopened it is
+          rendered above with its reason; otherwise the Safety panel returns after reconfirmation. */}
+      {event.status === 'confirmed' && <SafetyReviewPanel key={`safety-${event.id}-${event.status}-current`} accessToken={accessToken} eventId={event.id} onStatusChange={status => setEvent(current => current ? { ...current, status, status_label: 'Preparing' } : current)} />}
+      {event.status === 'planning' && <EventConfirmationPanel readiness={event.confirmation_readiness} safetyRework={event.safety_rework}
         confirming={confirmingEvent} transitioning={transitioning}
         onStart={() => { setError(null); setConfirmingEvent(true); }}
         onCancel={() => setConfirmingEvent(false)}

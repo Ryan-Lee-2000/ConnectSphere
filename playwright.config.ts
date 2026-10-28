@@ -6,6 +6,7 @@ export default defineConfig({
     '**/spl110-uat-evidence.spec.ts',
     '**/spl119-uat-evidence.spec.ts',
     '**/spl120-uat-evidence.spec.ts',
+    '**/spl136-uat-evidence.spec.ts',
   ],
   use:{baseURL:'http://127.0.0.1:5173',trace:'retain-on-failure', reducedMotion:'reduce'},
   reporter:[['list'],['html',{open:'never'}]],

@@ -74,7 +74,18 @@ def register_safety_review_routes(app: Flask) -> None:
         with Session(app.extensions["engine"]) as session:
             event = _visible_event(session, event_request_id)
             review = _latest_review(session, event.id)
-            return jsonify(event=_event_context(event), review=_serialize_review(review, event))
+            # SPL-136 AC4: `review` is the convenient latest-item alias; `reviews` deliberately
+            # includes that item as the complete newest-first accountable history.  The UI omits
+            # reviews[0] from its "previous" list rather than asking API clients to reconstruct it.
+            reviews = _review_history(session, event.id)
+            return jsonify(
+                event=_event_context(event),
+                review=_serialize_review(review, event),
+                reviews=[
+                    _serialize_review(item, event, superseded=item.id != review.id)
+                    for item in reviews
+                ],
+            )
 
     @app.post("/api/event-requests/<int:event_request_id>/safety-review")
     @require_roles(Role.EVENT_COORDINATOR)
@@ -94,6 +105,13 @@ def register_safety_review_routes(app: Flask) -> None:
                 and latest.arrangement_fingerprint == _fingerprint(event)
             ):
                 abort(409, "This arrangement already has a safety review awaiting a decision.")
+            if (
+                latest is not None
+                and latest.status == "approved"
+                and latest.arrangement_fingerprint == _fingerprint(event)
+                and latest.plan == plan
+            ):
+                abort(409, "The current safety plan is already approved.")
             now = datetime.now(SINGAPORE)
             review = SafetyReview(
                 event_request_id=event.id,
@@ -270,12 +288,35 @@ def _latest_review(session: Session, event_id: int, lock: bool = False) -> Safet
     return session.scalar(query)
 
 
+def _review_history(session: Session, event_id: int) -> list[SafetyReview]:
+    """Return the newest-first review evidence without treating old versions as actionable."""
+
+    return session.scalars(
+        select(SafetyReview)
+        .where(SafetyReview.event_request_id == event_id)
+        .order_by(SafetyReview.id.desc())
+    ).all()
+
+
 def _fingerprint(event: EventRequest) -> str:
     # Hash every arrangement fact the Safety Officer is shown *and* the durable schedule and
     # allocation identities it approved.  The UI context intentionally stays readable, while this
     # server-side snapshot also prevents a re-confirmation from reviving approval for a changed
     # date/time or a replacement booking that happens to look the same in the interface.
     context = _event_context(event)
+    # Keep the reviewer-facing context readable and complete, but hash only facts that affect
+    # the safe arrangement.  Cosmetic fields such as the event name and workflow status must
+    # not expire a valid approval; venue preferences must, even after other teams revalidate
+    # the affected booking or equipment line.
+    safety_context = {
+        "expected_attendance": context["expected_attendance"],
+        "accessibility_needs": context["accessibility_needs"],
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": sorted(event.required_facilities or [], key=str.casefold),
+        "location_preference": event.location_preference,
+        "venues": context["venues"],
+        "equipment": context["equipment"],
+    }
     payload = {
         "schedule": {
             "event_id": event.id,
@@ -283,7 +324,7 @@ def _fingerprint(event: EventRequest) -> str:
             "start_time": event.start_time,
             "end_time": event.end_time,
         },
-        "safety_context": context,
+        "safety_context": safety_context,
         "bookings": [
             {
                 "id": booking.id,
@@ -356,6 +397,7 @@ def _event_context(event: EventRequest) -> dict[str, Any]:
             "reserved": sum(remaining_quantity(reservation) for reservation in line.reservations),
             "essentiality": line.essentiality,
             "status": line.status,
+            "notes": line.notes,
         }
         for line in event.equipment_requirements
         if line.status != "removed"
@@ -371,7 +413,9 @@ def _event_context(event: EventRequest) -> dict[str, Any]:
     }
 
 
-def _serialize_review(review: SafetyReview | None, event: EventRequest) -> dict[str, Any] | None:
+def _serialize_review(
+    review: SafetyReview | None, event: EventRequest, *, superseded: bool = False
+) -> dict[str, Any] | None:
     if review is None:
         return None
     return {
@@ -386,7 +430,7 @@ def _serialize_review(review: SafetyReview | None, event: EventRequest) -> dict[
             if review.decider
             else None
         ),
-        "current": review.arrangement_fingerprint == _fingerprint(event),
+        "current": not superseded and review.arrangement_fingerprint == _fingerprint(event),
     }
 
 

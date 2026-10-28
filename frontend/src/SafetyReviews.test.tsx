@@ -105,12 +105,27 @@ it('QA-SPL-135-013 keeps a mandatory decision reason beside the Safety Officer c
 it('QA-SPL-135-023 renders the venue and technical evidence returned by the real queue contract', async () => {
   // This mirrors GET /api/safety-reviews: the queue must supply the context, rather than rely on
   // a later detail request or a locally invented placeholder.
-  const queueResponse = { reviews: [{ id: 9, event: context, plan, submitted_at: pendingReview.submitted_at }] };
+  const event = { ...context, equipment: [{ ...context.equipment[0], notes: 'Keep cables clear of the exit' }] };
+  const queueResponse = { reviews: [{ id: 9, event, plan, submitted_at: pendingReview.submitted_at }] };
   vi.stubGlobal('fetch', api({ 'GET /api/safety-reviews': () => response(queueResponse) }));
   render(<SafetyReviewQueue accessToken="safety-token" />);
   fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
   expect(screen.getByText('Harbour Hall')).toBeTruthy();
   expect(screen.getByText(/Theatre layout · 180 capacity · 120 attending/)).toBeTruthy();
   expect(screen.getByText(/4\/4 reserved · Essential · Reserved/)).toBeTruthy();
+  expect(screen.getByText('Technical notes: Keep cables clear of the exit')).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
+// QA-SPL-136-006 | AC1, AC4 | UI regression
+it('QA-SPL-136-006 explains a returned-to-Planning safety decision and retains its evidence', async () => {
+  const rejected = { ...pendingReview, status: 'changes_requested', reason: 'Keep the cable route clear of the east exit.', decided_at: '2026-10-25T10:00:00+08:00', decided_by: { id: 'safety', name: 'Samira Hassan' } };
+  const planningContext = { ...context, status: 'planning' };
+  vi.stubGlobal('fetch', api({ 'GET /api/event-requests/71/safety-review': () => response({ event: planningContext, review: rejected, reviews: [rejected] }) }));
+  render(<SafetyReviewPanel accessToken="token" eventId={71} onStatusChange={() => undefined} />);
+  expect(await screen.findByText('Safety decision needs action')).toBeTruthy();
+  expect(screen.getByText('Keep the cable route clear of the east exit.')).toBeTruthy();
+  expect(screen.getByLabelText('Safety rework next steps')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Begin preparation' })).toBeNull();
   vi.unstubAllGlobals();
 });

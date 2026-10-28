@@ -87,6 +87,14 @@ it('[QA-SPL-112-106] Under Review equipment allows decline but not acceptance', 
 });
 
 // QA-SPL-112-107 | AC5 | BB
+it('[QA-SPL-136] permits equipment decisions during Preparing and warns before saving', async () => {
+  setup({ ...pending, items: [{ ...pending.items[0], field: 'equipment:add:1', field_label: 'Equipment', current_value: null, requested_value: { operation: 'add', equipment_type: 'Screen', quantity: 2, notes: '' } }] }, 'preparing');
+  expect((screen.getByRole('option', { name: 'Accept' }) as HTMLOptionElement).disabled).toBe(false);
+  select('accepted', 'Equipment');
+  fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
+  expect(await screen.findByText('This event will return to Planning.')).toBeTruthy();
+});
+
 it('[QA-SPL-112-107] stale save refuses success and offers reload', async () => {
   const { api, saved, reload } = setup();
   api.mockReset().mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'The original value changed.' }) });

@@ -285,7 +285,7 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
     setSaving(true); setError(null); setEditorError(null); setNotice(null);
     try {
       let response: Response;
-      if (data?.event.status === 'confirmed' && requirement) {
+      if (data && ['confirmed', 'preparing'].includes(data.event.status) && requirement) {
         const significant = `/api/event-requests/assigned/${eventId}/significant-changes`;
         const payload = { values: asPayload(draft), equipment_requirement_id: requirement.id };
         const proposed = await api(`${significant}/preview`, { method: 'POST', body: JSON.stringify(payload) });
@@ -293,7 +293,8 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
         const preview = await proposed.json() as ChangePreview;
         if (!Object.keys(preview.changes).length) { await load(); setEditing(null); setNotice('No changes to save.'); return; }
         const warning = preview.arrangements.map(item => `${item.name} (equipment #${item.id}): ${item.reason}`).join('\n');
-        if (!window.confirm(`${warning}\nThis event will return from Confirmed to Planning. Save changes?`)) return;
+        const stage = data.event.status === 'preparing' ? 'Preparing' : 'Confirmed';
+        if (!window.confirm(`${warning}\nThis event will return from ${stage} to Planning. Save changes?`)) return;
         response = await api(significant, { method: 'PATCH', body: JSON.stringify({ ...payload, preview_token: preview.preview_token }) });
       } else {
         response = await api(requirement ? `${endpoint}/${requirement.id}` : endpoint, {
@@ -359,7 +360,7 @@ export function EquipmentRequirements({ accessToken, eventId, onNavigate, reques
     </header>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
-    {data.event.status === 'confirmed' && <p role="note">Editing an equipment requirement returns this event to Planning. Adding or removing lines is available in Planning.</p>}
+    {['confirmed', 'preparing'].includes(data.event.status) && <p role="note">Editing an equipment requirement returns this event to Planning. Adding or removing lines is available in Planning.</p>}
     {editing === 'new' ? <RequirementEditor eventDate={data.event.proposed_date} catalogue={data.equipment_types}
       technicalSupport={data.technical_support_staff} onCancel={() => openEditor(null)} onSave={draft => { void save(draft); }} saving={saving} error={editorError} /> : <>
       <section className="equipment-requirements__overview" aria-label="Equipment planning guidance">

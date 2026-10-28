@@ -120,7 +120,7 @@ def apply_prepared_change(session, event, values, changes, impacts, equipment=No
 
 
 def return_to_planning(session: Session, event: EventRequest, now: datetime):
-    if event.status != "confirmed":
+    if event.status not in {"confirmed", "preparing"}:
         return None
     # AC4: the durable status-history event is the handoff to SPL-123, in this transaction.
     history = transition_event_status(
@@ -173,7 +173,7 @@ def _preview(event, changes, impacts, snapshot):
         "changes": changes,
         "arrangements": impacts,
         "preview_token": token,
-        "returns_to_planning": bool(changes) and event.status == "confirmed",
+        "returns_to_planning": bool(changes) and event.status in {"confirmed", "preparing"},
     }
 
 
@@ -208,8 +208,8 @@ def prepare_change(
     if equipment_id is not None:
         if isinstance(equipment_id, bool) or not isinstance(equipment_id, int) or equipment_id <= 0:
             abort(400, "Choose a valid equipment requirement.")
-        if event.status not in {"planning", "confirmed"}:
-            abort(409, "Equipment requirements can only be edited in Planning or Confirmed.")
+        if event.status not in {"planning", "confirmed", "preparing"}:
+            abort(409, "Equipment can only be edited in Planning, Confirmed or Preparing.")
         line, equipment_type = _locked_editable_requirement(session, event, equipment_id)
         values = _update_attributes(session, event, line, raw)
         changed = _changed_values(line, values)

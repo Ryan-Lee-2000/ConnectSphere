@@ -92,6 +92,53 @@ def confirmed(app, event):
         s.commit()
 
 
+def test_spl136_preparing_equipment_change_returns_to_planning(app, client):
+    """A genuine equipment edit warns first and returns a Preparing event to Planning."""
+    event, _, _ = venue.scenario(app, client)
+    line = equipment(app, event)
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, event).status = "preparing"
+        session.commit()
+    # The coordinator must be able to open the page before editing the requirement.
+    page = client.get(
+        f"/api/event-requests/{event}/equipment-requirements", headers=venue.base.headers()
+    )
+    assert page.status_code == 200, page.json
+    check = preview(client, event, {"quantity": 5}, equipment_requirement_id=line)
+    assert check.status_code == 200, check.json
+    assert check.json["returns_to_planning"] is True
+    response = client.patch(
+        url(event),
+        json={
+            "values": {"quantity": 5},
+            "equipment_requirement_id": line,
+            "preview_token": check.json["preview_token"],
+        },
+        headers=venue.base.headers(),
+    )
+    assert response.status_code == 200, response.json
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event).status == "planning"
+        assert session.get(EquipmentRequirement, line).status == "review_required"
+
+
+def test_spl136_preparing_unchanged_equipment_stays_in_preparation(app, client):
+    """An unchanged quantity must not reopen the event or release its reserved stock."""
+    event, _, _ = venue.scenario(app, client)
+    line = equipment(app, event)
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, event).status = "preparing"
+        session.commit()
+    check = preview(client, event, {"quantity": 4}, equipment_requirement_id=line)
+    assert check.status_code == 200, check.json
+    assert check.json["returns_to_planning"] is False
+    result = save(client, event, {"quantity": 4}, equipment_requirement_id=line)
+    assert result.status_code == 200 and result.json["change"] is None
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event).status == "preparing"
+        assert session.get(EquipmentRequirement, line).status == "reserved"
+
+
 @pytest.mark.parametrize(
     "values",
     [

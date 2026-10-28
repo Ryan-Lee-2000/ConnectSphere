@@ -12,7 +12,7 @@ from typing import Any
 from flask import Flask, abort, g, jsonify, request
 from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, object_session, selectinload
 
 from app.authorization import require_roles
 from app.equipment_readiness import (
@@ -41,6 +41,7 @@ from app.models import (
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
+    EventStatusHistory,
     Role,
 )
 from app.notifications import add_assignment_change_notices, add_coordinator_assigned_notice
@@ -551,7 +552,7 @@ def _serialize_assigned_event(event: EventRequest) -> dict[str, Any]:
 def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
     """Every event-request form field for the assigned coordinator (CS-E06-S1), read-only."""
 
-    return {
+    detail = {
         **_serialize_assigned_event(event),
         "purpose": event.purpose,
         "description": event.description,
@@ -591,6 +592,31 @@ def _serialize_assigned_event_detail(event: EventRequest) -> dict[str, Any]:
         **serialize_completion(event, include_note=True),
         "completion_available_at": completion_available_at(event),
     }
+    # Keep the established detail contract unchanged outside Planning.  This flag has meaning
+    # only while the coordinator needs an explanation for why Planning reopened.
+    if event.status == "planning":
+        detail["safety_rework"] = _has_safety_rework(event)
+    return detail
+
+
+def _has_safety_rework(event: EventRequest) -> bool:
+    """Return whether Safety, rather than another change, most recently reopened Planning.
+
+    A previous rejected review remains evidence forever.  It must not, however, relabel a later
+    significant-change return as a Safety rework: the immutable status-history action is the
+    authoritative explanation for the event's current Planning state.
+    """
+
+    session = object_session(event)
+    if event.status != "planning" or session is None:
+        return False
+    latest_transition = session.scalar(
+        select(EventStatusHistory.action)
+        .where(EventStatusHistory.event_request_id == event.id)
+        .order_by(EventStatusHistory.id.desc())
+        .limit(1)
+    )
+    return latest_transition == "safety_rework"
 
 
 def _serialize_assignment(session: Session, event_request_id: int) -> dict[str, Any]:

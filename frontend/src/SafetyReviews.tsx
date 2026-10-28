@@ -7,7 +7,7 @@ type Review = { id: number; status: string; plan: Plan; reason: string | null; s
 type SafetyContext = {
   id: number; name: string; status: string; expected_attendance: number | null; accessibility_needs: string[];
   venues: { name: string; layout: string | null; capacity: number | null; attendance: number | null; restrictions: string | null }[];
-  equipment: { name: string; required: number; reserved: number; essentiality: string | null; status: string }[];
+  equipment: { name: string; required: number; reserved: number; essentiality: string | null; status: string; notes?: string | null }[];
 };
 type QueueItem = { id: number; event: SafetyContext; plan: Plan; submitted_at: string };
 
@@ -29,7 +29,7 @@ function ArrangementEvidence({ context }: { context: SafetyContext }) {
   return <div className="safety-review__evidence" aria-label="Confirmed arrangement evidence">
     <dl className="safety-review__facts"><div><dt>Expected attendance</dt><dd>{context.expected_attendance ?? 'Not recorded'}</dd></div><div><dt>Accessibility needs</dt><dd>{accessibilityNeeds.length ? accessibilityNeeds.join(', ') : 'None recorded'}</dd></div></dl>
     <section><h3>Approved venue arrangements</h3>{venues.length === 0 ? <p>No approved venue arrangement is recorded.</p> : <ul>{venues.map(venue => <li key={`${venue.name}-${venue.layout}`}><strong>{venue.name}</strong><span>{venue.layout ? `${label(venue.layout)} layout` : 'Layout not recorded'} · {venue.capacity ?? 'Capacity not recorded'} capacity · {venue.attendance ?? 'Attendance not recorded'} attending</span><small>{venue.restrictions || 'No venue restrictions recorded; address this in the safety plan.'}</small></li>)}</ul>}</section>
-    <section><h3>Technical arrangements</h3>{equipment.length === 0 ? <p>No equipment requirements are recorded.</p> : <ul>{equipment.map(item => <li key={`${item.name}-${item.status}`}><strong>{item.name}</strong><span>{item.reserved}/{item.required} reserved · {label(item.essentiality || 'undecided')} · {label(item.status)}</span></li>)}</ul>}</section>
+    <section><h3>Technical arrangements</h3>{equipment.length === 0 ? <p>No equipment requirements are recorded.</p> : <ul>{equipment.map(item => <li key={`${item.name}-${item.status}`}><strong>{item.name}</strong><span>{item.reserved}/{item.required} reserved · {label(item.essentiality || 'undecided')} · {label(item.status)}</span>{item.notes && <small>Technical notes: {item.notes}</small>}</li>)}</ul>}</section>
   </div>;
 }
 
@@ -39,7 +39,9 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
   const api = useMemo(() => defaultRequest(accessToken), [accessToken]);
   const [context, setContext] = useState<SafetyContext | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [plan, setPlan] = useState<Plan>(emptyPlan);
+  const [editingPlan, setEditingPlan] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -48,8 +50,9 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
     setError(null);
     const response = await api(`/api/event-requests/${eventId}/safety-review`);
     if (!response.ok) throw new Error(await responseError(response, 'Could not load the safety review.'));
-    const body = await response.json() as { event: SafetyContext; review: Review | null };
-    setContext(body.event); setReview(body.review); setPlan(body.review?.plan ?? emptyPlan());
+    const body = await response.json() as { event: SafetyContext; review: Review | null; reviews?: Review[] };
+    setContext(body.event); setReview(body.review); setReviews(body.reviews ?? (body.review ? [body.review] : []));
+    setPlan(body.review?.plan ?? emptyPlan()); setEditingPlan(false);
   }
   useEffect(() => { void load().catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load the safety review.')); }, [api, eventId]);
 
@@ -59,7 +62,7 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
       const response = await api(`/api/event-requests/${eventId}/safety-review`, { method: 'POST', body: JSON.stringify({ plan }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not submit the safety review.');
-      setReview(body.review); setNotice(body.message || 'Safety review submitted.');
+      setNotice(body.message || 'Safety review submitted.'); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not submit the safety review.'); }
     finally { setSaving(false); }
   }
@@ -76,16 +79,27 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
 
   if (error && !context) return <p className="error" role="alert">{error}</p>;
   if (!context) return <p role="status">Loading safety review…</p>;
-  // A current approval closes this review cycle. SPL-136 returns a corrected event to Confirmed;
-  // at that point the same submission action starts a fresh safety-review cycle. A current
-  // pending review is deliberately not duplicated while Safety is deciding it.
-  const canSubmit = context.status === 'confirmed'
-    && (!review || (review.status !== 'submitted' && (review.status !== 'approved' || !review.current)));
+  // A current approved plan can be revised deliberately. Posting the revised plan creates a
+  // fresh submitted version, so Preparation cannot reuse the earlier approval.
+  const canRevise = context.status === 'confirmed' && review?.status === 'approved' && review.current;
+  const canSubmit = context.status === 'confirmed' && (!review
+    || !review.current || review.status !== 'submitted') && (!canRevise || editingPlan);
   const canBegin = context.status === 'confirmed' && review?.status === 'approved' && review.current;
+  if (context.status === 'planning' && reviews.length === 0) return null;
   return <section className="safety-review" aria-labelledby="safety-review-title">
-    <header className="safety-review__header"><div><p className="eyebrow">Safety gate</p><h2 id="safety-review-title">Safety review</h2><p>Preparation can begin only after the current confirmed arrangements are approved by Safety.</p></div><strong className={`safety-review__status safety-review__status--${review?.status ?? 'not-submitted'}`}>{review ? label(review.status) : 'Not submitted'}</strong></header>
+    <header className="safety-review__header"><div><p className="eyebrow">{context.status === 'planning' ? 'Safety rework required' : 'Safety gate'}</p><h2 id="safety-review-title">{context.status === 'planning' ? 'Safety decision needs action' : 'Safety review'}</h2><p>{context.status === 'planning' ? 'Safety returned this event to Planning. Read the decision below, correct the arrangements, then reconfirm before submitting a renewed review.' : 'Preparation can begin only after the current confirmed arrangements are approved by Safety.'}</p></div><strong className={`safety-review__status safety-review__status--${review?.status ?? 'not-submitted'}`}>{review ? label(review.status) : 'Not submitted'}</strong></header>
     <ArrangementEvidence context={context} />
-    {review && <div className="safety-review__decision"><strong>{review.current ? 'Current arrangement' : 'Arrangement changed'}</strong><span>{review.reason || (review.status === 'approved' ? 'Safety approved this submitted arrangement.' : 'Awaiting the Safety Officer’s decision.')}</span>{review.decided_by && <small>Recorded by {review.decided_by.name} on {new Date(review.decided_at || '').toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</small>}</div>}
+    {review && <div className="safety-review__decision"><strong>{context.status === 'planning' ? 'Safety Officer decision' : review.current ? 'Current arrangement' : 'Arrangement changed'}</strong><span>{review.reason || (review.status === 'approved' ? 'Safety approved this submitted arrangement.' : 'Awaiting the Safety Officer’s decision.')}</span>{review.decided_by && <small>Recorded by {review.decided_by.name} on {new Date(review.decided_at || '').toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</small>}</div>}
+    {context.status === 'planning' && review && <section className="safety-review__next-steps" aria-label="Safety rework next steps">
+      <h3>What happens next</h3>
+      <ol>
+        <li>Resolve the affected venue, equipment, or event-detail items shown in the Planning view.</li>
+        <li>Reconfirm the corrected event once its arrangement checks are ready.</li>
+        <li>Submit a new safety review. The earlier decision remains as evidence but cannot approve the corrected arrangement.</li>
+      </ol>
+    </section>}
+    {reviews.length > 1 && <details className="safety-review__history"><summary>Previous safety review decisions ({reviews.length - 1})</summary><ol>{reviews.slice(1).map(item => <li key={item.id}><strong>{label(item.status)}</strong><span>{item.reason || 'No decision reason recorded.'}</span><small>{item.decided_at ? `Recorded ${new Date(item.decided_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}` : `Submitted ${new Date(item.submitted_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}`}</small></li>)}</ol></details>}
+    {canRevise && !editingPlan && <div className="organisation-events__actions"><button className="button button--secondary" type="button" onClick={() => setEditingPlan(true)}>Revise safety plan</button></div>}
     {canSubmit && <fieldset className="safety-review__plan" disabled={saving}><legend>Safety plan</legend>{fields.map(([key, title, hint]) => {
       const notApplicable = Boolean(plan[key]?.not_applicable_reason);
       return <div className="field" key={key}>
@@ -105,7 +119,7 @@ export function SafetyReviewPanel({ accessToken, eventId, onStatusChange }: { ac
       </div>;
     })}</fieldset>}
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    <div className="organisation-events__actions">{canSubmit && <button className="button button--primary" type="button" disabled={saving} onClick={() => void submit()}>{saving ? 'Submitting…' : 'Submit safety review'}</button>}{canBegin && <button className="button button--primary" type="button" disabled={saving} onClick={() => void beginPreparation()}>{saving ? 'Starting…' : 'Begin preparation'}</button>}</div>
+    <div className="organisation-events__actions">{canSubmit && <button className="button button--primary" type="button" disabled={saving} onClick={() => void submit()}>{saving ? 'Submitting…' : editingPlan ? 'Submit revised safety review' : 'Submit safety review'}</button>}{canBegin && !editingPlan && <button className="button button--primary" type="button" disabled={saving} onClick={() => void beginPreparation()}>{saving ? 'Starting…' : 'Begin preparation'}</button>}{editingPlan && <button className="button button--secondary" type="button" disabled={saving} onClick={() => { setEditingPlan(false); setPlan(review?.plan ?? emptyPlan()); }}>Cancel revision</button>}</div>
   </section>;
 }
 

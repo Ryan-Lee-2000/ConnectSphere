@@ -155,6 +155,26 @@ def test_qa_spl_112_007_significant_combined_times(app, client):
         assert event.start_time.hour == 9 and event.end_time.hour == 10
 
 
+# QA-SPL-136-007 | AC2 | regression
+def test_qa_spl_136_007_change_request_preview_warns_that_preparing_event_returns_to_planning(
+    app, client
+):
+    """The preview must not promise that a Preparing event will stay in Preparation."""
+
+    event = base.make_event(app, "confirmed")
+    req = request(client, event, item("expected_attendance", 151))
+    # A request can be submitted while Confirmed and still be pending when the event enters
+    # Preparation.  Its later decision preview must describe the real resulting transition.
+    with Session(app.extensions["engine"]) as s:
+        s.get(EventRequest, event).status = "preparing"
+        s.commit()
+
+    check = preview(client, event, req, choices(req))
+
+    assert check.status_code == 200, check.json
+    assert check.json["returns_to_planning"] is True
+
+
 # QA-SPL-112-008 | AC2 | WB
 def test_qa_spl_112_008_equipment_add_final_date(app, client, equipment):
     event = equipment["event"]
@@ -198,6 +218,34 @@ def test_qa_spl_112_009_equipment_stock_effects(app, client, equipment, operatio
         assert _held_quantity(s, line.id) == 0
         assert s.scalar(select(EquipmentReservationRelease)).quantity == 2
         assert s.get(EventRequest, event).status == "planning"
+
+
+@pytest.mark.parametrize("operation", ["add", "update", "remove"])
+def test_spl136_preparing_equipment_decision_returns_to_planning(app, client, equipment, operation):
+    """Accepted equipment proposals warn and return a Preparing event to Planning."""
+    event = equipment["event"]
+    with Session(app.extensions["engine"]) as session:
+        row = session.get(EventRequest, event)
+        row.status = "confirmed"
+        line = session.get(EquipmentRequirement, equipment["mapped"])
+        line.required_start_date = line.required_end_date = row.proposed_date
+        session.commit()
+    proposal = (
+        equipment_base.proposal(equipment, operation, requirement_id=equipment["mapped"])
+        if operation != "add"
+        else equipment_base.proposal(equipment)
+    )
+    req = request(client, event, proposal)
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, event).status = "preparing"
+        session.commit()
+    check = preview(client, event, req, choices(req))
+    assert check.status_code == 200, check.json
+    assert check.json["returns_to_planning"] is True
+    response = save(client, event, req, choices(req))
+    assert response.status_code == 200, response.json
+    with Session(app.extensions["engine"]) as session:
+        assert session.get(EventRequest, event).status == "planning"
 
 
 # QA-SPL-112-010 | AC2 | BB

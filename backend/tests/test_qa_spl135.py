@@ -223,6 +223,72 @@ def review_count(app, event_id):
         )
 
 
+def test_spl136_technical_notes_change_invalidates_safety_approval(app, client):
+    """Changing technical notes must make the previous Safety decision stale."""
+    event_id = ready_event(app)
+    submitted = submit(client, event_id)
+    assert submitted.status_code == 200, submitted.json
+    review_id = submitted.json["review"]["id"]
+    assert decide(client, review_id, "approved").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        line = session.scalar(
+            select(EquipmentRequirement).where(EquipmentRequirement.event_request_id == event_id)
+        )
+        line.notes = "Keep cables clear of the exit"
+        session.commit()
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+    assert response.status_code == 409, response.json
+    assert "no longer current" in response.json["error"]
+
+
+def test_spl136_preparing_notes_change_requires_new_safety_decision(app, client):
+    """A nonessential unreserved line must still invalidate the old Safety approval."""
+    event_id = ready_event(app)
+    with Session(app.extensions["engine"]) as session:
+        line = EquipmentRequirement(
+            event_request_id=event_id,
+            equipment_type="Display screen",
+            equipment_type_id=1,
+            quantity=1,
+            required_start_date=EVENT_DATE,
+            required_end_date=EVENT_DATE,
+            status="requested",
+            essentiality="non_essential",
+        )
+        session.add(line)
+        session.commit()
+        line_id = line.id
+    submitted = submit(client, event_id)
+    assert submitted.status_code == 200, submitted.json
+    review_id = submitted.json["review"]["id"]
+    assert decide(client, review_id, "approved").status_code == 200
+    assert (
+        client.post(
+            f"/api/event-requests/{event_id}/begin-preparation", headers=headers()
+        ).status_code
+        == 200
+    )
+    endpoint = f"/api/event-requests/assigned/{event_id}/significant-changes"
+    payload = {"equipment_requirement_id": line_id, "values": {"notes": "Keep exit clear"}}
+    preview = client.post(endpoint + "/preview", headers=headers(), json=payload)
+    assert preview.status_code == 200 and preview.json["returns_to_planning"]
+    saved = client.patch(
+        endpoint,
+        headers=headers(),
+        json={**payload, "preview_token": preview.json["preview_token"]},
+    )
+    assert saved.status_code == 200, saved.json
+    with Session(app.extensions["engine"]) as session:
+        event = session.get(EventRequest, event_id)
+        assert event.status == "planning"
+        # Model successful reconfirmation; the unchanged stock must not hide the notes change.
+        event.status = "confirmed"
+        session.commit()
+    result = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+    assert result.status_code == 409, result.json
+    assert "no longer current" in result.json["error"]
+
+
 def save_significant_change(client, event_id, values):
     """Apply the real significant-change workflow, including its server-issued preview token."""
 
@@ -366,6 +432,7 @@ def test_qa_spl_135_009_context_presents_venue_capacity_layout_restrictions_acce
         "reserved": 4,
         "essentiality": "essential",
         "status": "reserved",
+        "notes": None,
     }
 
 
@@ -607,6 +674,148 @@ def test_qa_spl_135_025_reconfirmation_cannot_resurrect_safety_approval_for_chan
     assert "no longer current" in response.json["error"]
     with Session(app.extensions["engine"]) as session:
         assert session.get(EventRequest, event_id).status == "confirmed"
+
+
+# QA-SPL-136-001 | AC1 | BB
+def test_qa_spl_136_001_assigned_detail_marks_only_a_safety_return_as_safety_rework(app, client):
+    """The coordinator sees why Planning reopened when Safety requests a correction."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert (
+        decide(
+            client, review_id, "changes_requested", "Move the cable route away from the exit."
+        ).status_code
+        == 200
+    )
+
+    response = client.get(f"/api/event-requests/assigned/{event_id}", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "planning"
+    assert response.json["event"]["safety_rework"] is True
+
+
+# QA-SPL-136-002 | AC2 | regression
+def test_qa_spl_136_002_old_safety_rejection_does_not_mislabel_a_later_significant_change(
+    app, client
+):
+    """Planning's reason follows the newest durable transition, not an old review record."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "rejected", "Use the east exit instead.").status_code == 200
+    assert (
+        client.post(f"/api/event-requests/{event_id}/confirm", headers=headers()).status_code == 200
+    )
+
+    changed = save_significant_change(client, event_id, {"start_time": "10:00"})
+    assert changed.status_code == 200, changed.json
+
+    response = client.get(f"/api/event-requests/assigned/{event_id}", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "planning"
+    assert response.json["event"]["safety_rework"] is False
+
+
+# QA-SPL-136-003 | AC3 | regression
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("preferred_room_layout", "theatre"),
+        ("required_facilities", ["PA system"]),
+        ("location_preference", "Marina Centre"),
+    ],
+)
+def test_qa_spl_136_003_revalidated_arrangement_preferences_cannot_reuse_old_safety_approval(
+    app, client, field, value
+):
+    """Every safety-relevant venue preference needs a renewed Safety decision after Planning."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    assert (
+        client.post(
+            f"/api/event-requests/{event_id}/begin-preparation", headers=headers()
+        ).status_code
+        == 200
+    )
+
+    changed = save_significant_change(client, event_id, {field: value})
+    assert changed.status_code == 200, changed.json
+    assert changed.json["event"]["status"] == "planning"
+    with Session(app.extensions["engine"]) as session:
+        booking = session.scalar(
+            select(VenueBooking).where(VenueBooking.event_request_id == event_id)
+        )
+        # This models the separate venue/technical revalidation workflows.  They make the event
+        # confirmable again, but must not make the old safety approval current.
+        booking.requires_review = False
+        session.query(VenueBookingReviewFinding).filter_by(booking_id=booking.id).delete()
+        requirement = session.scalar(
+            select(EquipmentRequirement).where(EquipmentRequirement.event_request_id == event_id)
+        )
+        requirement.status = "reserved"
+        requirement.review_reason = None
+        requirement.review_flagged_at = None
+        session.commit()
+
+    assert (
+        client.post(f"/api/event-requests/{event_id}/confirm", headers=headers()).status_code == 200
+    )
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 409
+    assert "no longer current" in response.json["error"]
+
+
+# QA-SPL-136-004 | AC3 | boundary
+def test_qa_spl_136_004_name_only_correction_keeps_an_approved_safety_review_current(app, client):
+    """A cosmetic name correction is deliberately outside the Safety arrangement boundary."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "approved", "").status_code == 200
+    with Session(app.extensions["engine"]) as session:
+        session.get(EventRequest, event_id).name = "Northstar Leadership Forum 2026"
+        session.commit()
+
+    response = client.post(f"/api/event-requests/{event_id}/begin-preparation", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["event"]["status"] == "preparing"
+
+
+# QA-SPL-136-005 | AC4 | API contract
+def test_qa_spl_136_005_read_returns_latest_review_and_accountable_history(app, client):
+    """The current review is convenient at the top level while the complete audit history remains readable."""
+
+    event_id = ready_event(app)
+    review_id = submit(client, event_id).json["review"]["id"]
+    assert decide(client, review_id, "changes_requested", "Use the east exit.").status_code == 200
+
+    response = client.get(f"/api/event-requests/{event_id}/safety-review", headers=headers())
+
+    assert response.status_code == 200
+    assert response.json["review"]["id"] == review_id
+    assert [item["id"] for item in response.json["reviews"]] == [review_id]
+    assert response.json["reviews"][0]["reason"] == "Use the east exit."
+
+
+def test_spl136_superseded_approval_is_not_current_in_history(app, client):
+    """A newer Safety review supersedes an earlier decision even for the same arrangement."""
+    event_id = ready_event(app)
+    original = submit(client, event_id).json["review"]["id"]
+    assert decide(client, original, "approved").status_code == 200
+    revised = plan(crowd_movement={"value": "Use the east entrance.", "not_applicable_reason": ""})
+    result = submit(client, event_id, payload=revised)
+    assert result.status_code == 200, result.json
+    history = client.get(f"/api/event-requests/{event_id}/safety-review", headers=headers()).json
+    assert history["reviews"][0]["current"] is True
+    assert history["reviews"][1]["id"] == original
+    assert history["reviews"][1]["current"] is False
 
 
 # QA-SPL-135-019 | AC4 | security

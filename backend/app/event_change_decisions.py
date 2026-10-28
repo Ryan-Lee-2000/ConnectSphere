@@ -222,10 +222,10 @@ def _prepare(session, event_id, request_id):
                 )
             value = _requested_value(item.field, item.requested_value)
             (values if item.field in significant.FIELDS else ordinary)[item.field] = value
-    if equipment_items and event.status not in {"planning", "confirmed"}:
+    if equipment_items and event.status not in {"planning", "confirmed", "preparing"}:
         abort(
             409,
-            "Equipment proposals can be accepted in Planning or Confirmed. "
+            "Equipment proposals can be accepted in Planning, Confirmed or Preparing. "
             "Leave them pending or decline them until then.",
         )
     added_type_ids = {
@@ -348,6 +348,9 @@ def _prepare(session, event_id, request_id):
         "preview": {
             "preview_token": token,
             "arrangements": arrangements,
-            "returns_to_planning": has_significant_change and event.status == "confirmed",
+            # Keep the preview aligned with the shared significant-change transition.  A
+            # Preparing event is also returned to Planning before accepted changes are saved.
+            "returns_to_planning": has_significant_change
+            and event.status in {"confirmed", "preparing"},
         },
     }
