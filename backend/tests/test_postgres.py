@@ -50,6 +50,8 @@ PRODUCT_TABLES = {
     "event_change_request_items",
     # SPL-135: server-owned safety-review evidence for the preparation gate.
     "safety_reviews",
+    # SPL-125: one email record per notice, sent or failed.
+    "email_deliveries",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

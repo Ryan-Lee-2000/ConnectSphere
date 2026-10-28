@@ -53,6 +53,11 @@ role. First startup
 needs internet access and time to download Python, packages and container images.
 Rerunning setup is supported and preserves existing local data.
 
+Notice emails (SPL-125) go to Supabase's local Mailpit inbox at http://127.0.0.1:54324 and never
+leave your machine. The app refuses to start until setup has written the email settings into
+`.env`, so rerun `npm run setup` once after pulling SPL-125 (it keeps any Gmail values you added),
+and restart local Supabase so Mailpit's SMTP port 54325 is open.
+
 Open http://127.0.0.1:5173 and sign in with a local fixture. Every fixture's password is
 `LocalDemo123!`:
 
@@ -115,7 +120,7 @@ These commands do not replace your system Node. A version manager using this rep
   search System Settings for AirPlay Receiver and temporarily turn it off if you do not need it.
   If you need to keep it running, report the conflict before changing ports: Flask and the Vite
   proxy must use the same API port. See [Flask's guidance](https://flask.palletsprojects.com/en/stable/server/).
-- If ports 5000, 5173 or Supabase ports 54320–54324/54327/8083 are occupied, stop your own
+- If ports 5000, 5173 or Supabase ports 54320–54325/54327/8083 are occupied, stop your own
   conflicting process or coordinate with its owner; do not reset another project's database.
 - If setup stops, resolve the reported error and rerun `npm run setup`.
 - An existing non-local `.env` is refused. Keep hosted credentials separate from the local clone.

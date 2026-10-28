@@ -25,10 +25,12 @@ from app.coordinator_assignment import (
 from app.models import (
     Account,
     AccountRole,
+    EmailDelivery,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventDetailChange,
     EventRequest,
+    Notification,
     Organisation,
     Role,
 )
@@ -129,6 +131,14 @@ def scenario(engine):
         session.execute(
             delete(EventCoordinatorAssignment).where(
                 EventCoordinatorAssignment.event_request_id == event_request_id
+            )
+        )
+        # SPL-125: email records block deleting their notices, so they go first.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(Notification.event_request_id == event_request_id)
+                )
             )
         )
         session.execute(delete(EventRequest).where(EventRequest.id == event_request_id))

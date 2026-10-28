@@ -86,6 +86,24 @@ def stop_process(process):
         process.wait()
 
 
+def email_env(target):
+    """SPL-125: local email goes to Supabase's Mailpit. Email settings already in .env are kept,
+    so Gmail credentials added by hand survive a rerun of setup."""
+    settings = {
+        "EMAIL_BACKEND": "smtp",
+        # The shared inbox; Mailpit captures local mail, so nothing reaches it from smtp.
+        "NOTIFICATION_EMAIL_TO": "connectsphere.notices@gmail.com",
+        "APP_BASE_URL": "http://127.0.0.1:5173",
+    }
+    keys = (*settings, "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN")
+    if target.exists():
+        for line in target.read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() in keys and value.strip():
+                settings[key.strip()] = value.strip()
+    return "".join(f"{key}={value}\n" for key, value in settings.items())
+
+
 def local_env():
     data = json.loads(run("pnpm", "exec", "supabase", "status", "-o", "json", capture=True).stdout)
     api = data["API_URL"]
@@ -111,7 +129,7 @@ def local_env():
     target.write_text(
         f"DATABASE_URL={db}\nSUPABASE_URL={api}\n"
         f"SUPABASE_PUBLISHABLE_KEY={public}\n"
-        f"SUPABASE_SERVICE_ROLE_KEY={secret}\n"
+        f"SUPABASE_SERVICE_ROLE_KEY={secret}\n" + email_env(target)
     )
     target.chmod(0o600)
     (ROOT / "frontend/.env.local").write_text(
@@ -352,6 +370,8 @@ def main():
             "backend/tests/test_qa_spl105_postgres.py",
             # SPL-133: expiry racing approval expires once; the hold-expiry migration and cutover.
             "backend/tests/test_qa_spl133_postgres.py",
+            # SPL-125: email row locking, restart pick-up, role backfill, checks and grants.
+            "backend/tests/test_qa_spl125_postgres.py",
             "-q",
         )
     elif cmd == "dev":

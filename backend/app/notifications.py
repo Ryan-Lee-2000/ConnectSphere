@@ -47,6 +47,7 @@ def add_coordinator_assigned_notice(
     session.add(
         Notification(
             recipient_account_id=coordinator_id,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event.id,
             message=f"You have been assigned to {event.name}.",
             dedupe_key=f"coordinator_assigned:{history_id}",
@@ -75,13 +76,14 @@ def add_assignment_change_notices(
     notified = set(already_notified)
     now = datetime.now(SINGAPORE)
 
-    def notify(recipient_id: str, message: str, kind: str) -> None:
+    def notify(recipient_id: str, message: str, kind: str, role: Role) -> None:
         if recipient_id in notified:
             return
         notified.add(recipient_id)
         session.add(
             Notification(
                 recipient_account_id=recipient_id,
+                recipient_role=role,
                 event_request_id=event.id,
                 message=message,
                 dedupe_key=f"{kind}:{history_id}",
@@ -95,6 +97,7 @@ def add_assignment_change_notices(
             f"You are no longer responsible for {event.name}. "
             f"It has been reassigned to {new_coordinator.display_name}.",
             "coordinator_removed",
+            Role.EVENT_COORDINATOR,
         )
         organiser_message = (
             f"{new_coordinator.display_name} has taken over {event.name} from "
@@ -105,7 +108,12 @@ def add_assignment_change_notices(
             f"{new_coordinator.display_name} is now the Event Coordinator responsible for "
             f"{event.name}."
         )
-    notify(event.organiser_account_id, organiser_message, "organiser_coordinator_changed")
+    notify(
+        event.organiser_account_id,
+        organiser_message,
+        "organiser_coordinator_changed",
+        Role.EVENT_ORGANISER,
+    )
 
 
 def add_review_outcome_notice(
@@ -179,6 +187,7 @@ def _add_organiser_notice(
     session.add(
         Notification(
             recipient_account_id=recipient_id,
+            recipient_role=Role.EVENT_ORGANISER,
             event_request_id=event.id,
             message=message,
             dedupe_key=f"organiser_{kind}:{source_id}",
@@ -200,6 +209,7 @@ def add_clarification_answered_notice(
     session.add(
         Notification(
             recipient_account_id=author_id,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event.id,
             message=f"The organiser responded to your clarification request on {event.name}.",
             dedupe_key=f"clarification_answered:{clarification_id}",
@@ -233,6 +243,7 @@ def add_change_request_submitted_notice(
     session.add(
         Notification(
             recipient_account_id=coordinator_id,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event.id,
             message=f"A change request was submitted on {event.name}: {', '.join(field_labels)}.",
             dedupe_key=f"change_request_submitted:{change_request_id}",
@@ -262,6 +273,7 @@ def add_arrangement_notice(
     session.add(
         Notification(
             recipient_account_id=coordinator_id,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event.id,
             message=message,
             dedupe_key=f"arrangement_{kind}:{source_id}",
@@ -285,6 +297,7 @@ def add_technical_support_notices(
         session.add(
             Notification(
                 recipient_account_id=recipient_id,
+                recipient_role=Role.TECHNICAL_SUPPORT_STAFF,
                 event_request_id=event.id,
                 message=message,
                 dedupe_key=f"technical_{kind}:{source_id}",
@@ -312,6 +325,7 @@ def add_venue_booking_notices(
         session.add(
             Notification(
                 recipient_account_id=recipient_id,
+                recipient_role=Role.VENUE_STAFF,
                 event_request_id=event.id,
                 message=message,
                 dedupe_key=f"venue_booking_{kind}:{booking.id}",
@@ -340,6 +354,7 @@ def add_attendee_notices(
         session.add(
             Notification(
                 recipient_account_id=recipient_id,
+                recipient_role=Role.ATTENDEE,
                 event_request_id=event.id,
                 message=message,
                 dedupe_key=f"attendee_{kind}:{source_id}",
@@ -364,6 +379,7 @@ def add_registration_notice(
     session.add(
         Notification(
             recipient_account_id=registration.attendee_account_id,
+            recipient_role=Role.ATTENDEE,
             event_request_id=event.id,
             message=message,
             dedupe_key=f"attendee_{kind}:{registration.id}",
@@ -509,6 +525,7 @@ def add_safety_decision_notice(session: Session, event: EventRequest, *, review)
     session.add(
         Notification(
             recipient_account_id=coordinator_id,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event.id,
             message=f"Safety Officer {wording} for {event.name}",
             dedupe_key=f"safety_decision:{review.id}",

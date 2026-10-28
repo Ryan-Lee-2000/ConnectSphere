@@ -348,3 +348,23 @@ A batch that accepts an event rename applies it before any significant-change no
 its Planning-return and item notices the same resulting event name. SPL-102 retains its
 existing recipient policy; only the final row-construction function is shared. Safety-rework
 organiser notices remain outside this story’s current SPL-109 trigger scope.
+
+## Notice email (SPL-125)
+
+Every notice names the role it was sent for (`notifications.recipient_role`, required, one of the
+defined roles, no default); each helper in `app/notifications.py` sets it. Every role needs a
+display name in `ROLE_DISPLAY_NAMES`, or the models module refuses to load.
+
+`app/email_delivery.py` hooks every SQLAlchemy session: a new notice gains one pending
+`email_deliveries` row in the same flush, so a refused or rolled-back action leaves neither, and a
+new notice type gets email without route changes. After commit, the first attempt runs; it never
+shares the action's transaction, so a failed send cannot undo the action. The table is the
+durable retry queue: a daemon thread (Gunicorn's single worker) claims due rows with
+`FOR UPDATE SKIP LOCKED`, holding the lock while it sends, and retries three times a minute
+apart before marking the row `failed`. Pending rows resume after a restart, redeploy or Render
+sleep. Rows are never deleted, and their foreign key blocks deleting their notice.
+
+Backends (`EMAIL_BACKEND`): tests always use `log`; local development uses `smtp` into
+Supabase's Mailpit (port 54325, inbox http://127.0.0.1:54324); Render uses `gmail_api` over
+HTTPS. Outside tests the app refuses to start without a valid backend and its settings. All
+mail goes to one shared address and names its intended recipient and role (Release 1 decision).

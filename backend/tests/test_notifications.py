@@ -18,6 +18,7 @@ from app.models import (
     EventCoordinatorHistory,
     EventRequest,
     Notification,
+    Role,
 )
 from app.notifications import _timestamp, add_coordinator_assigned_notice
 from sqlalchemy import event as sa_event
@@ -50,6 +51,7 @@ def add_notice(app, recipient, event_id, message="Something happened", *, minute
     with Session(app.extensions["engine"]) as session:
         notice = Notification(
             recipient_account_id=recipient,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event_id,
             message=message,
             dedupe_key=f"seed:{recipient}:{message}:{minutes}",
@@ -418,6 +420,7 @@ def test_qa_spl_101_030_the_same_change_cannot_be_stored_twice_for_one_recipient
     def notice(recipient, key):
         return Notification(
             recipient_account_id=recipient,
+            recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event_id,
             message="x",
             dedupe_key=key,
@@ -535,6 +538,7 @@ def test_qa_spl_101_039_listing_uses_a_constant_number_of_queries(app, client):
             session.add_all(
                 Notification(
                     recipient_account_id=ALICE,
+                    recipient_role=Role.EVENT_COORDINATOR,
                     event_request_id=event_id,
                     message=f"n{size}-{i}",
                     dedupe_key=f"{size}:{i}",
@@ -569,6 +573,7 @@ def test_qa_spl_101_040_a_large_inbox_is_returned_in_full(app, client):
         session.add_all(
             Notification(
                 recipient_account_id=ALICE,
+                recipient_role=Role.EVENT_COORDINATOR,
                 event_request_id=event_id,
                 message=f"notice {i}",
                 dedupe_key=f"bulk:{i}",

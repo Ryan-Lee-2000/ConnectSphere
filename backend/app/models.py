@@ -22,7 +22,7 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
 from app.event_statuses import INITIAL_STATUS, status_check_constraint
 
@@ -77,6 +77,24 @@ class Role(StrEnum):
 
 
 ROLE_VALUES = tuple(role.value for role in Role)
+
+# SPL-125 AC3c: the name an email uses for the role a notice was sent for.
+ROLE_DISPLAY_NAMES = {
+    Role.EVENT_ORGANISER: "Event Organiser",
+    Role.EVENT_OPERATIONS_MANAGER: "Event Operations Manager",
+    Role.EVENT_COORDINATOR: "Event Coordinator",
+    Role.VENUE_STAFF: "Venue Staff",
+    Role.TECHNICAL_SUPPORT_STAFF: "Technical Support Staff",
+    Role.SAFETY_OFFICER: "Safety Officer",
+    Role.ATTENDEE: "Attendee",
+}
+# AC3c: a role added without a display name stops the app and every test from loading.
+if missing := set(Role) - {role for role, name in ROLE_DISPLAY_NAMES.items() if name.strip()}:
+    raise RuntimeError(f"Roles without an email display name: {sorted(missing)}")
+# AC3b. A new role needs a migration that widens this check, as SPL-135's did for account roles.
+KNOWN_NOTIFICATION_ROLE = (
+    "recipient_role in (" + ", ".join(repr(role) for role in ROLE_VALUES) + ")"
+)
 
 
 class Organisation(Base):
@@ -1171,12 +1189,15 @@ class Notification(Base):
     __table_args__ = (
         # One notice per recipient per triggering change, so a retry cannot add a duplicate.
         UniqueConstraint("recipient_account_id", "dedupe_key", name="uq_notifications_dedupe"),
+        CheckConstraint(KNOWN_NOTIFICATION_ROLE, name="ck_notifications_known_role"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     recipient_account_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False, index=True
     )
+    # SPL-125 AC3a: the role the notice was sent for. Required, with no default.
+    recipient_role: Mapped[str] = mapped_column(String(40), nullable=False)
     event_request_id: Mapped[int] = mapped_column(
         ForeignKey("event_requests.id", ondelete="CASCADE"), nullable=False
     )
@@ -1186,6 +1207,59 @@ class Notification(Base):
     # Null means unread.
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_request: Mapped[EventRequest] = relationship()
+
+    @validates("recipient_role")
+    def _known_role(self, _key: str, value: str) -> str:
+        # AC3b: only a defined role; anything else is refused before it reaches the database.
+        if value not in ROLE_VALUES:
+            raise ValueError(f"Unknown notification role: {value!r}")
+        return Role(value).value
+
+
+# SPL-125 AC8 and AC11: one email record per notice, never one per attempt.
+EMAIL_STATUSES = ("pending", "sent", "failed")
+EMAIL_KNOWN_STATUS = "status in (" + ", ".join(repr(status) for status in EMAIL_STATUSES) + ")"
+EMAIL_OUTCOME_RECORDED = (
+    "(status = 'pending' and sent_at is null and failed_at is null)"
+    " or (status = 'sent' and sent_at is not null and failed_at is null)"
+    " or (status = 'failed' and failed_at is not null and sent_at is null)"
+)
+
+
+class EmailDelivery(Base):
+    """The email copy of one notice (SPL-125), kept whether it was sent or failed."""
+
+    __tablename__ = "email_deliveries"
+    __table_args__ = (
+        CheckConstraint(EMAIL_KNOWN_STATUS, name="ck_email_deliveries_known_status"),
+        CheckConstraint(EMAIL_OUTCOME_RECORDED, name="ck_email_deliveries_outcome"),
+        CheckConstraint(KNOWN_NOTIFICATION_ROLE, name="ck_email_deliveries_known_role"),
+        Index("ix_email_deliveries_status_next_attempt_at", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # AC9: unique, so a notice can never gain a second email.
+    notification_id: Mapped[int] = mapped_column(
+        ForeignKey("notifications.id"), nullable=False, unique=True
+    )
+    recipient_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id"), nullable=False
+    )
+    recipient_name: Mapped[str] = mapped_column(Text, nullable=False)
+    recipient_role: Mapped[str] = mapped_column(String(40), nullable=False)
+    to_address: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    body_html: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    provider_message_id: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notification: Mapped[Notification] = relationship()
 
 
 # SPL-111 (CS-E18-S1): a change request is Pending until a later story resolves it. Shared with the

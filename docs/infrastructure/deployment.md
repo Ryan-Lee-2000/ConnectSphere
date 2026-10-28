@@ -39,6 +39,19 @@ frontend build arguments. Database credentials stay server-side. The session-poo
 postgresql+psycopg:// with SSL required, port 5432 and the project-specific pooler username.
 Never copy a local .env into Render or run the local seed against cloud.
 
+SPL-125 notice email, also in the Render environment (secret values never in Git, Jira or chat):
+EMAIL_BACKEND=gmail_api, NOTIFICATION_EMAIL_TO (the shared ConnectSphere Gmail address, both
+sender and inbox), APP_BASE_URL=https://connectsphere-mmay.onrender.com, GMAIL_CLIENT_ID,
+GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN. The app refuses to start on Render without all of
+them, or with any backend other than gmail_api; SMTP cannot be used because the free tier blocks
+outbound SMTP ports. Add them before merging SPL-125: the merge applies its migration first, and
+the release before SPL-125 cannot create notices once notices require a role.
+
+Gmail token rotation: if the refresh token is revoked or expires, every send fails, retries three
+times and ends as a `failed` row in `email_deliveries` with the Gmail error in `last_error`; the
+actions themselves still succeed. Mint a new token (steps in [SPL-125](../tasks/SPL-125.md)),
+replace GMAIL_REFRESH_TOKEN in Render and redeploy. Personal Gmail allows about 500 sends a day.
+
 Render settings: main branch, repository root, Docker context '.', Dockerfile './Dockerfile',
 health path /api/health, no Docker command override, no pre-deploy command. The Dockerfile starts
 Gunicorn. RENDER_GIT_COMMIT identifies the deployed version. Migrations do not run on app startup.

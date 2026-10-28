@@ -608,6 +608,7 @@ def test_qa_spl_103_029_the_database_refuses_a_duplicate_clarification_notice(ap
         session.add(
             Notification(
                 recipient_account_id=ALICE,
+                recipient_role=notice.recipient_role,
                 event_request_id=event_id,
                 message="duplicate",
                 dedupe_key=notice.dedupe_key,
