@@ -35,6 +35,7 @@ pytestmark = pytest.mark.skipif(
 RUNS = 3
 pg_url, engine = spl85.pg_url, spl85.engine
 DAY = date(2030, 9, 2)
+VENUE_LOCK = re.compile(r"FROM venues\b.*FOR NO KEY UPDATE", re.DOTALL)
 
 
 def _annex(engine):
@@ -314,10 +315,18 @@ def _race_at_second_venue_lock(app, calls):
     barrier = threading.Barrier(len(calls), timeout=3)
     seen: dict[int, int] = {}
     guard = threading.Lock()
-    venue_lock = re.compile(r"FROM venues.*FOR NO KEY UPDATE", re.DOTALL)
+    # The lock_venue query as PostgreSQL receives it, so a pattern that never matches fails here
+    # rather than leaving the barrier inactive.
+    representative = str(
+        select(Venue)
+        .where(Venue.id == 1)
+        .with_for_update(key_share=True)
+        .compile(dialect=app_engine.dialect)
+    )
+    assert VENUE_LOCK.search(representative), representative
 
     def align(_connection, _cursor, statement, _parameters, _context, _executemany):
-        if not venue_lock.search(statement):
+        if not VENUE_LOCK.search(statement):
             return
         with guard:
             seen[threading.get_ident()] = seen.get(threading.get_ident(), 0) + 1
@@ -338,9 +347,12 @@ def _race_at_second_venue_lock(app, calls):
     event.listen(app_engine, "before_cursor_execute", align)
     try:
         with ThreadPoolExecutor(max_workers=len(calls)) as executor:
-            return list(executor.map(run, calls))
+            results = list(executor.map(run, calls))
     finally:
         event.remove(app_engine, "before_cursor_execute", align)
+    # Every approval reached a venue lock, so the barrier was in play.
+    assert len(seen) == len(calls), seen
+    return results
 
 
 # QA-SPL-132-155 | AC7 | WB concurrency (review round 1, P2 from Clive)
