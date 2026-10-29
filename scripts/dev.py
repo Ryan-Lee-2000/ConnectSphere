@@ -372,6 +372,8 @@ def main():
             "backend/tests/test_qa_spl133_postgres.py",
             # SPL-125: email row locking, restart pick-up, role backfill, checks and grants.
             "backend/tests/test_qa_spl125_postgres.py",
+            # SPL-132: racing replacement requests, block versus confirmation, release once.
+            "backend/tests/test_qa_spl132_postgres.py",
             "-q",
         )
     elif cmd == "dev":

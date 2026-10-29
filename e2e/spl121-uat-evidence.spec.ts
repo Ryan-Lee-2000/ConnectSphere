@@ -155,7 +155,9 @@ test('[QA-SPL-121-200] the coordinator is told of each decision on their event a
     await expect(items.nth(0)).toContainText(`Equipment for ${eventName} needs review: ${microphone} × 4; units became unavailable.`);
     await expect(items.nth(1)).toContainText(`Equipment marked unavailable for ${eventName}: ${speaker} × 2.`);
     await expect(items.nth(2)).toContainText(`Equipment partially reserved for ${eventName}: ${microphone} × 4 (2 of 4 units).`);
-    await expect(items.nth(3)).toContainText(`Venue booking for ${eventName} at ${hall} needs review: Venue Staff blocked time it uses.`);
+    // SPL-132 AC2: the disruption notice now names the booking's time and the block's reason.
+    await expect(items.nth(3)).toContainText(`Venue booking for ${eventName} at ${hall} on `);
+    await expect(items.nth(3)).toContainText('needs a replacement: Venue Staff marked the venue unavailable (');
     await expect(items.nth(4)).toContainText(`Venue booking for ${eventName} at ${studio} was rejected: ${reason}`);
     await expect(items.nth(5)).toContainText(`Venue booking for ${eventName} at ${hall} was approved.`);
     await caption(page, 'AC5: Casey Lim, the assigned coordinator, has exactly one notice per decision');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ban, CircleAlert, Undo2 } from 'lucide-react';
+import { Ban, CircleAlert, Replace, Undo2 } from 'lucide-react';
 import { responseError, type ApiRequest } from './api';
 import { BookingReviewFindings, type BookingReviewFinding } from './BookingReviewFindings';
 import { BookingReviewReasons, ExactBookingTiming } from './ExactBookingTiming';
@@ -9,6 +9,8 @@ import type { VenueBooking } from './VenueBookingRequest';
 // times, attendee count, status and history (AC8). The event's original single booking is the
 // first item (AC9). A Requested booking can be withdrawn (SPL-78) and an Approved one cancelled
 // with a reason while the event is in Planning (AC7); either changes only that booking (AC6).
+// SPL-132: a booking whose venue became unavailable offers a replacement search, and each card
+// names the booking it replaces or the replacements requested for it.
 
 type Actor = { id: string; name: string };
 type HistoryEntry = { action: string; status: string; status_label: string; actor: Actor; changed_at: string; note: string | null };
@@ -20,6 +22,9 @@ type Arrangement = {
 };
 
 const MAX_REASON_LENGTH = 1000;
+const STATUS_NAMES: Record<string, string> = {
+  requested: 'Requested', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled', expired: 'Expired',
+};
 const SLOT_NAMES: Record<string, string> = { AM: 'AM', PM: 'PM', NIGHT: 'Night' };
 const dateName = (day: string) => new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   .format(new Date(`${day}T00:00:00Z`));
@@ -28,8 +33,9 @@ const timeName = (instant: string) => new Intl.DateTimeFormat('en-SG', {
 }).format(new Date(instant));
 const layoutName = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
 
-export function VenueArrangements({ api, eventId, eventStatus, refreshKey = 0, onChanged, emptyMessage = false }: {
+export function VenueArrangements({ api, eventId, eventStatus, refreshKey = 0, onChanged, onFindReplacement, emptyMessage = false }: {
   api: ApiRequest; eventId: number; eventStatus?: string; refreshKey?: number; onChanged?: () => void;
+  onFindReplacement?: (bookingId: number) => void;
   // On the event page, say so explicitly when nothing has been requested yet.
   emptyMessage?: boolean;
 }) {
@@ -66,14 +72,15 @@ export function VenueArrangements({ api, eventId, eventStatus, refreshKey = 0, o
     {notice && <p className="venue-booking-panel__notice" role="status">{notice}</p>}
     <ol className="venue-arrangements__list" aria-label="Venue bookings">
       {arrangements.map(arrangement => <li key={arrangement.booking.id}>
-        <ArrangementCard api={api} eventId={eventId} eventStatus={eventStatus} arrangement={arrangement} onChanged={changed} />
+        <ArrangementCard api={api} eventId={eventId} eventStatus={eventStatus} arrangement={arrangement} onChanged={changed} onFindReplacement={onFindReplacement} />
       </li>)}
     </ol>
   </section>;
 }
 
-function ArrangementCard({ api, eventId, eventStatus, arrangement, onChanged }: {
+function ArrangementCard({ api, eventId, eventStatus, arrangement, onChanged, onFindReplacement }: {
   api: ApiRequest; eventId: number; eventStatus?: string; arrangement: Arrangement; onChanged: (message: string) => void;
+  onFindReplacement?: (bookingId: number) => void;
 }) {
   const { booking, current_status: status, history, review } = arrangement;
   const [action, setAction] = useState<'withdraw' | 'cancel' | null>(null);
@@ -118,6 +125,11 @@ function ArrangementCard({ api, eventId, eventStatus, arrangement, onChanged }: 
       <CircleAlert size={16} aria-hidden="true" /><span><strong>Marked for review.</strong></span>
     </p>}
     <BookingReviewFindings findings={review?.findings || []} />
+    {booking.replaces && <p className="venue-arrangements__link">Replacement for the {booking.replaces.venue.name} booking.</p>}
+    {booking.replacements?.map(item => <p className="venue-arrangements__link" key={item.id}>
+      Replacement requested: {item.venue.name} ({STATUS_NAMES[item.status] || item.status}).
+    </p>)}
+    {action === null && booking.replaceable && eventStatus === 'planning' && onFindReplacement && <button className="button button--primary" type="button" onClick={() => onFindReplacement(booking.id)}><Replace size={16} />Find a replacement venue</button>}
     {action === null && booking.status === 'requested' && <button className="button" type="button" onClick={() => { setAction('withdraw'); setError(null); }}><Undo2 size={16} />Withdraw request</button>}
     {action === null && canCancel && <button className="button" type="button" onClick={() => { setAction('cancel'); setError(null); }}><Ban size={16} />Cancel booking</button>}
     {action === 'withdraw' && <div className="venue-booking-panel__confirm" role="group" aria-label={`Confirm withdrawal of ${booking.venue.name}`}>

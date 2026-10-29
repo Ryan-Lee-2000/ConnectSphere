@@ -7,6 +7,7 @@ import { RegistrationSettingsPanel } from './RegistrationSettings';
 import { VenueAvailabilitySearch } from './VenueAvailabilitySearch';
 import { SignificantEventChanges } from './SignificantEventChanges';
 import { VenueArrangements } from './VenueArrangements';
+import type { VenueBooking } from './VenueBookingRequest';
 import { SafetyReviewPanel } from './SafetyReviews';
 
 const VENUE_BOOKING_STAGES = new Set(['planning', 'confirmed', 'completed', 'cancelled', 'postponed']);
@@ -210,6 +211,22 @@ function labelLayout(value: string | null | undefined) {
 
 function listValue(values: string[] | undefined) {
   return values?.length ? values.join(', ') : 'No preference recorded';
+}
+
+// SPL-132 AC4: a replacement search starts from the affected booking; any other from the event.
+function replacementSearch(event: AssignedEventDetail, booking: VenueBooking | null) {
+  if (!booking) {
+    return { initialDate: event.proposed_date, initialSlots: event.mapped_slots, initialStartTime: event.start_time, initialEndTime: event.end_time };
+  }
+  const timing = booking.timing?.event;
+  return {
+    initialDate: timing ? timing.start.slice(0, 10) : booking.date,
+    initialSlots: booking.event_slots.length ? booking.event_slots : event.mapped_slots,
+    initialStartTime: timing ? timing.start.slice(11, 16) : event.start_time,
+    initialEndTime: timing ? (timing.end.slice(0, 10) !== timing.start.slice(0, 10) ? '24:00' : timing.end.slice(11, 16)) : event.end_time,
+    replacesBookingId: booking.id,
+    seed: { attendance: booking.expected_attendance, layout: booking.layout, facilities: booking.required_facilities ?? event.required_facilities ?? [] },
+  };
 }
 
 function EventBrief({ event }: { event: AssignedEventDetail }) {
@@ -448,14 +465,17 @@ function EquipmentEvidence({ line }: { line: EquipmentLine }) {
   </ul>;
 }
 
-export function AssignedEvents({ accessToken, eventId, onNavigate, request, view = 'detail' }: {
+export function AssignedEvents({ accessToken, eventId, onNavigate, request, view = 'detail', replacingBookingId }: {
   accessToken: string;
   eventId?: number;
   onNavigate: (path: string) => void;
   request?: ApiRequest;
   view?: 'detail' | 'venue-search';
+  // SPL-132: the disrupted booking a venue search is finding a replacement for.
+  replacingBookingId?: number;
 }) {
   const api = useMemo(() => request || defaultRequest(accessToken), [request, accessToken]);
+  const [replacing, setReplacing] = useState<VenueBooking | 'unavailable' | null>(null);
   const [events, setEvents] = useState<AssignedEvent[] | null>(null);
   const [event, setEvent] = useState<AssignedEventDetail | null>(null);
   const [registrationListAvailable, setRegistrationListAvailable] = useState(false);
@@ -509,6 +529,23 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       return false;
     }
   }, [api, eventId]);
+
+  // SPL-132 AC4: the affected booking seeds the replacement search, so read it before searching.
+  useEffect(() => {
+    setReplacing(null);
+    if (view !== 'venue-search' || eventId === undefined || replacingBookingId === undefined) return;
+    let active = true;
+    void (async () => {
+      try {
+        const response = await api(`/api/event-requests/${eventId}/venue-bookings/${replacingBookingId}`);
+        const body = await response.json().catch(() => null) as { booking?: VenueBooking } | null;
+        if (active) setReplacing(response.ok && body?.booking ? body.booking : 'unavailable');
+      } catch {
+        if (active) setReplacing('unavailable');
+      }
+    })();
+    return () => { active = false; };
+  }, [api, eventId, replacingBookingId, view]);
 
   // Refresh recorded requirements on navigation, including entry into search without a remount.
   useEffect(() => {
@@ -875,11 +912,17 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
       {error && <p className="error" role="alert">{error}</p>}
       {!error && !event && <p role="status">Loading the assigned event…</p>}
       {event && event.status !== 'planning' && <p className="error" role="alert">Venue search is available after this request is approved and moves to Planning.</p>}
-      {event?.status === 'planning' && <>
-        <p className="venue-search-page__event-name">Explore venue options for <strong>{event.name}</strong>. The filters start with this request’s details, but do not change it.</p>
+      {event?.status === 'planning' && replacingBookingId !== undefined && replacing === null && <p role="status">Loading the booking to replace…</p>}
+      {event?.status === 'planning' && replacingBookingId !== undefined && replacing !== null && (replacing === 'unavailable' || !replacing.replaceable) && <p className="error" role="alert">
+        {replacing === 'unavailable' ? 'The booking to replace could not be loaded.' : `The ${replacing.venue.name} booking does not need a replacement now: its venue is available again, it is no longer active, or a replacement is already waiting for Venue Staff.`}
+      </p>}
+      {event?.status === 'planning' && (replacingBookingId === undefined || (replacing !== null && replacing !== 'unavailable' && replacing.replaceable)) && <>
+        {replacing && replacing !== 'unavailable'
+          ? <p className="venue-search-page__event-name venue-search-page__replacing" role="note">Finding a replacement for the <strong>{replacing.venue.name}</strong> booking of <strong>{event.name}</strong>. The filters start with that booking’s date, times, attendees, layout and facilities. It stays booked until Venue Staff approve the replacement.</p>
+          : <p className="venue-search-page__event-name">Explore venue options for <strong>{event.name}</strong>. The filters start with this request’s details, but do not change it.</p>}
         <div className="venue-search-page__layout">
           <VenueAvailabilitySearch accessToken={accessToken} eventId={event.id}
-            initialDate={event.proposed_date} initialSlots={event.mapped_slots} initialStartTime={event.start_time} initialEndTime={event.end_time}
+            {...replacementSearch(event, replacing && replacing !== 'unavailable' ? replacing : null)}
             expectedAttendance={event.expected_attendance ?? null} preferredRoomLayout={event.preferred_room_layout ?? null}
             requiredFacilities={event.required_facilities ?? []} accessibilityNeeds={event.accessibility_needs ?? []}
             locationPreference={event.location_preference ?? null} request={api} />
@@ -935,7 +978,8 @@ export function AssignedEvents({ accessToken, eventId, onNavigate, request, view
           request can only be made once the event is in Planning (SPL-77), so earlier stages have
           nothing to show. The panel follows the event as loaded, so approving on this page
           performs no booking read. */}
-      {bookingStageOnLoad && <VenueArrangements key={`${event.id}-${arrangementRevision}`} api={api} eventId={event.id} eventStatus={event.status} emptyMessage />}
+      {bookingStageOnLoad && <VenueArrangements key={`${event.id}-${arrangementRevision}`} api={api} eventId={event.id} eventStatus={event.status} emptyMessage
+        onFindReplacement={bookingId => onNavigate(`/workspace/assigned-events/${event.id}/venue-search/replace/${bookingId}`)} />}
       {/* SPL-114: registration can only be set up while the event is Confirmed (AC7), so the panel
           is not offered at any other stage. The server refuses other stages regardless. */}
       {event.status === 'confirmed' && <RegistrationSettingsPanel api={api} eventId={event.id}

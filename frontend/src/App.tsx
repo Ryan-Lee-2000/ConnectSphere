@@ -65,7 +65,8 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace/assignments') return role === 'event_operations_manager';
   // SPL-117. An attendee's own registrations (AC5); the server enforces ownership and role too.
   if (requestedPath === '/workspace/my-registrations') return role === 'attendee';
-  if (/^\/workspace\/assigned-events\/\d+\/venue-search$/.test(requestedPath)) {
+  // SPL-132: the same search, finding a replacement for one disrupted booking.
+  if (/^\/workspace\/assigned-events\/\d+\/venue-search(?:\/replace\/\d+)?$/.test(requestedPath)) {
     return role === 'event_coordinator';
   }
   if (/^\/workspace\/assigned-events\/\d+\/equipment-requirements$/.test(requestedPath)) {
@@ -419,8 +420,9 @@ function Workspace({
     : undefined;
   const assignedEventMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)$/);
   const assignedEventId = assignedEventMatch ? Number(assignedEventMatch[1]) : undefined;
-  const venueSearchMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/venue-search$/);
+  const venueSearchMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/venue-search(?:\/replace\/(\d+))?$/);
   const venueSearchEventId = venueSearchMatch ? Number(venueSearchMatch[1]) : undefined;
+  const replacingBookingId = venueSearchMatch?.[2] ? Number(venueSearchMatch[2]) : undefined;
   const equipmentRequirementsMatch = safePath.match(/^\/workspace\/assigned-events\/(\d+)\/equipment-requirements$/);
   const equipmentRequirementsEventId = equipmentRequirementsMatch ? Number(equipmentRequirementsMatch[1]) : undefined;
   const venueBookingMatch = safePath.match(/^\/workspace\/venue-bookings\/(\d+)$/);
@@ -657,8 +659,9 @@ function Workspace({
           <AssignedEvents
             accessToken={session.access_token}
             eventId={venueSearchEventId}
-            key={`${activeRole}:venue-search:${venueSearchEventId}`}
+            key={`${activeRole}:venue-search:${venueSearchEventId}:${replacingBookingId ?? ''}`}
             onNavigate={navigate}
+            replacingBookingId={replacingBookingId}
             view="venue-search"
           />
         ) : equipmentRequirementsEventId !== undefined ? (
