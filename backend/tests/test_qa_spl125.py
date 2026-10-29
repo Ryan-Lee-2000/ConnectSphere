@@ -1638,3 +1638,47 @@ print("SENT", len(sent))
 
     assert result.returncode == 0, result.stderr
     assert "SENT 1" in result.stdout
+
+
+def _flushed_notice(session, event_id, key):
+    session.add(
+        _bare_notice(event_id, recipient_role=Role.EVENT_COORDINATOR, dedupe_key=f"{key}:1")
+    )
+    session.flush()
+
+
+# QA-SPL-125-016 | AC2 | WB review round 1: a savepoint commit does not consume the dispatch
+def test_qa_spl_125_016_a_savepoint_commit_keeps_the_send_for_the_outer_commit(app, outbox):
+    event_id = add_event(app)
+    with Session(app.extensions["engine"]) as session:
+        _flushed_notice(session, event_id, "savepoint_commit")
+        session.begin_nested().commit()
+        assert outbox.messages == []  # nothing is sent while the outer transaction is open
+        session.commit()
+
+    assert len(outbox.messages) == 1
+    assert deliveries(app)[0].status == "sent"
+
+
+# QA-SPL-125-017 | AC2 | WB review round 1: a savepoint rollback does not drop the dispatch
+def test_qa_spl_125_017_a_savepoint_rollback_keeps_the_send_for_the_outer_commit(app, outbox):
+    event_id = add_event(app)
+    with Session(app.extensions["engine"]) as session:
+        _flushed_notice(session, event_id, "savepoint_rollback")
+        session.begin_nested().rollback()
+        session.commit()
+
+    assert len(outbox.messages) == 1
+    assert deliveries(app)[0].status == "sent"
+
+
+# QA-SPL-125-018 | AC5 | WB review round 1: a notice rolled back with its savepoint is not sent
+def test_qa_spl_125_018_a_notice_inside_a_rolled_back_savepoint_sends_nothing(app, outbox):
+    event_id = add_event(app)
+    with Session(app.extensions["engine"]) as session:
+        nested = session.begin_nested()
+        _flushed_notice(session, event_id, "inside_savepoint")
+        nested.rollback()
+        session.commit()
+
+    assert notices(app) == [] and deliveries(app) == [] and outbox.messages == []

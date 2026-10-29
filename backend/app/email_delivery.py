@@ -200,7 +200,10 @@ def _queue_emails(session: Session, _context, _instances) -> None:
 @event.listens_for(Session, "after_commit")
 def _send_after_commit(session: Session) -> None:
     # AC2: the first attempt follows the save. Sending never runs inside the action's own
-    # transaction, so a failed send cannot undo it (AC6).
+    # transaction, so a failed send cannot undo it (AC6). A savepoint commit also fires this hook;
+    # the emails are not saved until the outer transaction commits, so they wait for it.
+    if session.in_nested_transaction():
+        return
     dispatch = session.info.pop("spl125_email_dispatch", None)
     if dispatch is not None:
         try:
@@ -211,7 +214,10 @@ def _send_after_commit(session: Session) -> None:
 
 @event.listens_for(Session, "after_rollback")
 def _forget_queued(session: Session) -> None:
-    session.info.pop("spl125_email_dispatch", None)
+    # A savepoint rollback keeps emails queued before it; any queued inside it are rolled back
+    # with their notices, and the delivery loop simply finds nothing for them.
+    if not session.in_nested_transaction():
+        session.info.pop("spl125_email_dispatch", None)
 
 
 def _render(session: Session, notice: Notification, settings: EmailSettings) -> EmailDelivery:

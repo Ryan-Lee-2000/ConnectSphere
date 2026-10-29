@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
 load_dotenv(ROOT / ".env")
 
-from app.models import EventRequest, EventStatusHistory  # noqa: E402
+from app.models import EmailDelivery, EventRequest, EventStatusHistory, Notification  # noqa: E402
 
 database_url = os.environ["DATABASE_URL"]
 if urlparse(database_url).hostname not in ("localhost", "127.0.0.1"):
@@ -29,6 +29,14 @@ try:
         if ids:
             session.execute(
                 delete(EventStatusHistory).where(EventStatusHistory.event_request_id.in_(ids))
+            )
+            # SPL-125: email records block deleting their notices, which the event delete cascades to.
+            session.execute(
+                delete(EmailDelivery).where(
+                    EmailDelivery.notification_id.in_(
+                        select(Notification.id).where(Notification.event_request_id.in_(ids))
+                    )
+                )
             )
             for event in session.scalars(select(EventRequest).where(EventRequest.id.in_(ids))):
                 session.delete(event)

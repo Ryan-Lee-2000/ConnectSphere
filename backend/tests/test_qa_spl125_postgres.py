@@ -514,3 +514,99 @@ def test_qa_spl_125_172_the_migration_downgrades_and_upgrades_cleanly(fresh_url)
         check.dispose()
     up = _alembic(fresh_url, "upgrade", "head")
     assert up.returncode == 0, up.stderr
+
+
+# QA-SPL-125-173 | AC2 | WB review round 1: savepoints on PostgreSQL keep the send for the commit
+@pytest.mark.parametrize("savepoint", ["commit", "rollback"])
+def test_qa_spl_125_173_a_savepoint_does_not_lose_the_immediate_send(engine, world, savepoint):
+    with Session(world["app"].extensions["engine"]) as session:
+        notice = Notification(
+            recipient_account_id=world["ids"]["alice"],
+            recipient_role=Role.EVENT_COORDINATOR,
+            event_request_id=world["event_id"],
+            message="Something changed.",
+            dedupe_key=f"spl125_pg:savepoint_{savepoint}",
+            created_at=datetime.now(SINGAPORE),
+        )
+        session.add(notice)
+        session.flush()
+        nested = session.begin_nested()
+        getattr(nested, savepoint)()
+        assert world["outbox"].messages == []
+        session.commit()
+        notice_id = notice.id
+
+    assert len(world["outbox"].messages) == 1
+    assert _email(engine, notice_id).status == "sent"
+
+
+def _spl136_event(world, run_id, label):
+    with Session(world["app"].extensions["engine"]) as session:
+        template = session.get(EventRequest, world["event_id"])
+        event = EventRequest(
+            organiser_account_id=template.organiser_account_id,
+            organisation_id=template.organisation_id,
+            name=f"E2E SPL-136 {run_id} {label}",
+            purpose="SPL-136 fixture cleanup proof",
+            proposed_date=template.proposed_date,
+            start_time=template.start_time,
+            end_time=template.end_time,
+            expected_attendance=10,
+            status="planning",
+            submitted_at=datetime.now(UTC),
+        )
+        session.add(event)
+        session.flush()
+        # A safety decision notice, as the SPL-136 walkthrough creates; it gains an email record.
+        session.add(
+            Notification(
+                recipient_account_id=world["ids"]["alice"],
+                recipient_role=Role.EVENT_COORDINATOR,
+                event_request_id=event.id,
+                message="Safety Officer approved the plan",
+                dedupe_key=f"safety_decision:{uuid.uuid4().hex}",
+                created_at=datetime.now(SINGAPORE),
+            )
+        )
+        session.commit()
+        return event.id
+
+
+# QA-SPL-125-174 | AC11 | WB review round 1: SPL-136 cleanup removes only its run's email records
+def test_qa_spl_125_174_spl136_cleanup_removes_its_email_records_first(engine, world):
+    run_id, other_run = str(uuid.uuid4()), str(uuid.uuid4())
+    mine = _spl136_event(world, run_id, "Safety approval")
+    other = _spl136_event(world, other_run, "Safety approval")
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/cleanup_e2e_spl136.py"],
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            env={
+                **os.environ,
+                "DATABASE_URL": os.environ["INTEGRATION_DATABASE_URL"],
+                "SPL136_E2E_RUN_ID": run_id,
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        with Session(engine) as session:
+            assert session.get(EventRequest, mine) is None
+            emails = session.scalars(
+                select(EmailDelivery)
+                .join(Notification, EmailDelivery.notification_id == Notification.id)
+                .where(Notification.event_request_id.in_([mine, other]))
+            ).all()
+            assert [e.notification.event_request_id for e in emails] == [other]
+    finally:
+        with Session(engine) as session:
+            for event_id in (mine, other):
+                notice_ids = select(Notification.id).where(
+                    Notification.event_request_id == event_id
+                )
+                session.execute(
+                    delete(EmailDelivery).where(EmailDelivery.notification_id.in_(notice_ids))
+                )
+                session.execute(delete(EventRequest).where(EventRequest.id == event_id))
+            session.commit()
