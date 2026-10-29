@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 
 const password = process.env.VITE_LOCAL_DEMO_PASSWORD ?? 'LocalDemo123!';
 const coordinator = process.env.VITE_LOCAL_DEMO_EVENT_COORDINATOR_EMAIL ?? 'event.coordinator@example.test';
@@ -12,7 +11,15 @@ const evidencePause = (page: Page) => page.waitForTimeout(1_800);
 
 test.beforeAll(() => {
   // The walkthrough owns its disposable events so it can run in the complete browser suite.
-  execFileSync(path.join(process.cwd(), '.venv', 'Scripts', 'python.exe'), ['scripts/prepare_e2e_safety.py'], {
+  // SPL-142: uv picks the project interpreter on Windows and macOS alike.
+  execFileSync('uv', ['run', '--frozen', 'python', 'scripts/prepare_e2e_safety.py'], {
+    stdio: 'inherit',
+  });
+});
+
+// SPL-142: the events use a shared equipment type, so they must not outlive the walkthrough.
+test.afterAll(() => {
+  execFileSync('uv', ['run', '--frozen', 'python', 'scripts/cleanup_e2e_safety.py'], {
     stdio: 'inherit',
   });
 });
