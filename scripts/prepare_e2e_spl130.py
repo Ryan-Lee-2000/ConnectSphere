@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,8 +19,10 @@ from app.exact_venue_bookings import requirements  # noqa: E402
 from app.models import (  # noqa: E402
     Account,
     AccountRole,
+    EmailDelivery,
     EventCoordinatorAssignment,
     EventRequest,
+    Notification,
     Organisation,
     Role,
     Venue,
@@ -111,6 +113,20 @@ def add_event(
 
 try:
     with Session(engine) as session, session.begin():
+        # SPL-125: email records block deleting their notices, which the event delete cascades to.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(
+                        Notification.event_request_id.in_(
+                            select(EventRequest.id).where(
+                                EventRequest.name.like("SPL-130 Browser %")
+                            )
+                        )
+                    )
+                )
+            )
+        )
         prior_events = session.scalars(
             select(EventRequest).where(EventRequest.name.like("SPL-130 Browser %"))
         ).all()

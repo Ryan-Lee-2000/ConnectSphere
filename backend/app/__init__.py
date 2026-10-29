@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 
 from .authorization import associate_account_roles, authenticated_only
 from .coordinator_assignment import register_coordinator_assignment_routes
+from .email_delivery import register_email_delivery
 from .equipment_availability import register_equipment_availability_routes
 from .equipment_catalogue import register_equipment_catalogue_routes
 from .equipment_releases import register_equipment_release_routes
@@ -59,6 +60,16 @@ def create_app(test_config=None):
         EXACT_VENUE_TIMING_ENABLED=(
             os.getenv("EXACT_VENUE_TIMING_ENABLED", "false").lower() == "true"
         ),
+        # SPL-125: email copies of notices. Missing settings refuse start outside tests.
+        EMAIL_BACKEND=os.getenv("EMAIL_BACKEND", ""),
+        NOTIFICATION_EMAIL_TO=os.getenv("NOTIFICATION_EMAIL_TO", ""),
+        APP_BASE_URL=os.getenv("APP_BASE_URL", ""),
+        GMAIL_CLIENT_ID=os.getenv("GMAIL_CLIENT_ID", ""),
+        GMAIL_CLIENT_SECRET=os.getenv("GMAIL_CLIENT_SECRET", ""),
+        GMAIL_REFRESH_TOKEN=os.getenv("GMAIL_REFRESH_TOKEN", ""),
+        SMTP_HOST=os.getenv("SMTP_HOST", "127.0.0.1"),
+        SMTP_PORT=os.getenv("SMTP_PORT", "54325"),
+        RENDER=os.getenv("RENDER", ""),
     )
     if test_config:
         app.config.update(test_config)
@@ -66,6 +77,7 @@ def create_app(test_config=None):
         raise RuntimeError("DATABASE_URL missing. Run npm run setup; see .env.example.")
     engine = create_engine(app.config["DATABASE_URL"], pool_pre_ping=True)
     app.extensions["engine"] = engine
+    register_email_delivery(app)
 
     @app.before_request
     def identity():

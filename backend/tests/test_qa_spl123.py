@@ -436,6 +436,7 @@ def test_qa_spl_123_027_database_dedupe_constraint(app, client):
         session.add(
             Notification(
                 recipient_account_id=source.recipient_account_id,
+                recipient_role=source.recipient_role,
                 event_request_id=event_id,
                 message=source.message,
                 dedupe_key=source.dedupe_key,

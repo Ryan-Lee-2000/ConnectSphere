@@ -4,11 +4,13 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from app.models import (
     Account,
+    EmailDelivery,
     EquipmentRequirement,
     EquipmentReservation,
     EquipmentType,
     EventCoordinatorAssignment,
     EventRequest,
+    Notification,
     Venue,
     VenueBooking,
     VenueLayout,
@@ -60,14 +62,20 @@ CANCELLATION_DATE = date(2030, 10, 22)
 
 def remove_equipment_fixtures(session: Session) -> None:
     """Delete parents first; database cascades retain no dangling assignments or reservations."""
+    fixture_events = EventRequest.name.in_(
+        [row[0] for row in SCENARIOS] + [CONFIRMATION_EVENT, ARRANGEMENT_EVENT, CANCELLATION_EVENT]
+    )
+    # SPL-125: email records block deleting their notices, which the event delete cascades to.
     session.execute(
-        delete(EventRequest).where(
-            EventRequest.name.in_(
-                [row[0] for row in SCENARIOS]
-                + [CONFIRMATION_EVENT, ARRANGEMENT_EVENT, CANCELLATION_EVENT]
+        delete(EmailDelivery).where(
+            EmailDelivery.notification_id.in_(
+                select(Notification.id)
+                .join(EventRequest, Notification.event_request_id == EventRequest.id)
+                .where(fixture_events)
             )
         )
     )
+    session.execute(delete(EventRequest).where(fixture_events))
     session.execute(
         delete(EquipmentType).where(
             EquipmentType.name.in_(

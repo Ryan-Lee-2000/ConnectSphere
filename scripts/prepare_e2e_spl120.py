@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,9 +18,11 @@ load_dotenv(ROOT / ".env")
 from app.models import (  # noqa: E402
     Account,
     AccountRole,
+    EmailDelivery,
     EventCoordinatorAssignment,
     EventRegistration,
     EventRequest,
+    Notification,
     Role,
 )
 
@@ -65,6 +67,18 @@ def fixture_account(session: Session, email: str, role: Role) -> Account:
 engine = create_engine(database_url)
 try:
     with Session(engine) as session, session.begin():
+        # SPL-125: email records block deleting their notices, which the event delete cascades to.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(
+                        Notification.event_request_id.in_(
+                            select(EventRequest.id).where(EventRequest.name.like("SPL-120 UAT %"))
+                        )
+                    )
+                )
+            )
+        )
         for event in session.scalars(
             select(EventRequest).where(EventRequest.name.like("SPL-120 UAT %"))
         ).all():

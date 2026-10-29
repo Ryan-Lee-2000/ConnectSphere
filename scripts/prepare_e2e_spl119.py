@@ -18,8 +18,10 @@ load_dotenv(ROOT / ".env")
 from app.models import (  # noqa: E402
     Account,
     AccountRole,
+    EmailDelivery,
     EventRegistration,
     EventRequest,
+    Notification,
     Organisation,
     Role,
 )
@@ -63,6 +65,18 @@ with httpx.Client(base_url=api_url, headers=auth_headers, timeout=15) as auth:
 engine = create_engine(database_url)
 try:
     with Session(engine) as session, session.begin():
+        # SPL-125: email records block deleting their notices, which the event delete cascades to.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(
+                        Notification.event_request_id.in_(
+                            select(EventRequest.id).where(EventRequest.name.like("SPL-119 UAT %"))
+                        )
+                    )
+                )
+            )
+        )
         for event in session.scalars(
             select(EventRequest).where(EventRequest.name.like("SPL-119 UAT %"))
         ).all():

@@ -17,6 +17,7 @@ from app import create_app
 from app.models import (
     Account,
     AccountRole,
+    EmailDelivery,
     EventCoordinatorAssignment,
     EventCoordinatorHistory,
     EventRequest,
@@ -94,6 +95,14 @@ def world(engine):
 
     app.extensions["engine"].dispose()
     with Session(engine) as session:
+        # SPL-125: email records block deleting their notices, so they go first.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(Notification.event_request_id == event_id)
+                )
+            )
+        )
         session.execute(delete(Notification).where(Notification.event_request_id == event_id))
         session.execute(
             delete(EventCoordinatorHistory).where(

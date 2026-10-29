@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,11 +19,13 @@ from app.event_requests import SINGAPORE  # noqa: E402
 from app.models import (  # noqa: E402
     Account,
     AccountRole,
+    EmailDelivery,
     EquipmentRequirement,
     EquipmentReservation,
     EquipmentType,
     EventCoordinatorAssignment,
     EventRequest,
+    Notification,
     Role,
     Venue,
     VenueBooking,
@@ -81,6 +83,16 @@ try:
             session,
             os.getenv("VITE_LOCAL_DEMO_SAFETY_OFFICER_EMAIL", "safety.officer@example.test"),
             Role.SAFETY_OFFICER,
+        )
+        # SPL-125: email records block deleting their notices, which the event delete cascades to.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id)
+                    .join(EventRequest, Notification.event_request_id == EventRequest.id)
+                    .where(EventRequest.name.like("E2E SPL-135 %"))
+                )
+            )
         )
         for event in session.scalars(
             select(EventRequest).where(EventRequest.name.like("E2E SPL-135 %"))

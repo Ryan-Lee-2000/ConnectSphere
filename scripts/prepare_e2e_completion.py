@@ -23,9 +23,11 @@ from app.event_requests import SINGAPORE  # noqa: E402
 from app.models import (  # noqa: E402
     Account,
     AccountRole,
+    EmailDelivery,
     EventCoordinatorAssignment,
     EventRequest,
     EventStatusHistory,
+    Notification,
     Role,
     Venue,
     VenueBooking,
@@ -63,6 +65,14 @@ def remove_existing(session: Session) -> None:
     if ids:
         session.execute(
             delete(EventStatusHistory).where(EventStatusHistory.event_request_id.in_(ids))
+        )
+        # SPL-125: email records block deleting their notices, which the event delete cascades to.
+        session.execute(
+            delete(EmailDelivery).where(
+                EmailDelivery.notification_id.in_(
+                    select(Notification.id).where(Notification.event_request_id.in_(ids))
+                )
+            )
         )
         for event in session.scalars(select(EventRequest).where(EventRequest.id.in_(ids))).all():
             session.delete(event)
