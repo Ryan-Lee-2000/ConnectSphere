@@ -7,6 +7,9 @@ Events are dated 2030, so the bookings have not ended.
 """
 
 import os
+import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 import pytest
@@ -20,7 +23,7 @@ from app.models import (
     VenueBookingStatusHistory,
     VenueLayout,
 )
-from sqlalchemy import inspect, select, text
+from sqlalchemy import event, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -248,5 +251,118 @@ def test_qa_spl_132_154_approval_racing_cancellation_releases_the_original_once(
                     )
                 ).all()
             assert endings == (["cancel"] if cancel_code == 200 else ["replaced"])
+        finally:
+            app.extensions["engine"].dispose()
+
+
+def _approved_replacement_pair(engine, run):
+    """Two events whose replacements cross: Hall -> Annex for one, Annex -> Hall for the other."""
+
+    ids, organisation_id, hall, type_id = spl85._seed_accounts(engine)
+    annex = _annex(engine)
+    first_day = DAY + timedelta(days=10 + 2 * run)
+    second_day = first_day + timedelta(days=1)
+    pairs = []
+    for day, original_venue, replacement_venue in (
+        (first_day, hall, annex),
+        (second_day, annex, hall),
+    ):
+        event_id, _ = spl85._seed_ready_event(
+            engine, ids, organisation_id, original_venue, type_id, day
+        )
+        with Session(engine) as session:
+            original_id = session.scalar(
+                select(VenueBooking.id).where(VenueBooking.event_request_id == event_id)
+            )
+            replacement = VenueBooking(
+                event_request_id=event_id,
+                venue_id=replacement_venue,
+                status="requested",
+                layout="theatre",
+                expected_attendance=100,
+                booking_date=day,
+                event_slots=["PM"],
+                requested_by_account_id=ids["coordinator"],
+                requested_at=spl85.STAMP,
+                replaces_booking_id=original_id,
+            )
+            session.add(replacement)
+            session.flush()
+            for booking_id, venue_id in (
+                (original_id, original_venue),
+                (replacement.id, replacement_venue),
+            ):
+                session.add(
+                    VenueBookingOccupancy(
+                        booking_id=booking_id, venue_id=venue_id, day=day, slot="PM", kind="event"
+                    )
+                )
+            session.commit()
+            pairs.append((original_id, replacement.id))
+    return ids, pairs
+
+
+def _race_at_second_venue_lock(app, calls):
+    """Hold each approval at its second venue lock, so each already holds one venue.
+
+    Before the fix that is the original's venue, taken after the replacement's. Once the order is
+    consistent, one approval waits on the other's first venue lock instead and never reaches the
+    barrier, so the barrier gives up after a short wait and both carry on.
+    """
+
+    app_engine = app.extensions["engine"]
+    barrier = threading.Barrier(len(calls), timeout=3)
+    seen: dict[int, int] = {}
+    guard = threading.Lock()
+    venue_lock = re.compile(r"FROM venues.*FOR NO KEY UPDATE", re.DOTALL)
+
+    def align(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if not venue_lock.search(statement):
+            return
+        with guard:
+            seen[threading.get_ident()] = seen.get(threading.get_ident(), 0) + 1
+            second = seen[threading.get_ident()] == 2
+        if second:
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+
+    def run(call):
+        try:
+            response = call(app.test_client())
+        except Exception as error:  # a deadlock surfaces as a raised DBAPI error in testing
+            return 500, repr(error)
+        return response.status_code, response.json
+
+    event.listen(app_engine, "before_cursor_execute", align)
+    try:
+        with ThreadPoolExecutor(max_workers=len(calls)) as executor:
+            return list(executor.map(run, calls))
+    finally:
+        event.remove(app_engine, "before_cursor_execute", align)
+
+
+# QA-SPL-132-155 | AC7 | WB concurrency (review round 1, P2 from Clive)
+def test_qa_spl_132_155_opposite_replacement_approvals_both_complete(engine, pg_url):
+    for run in range(RUNS):
+        ids, pairs = _approved_replacement_pair(engine, run)
+        app = spl85._app(pg_url, ids)
+        try:
+            results = _race_at_second_venue_lock(
+                app, [_approve(replacement) for _, replacement in pairs]
+            )
+            assert [code for code, _ in results] == [200, 200], results
+            with Session(engine) as session:
+                for original, replacement in pairs:
+                    assert session.get(VenueBooking, replacement).status == "approved"
+                    assert session.get(VenueBooking, original).status == "cancelled"
+                    endings = session.scalars(
+                        select(VenueBookingStatusHistory.action).where(
+                            VenueBookingStatusHistory.booking_id == original,
+                            VenueBookingStatusHistory.resulting_status == "cancelled",
+                        )
+                    ).all()
+                    assert endings == ["replaced"]
         finally:
             app.extensions["engine"].dispose()

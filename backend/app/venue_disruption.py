@@ -147,6 +147,35 @@ def pending_replacement(session: Session, original_id: int) -> VenueBooking | No
     )
 
 
+def lock_replacement_venues(session: Session, booking_id: int) -> None:
+    """Lock a replacement's event, then its venue and the original's venue in id order.
+
+    Approving a replacement locks the original's venue to release it, after the replacement's
+    venue. Two replacements in opposite directions (A to B for one event, B to A for another)
+    would take the two venue locks in reverse order and deadlock, so both are taken first,
+    lowest id first. The later per-booking locks then find them already held.
+    """
+
+    from app.exact_venue_bookings import lock_event, lock_venue
+
+    replacement = session.execute(
+        select(
+            VenueBooking.event_request_id,
+            VenueBooking.venue_id,
+            VenueBooking.replaces_booking_id,
+        ).where(VenueBooking.id == booking_id)
+    ).first()
+    if replacement is None or replacement.replaces_booking_id is None:
+        return
+    original_venue_id = session.scalar(
+        select(VenueBooking.venue_id).where(VenueBooking.id == replacement.replaces_booking_id)
+    )
+    # The original belongs to the same event (check_replaceable), so one event lock covers both.
+    lock_event(session, replacement.event_request_id)
+    for venue_id in sorted({replacement.venue_id, original_venue_id} - {None}):
+        lock_venue(session, venue_id)
+
+
 def release_replaced_original(
     session: Session, replacement: VenueBooking, *, actor_id: str, now: datetime
 ) -> VenueBooking | None:
