@@ -145,7 +145,9 @@ def record_operational_block(
     """Create a block and atomically mark overlapping active bookings."""
 
     from app.exact_venue_bookings import lock_venue
+    from app.venue_disruption import lock_events_at_venue
 
+    lock_events_at_venue(session, venue_id)
     lock_venue(session, venue_id)
     marked_at = created_at or datetime.now(timezone.utc)
     lock_venue_slots(
@@ -200,7 +202,8 @@ def _mark_overlapping_bookings_for_review(
     """Persist a review marker without changing the affected booking itself."""
 
     from app.exact_venue_bookings import interval_from_json
-    from app.venue_timing import legacy_slot_interval
+    from app.venue_disruption import is_affected, notify_disruption, return_disrupted_events
+    from app.venue_timing import SGT, legacy_slot_interval
 
     candidates = session.scalars(
         select(VenueBooking)
@@ -216,37 +219,31 @@ def _mark_overlapping_bookings_for_review(
         intervals = [legacy_slot_interval(claim.day, claim.slot) for claim in booking.occupancy]
         if booking.exact_timing:
             intervals.append(interval_from_json(booking.exact_timing["occupied"]))
-        if any(block_overlaps(block, interval) for interval in intervals):
-            bookings.append(booking)
-    for booking in bookings:
+        event = session.get(EventRequest, booking.event_request_id)
+        # SPL-132 AC1: a booking whose event has already ended is not flagged.
+        if any(block_overlaps(block, interval) for interval in intervals) and is_affected(
+            booking, event
+        ):
+            bookings.append((booking, event))
+    from app.venue_booking_assessment import record_operational_finding
+
+    for booking, event in bookings:
         booking.requires_review = True
         booking.review_trigger_block_id = block.id
         booking.review_marked_at = marked_at
         booking.review_marked_by_account_id = marked_by_account_id
-        from app.venue_booking_assessment import record_operational_finding
-
         record_operational_finding(session, booking, block, assessed_at=marked_at)
-        _notify_coordinator_of_block(session, booking, block)
+        notify_disruption(session, booking, event, block)
+    session.flush()
+    disrupted = {event.id: event for _, event in bookings}
+    return_disrupted_events(
+        session,
+        [disrupted[event_id] for event_id in sorted(disrupted)],
+        actor_id=marked_by_account_id,
+        now=marked_at.astimezone(SGT),
+    )
     session.flush()
     return len(bookings)
-
-
-def _notify_coordinator_of_block(
-    session: Session, booking: VenueBooking, block: VenueOperationalBlock
-) -> None:
-    # SPL-121 AC3; the block's own reason stays with Venue Staff.
-    from app.notifications import add_arrangement_notice
-
-    event = session.get(EventRequest, booking.event_request_id)
-    venue = session.get(Venue, block.venue_id)
-    add_arrangement_notice(
-        session,
-        event,
-        kind="booking_flagged",
-        source_id=f"block-{block.id}-booking-{booking.id}",
-        message=f"Venue booking for {event.name} at {venue.name} needs review: Venue Staff "
-        "blocked time it uses.",
-    )
 
 
 def _block_attributes(data: dict[str, Any]) -> dict[str, Any]:

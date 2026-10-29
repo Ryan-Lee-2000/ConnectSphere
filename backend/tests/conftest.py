@@ -5,7 +5,7 @@ F811 flags as shadowing the import)."""
 from datetime import datetime
 
 import pytest
-from app import venue_hold_expiry
+from app import venue_disruption, venue_hold_expiry
 from app.event_requests import SINGAPORE
 from test_event_requests import client, event_app  # noqa: F401
 
@@ -20,3 +20,12 @@ PINNED_HOLD_CLOCK = datetime(2026, 1, 1, 9, 0, tzinfo=SINGAPORE)
 def pinned_hold_clock(request, monkeypatch):
     if not request.module.__name__.startswith("test_qa_spl133"):
         monkeypatch.setattr(venue_hold_expiry, "_now", lambda: PINNED_HOLD_CLOCK)
+
+
+# SPL-132 AC1: a block flags only bookings that have not ended. The same fixed-date suites would
+# otherwise see their bookings as past, so the disruption clock is pinned before them too. The
+# SPL-132 suites drive it themselves.
+@pytest.fixture(autouse=True)
+def pinned_disruption_clock(request, monkeypatch):
+    if not request.module.__name__.startswith("test_qa_spl132"):
+        monkeypatch.setattr(venue_disruption, "_now", lambda: PINNED_HOLD_CLOCK)

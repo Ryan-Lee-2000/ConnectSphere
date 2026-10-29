@@ -184,7 +184,7 @@ def test_qa_spl_133_102_migration_adds_the_deadline_and_the_expired_status(engin
     ]
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "s4_email_deliveries"
+            "s4_replacement_bookings"
         )
     ids, organisation_id, venue_id, _ = spl85._seed_accounts(engine)
     booking_id = _due_hold(engine, ids, organisation_id, venue_id, date(2027, 7, 1))
@@ -316,7 +316,7 @@ def test_qa_spl_133_104_downgrade_refuses_while_expired_holds_exist(fresh_url):
     try:
         with check.connect() as connection:
             assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "s4_email_deliveries"
+                "s4_replacement_bookings"
             )
     finally:
         check.dispose()

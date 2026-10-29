@@ -720,6 +720,9 @@ button { touch-action: manipulation; }
 .organisation-events__actions--planning span { color: var(--color-muted-slate); font-size: .9375rem; }
 .venue-search-page { max-width: 84rem; }
 .venue-search-page__event-name { margin: var(--space-3) 0 0; color: var(--color-muted-slate); }
+/* SPL-132: a replacement search names the booking it replaces. */
+.venue-search-page__replacing { padding: var(--space-3) var(--space-4); border: 1px solid var(--color-blueprint-line); border-left: 4px solid var(--color-ink-navy); border-radius: var(--radius-md); background: var(--color-raised-surface); color: var(--color-ink-navy); }
+.venue-arrangements__link { margin: var(--space-2) 0 0; color: var(--color-ink-navy); font-weight: 600; }
 .venue-search-page__layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem); align-items: start; gap: var(--space-8); margin-top: var(--space-8); }
 .venue-search-page__brief { position: sticky; top: var(--space-6); }
 .venue-search-page__brief .event-brief { margin: 0; padding: var(--space-5); border: 1px solid var(--color-blueprint-line); border-radius: var(--radius-lg); background: var(--color-raised-surface); }

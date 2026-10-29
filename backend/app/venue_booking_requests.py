@@ -38,9 +38,15 @@ from app.venue_arrangements import (
 )
 from app.venue_booking_history import record_booking_transition
 from app.venue_conflicts import VenueOccupancyConflict, claim_venue_occupancy
+from app.venue_disruption import (
+    REPLACEMENT_NOT_FOUND,
+    check_replaceable,
+    serialize_replacement_links,
+)
 from app.venue_hold_expiry import hold_created
 
 PLANNING = "planning"
+REPLACES_FIELD = "replaces_booking_id"
 REQUESTED = "requested"
 TIMING_CHECK = "Timing and preparation"
 MAX_LAYOUT_LENGTH = 100
@@ -51,7 +57,7 @@ def register_venue_booking_request_routes(app: Flask) -> None:
     @app.post("/api/event-requests/<int:event_request_id>/venue-bookings")
     @require_roles(Role.EVENT_COORDINATOR)
     def request_venue_booking(event_request_id: int):
-        venue_id, layout_name, attendee_count, facilities = _booking_request_body()
+        venue_id, layout_name, attendee_count, facilities, replaces_id = _booking_request_body()
         if event_request_id > MAX_EVENT_REQUEST_ID:
             abort(404, NOT_FOUND)
         with Session(app.extensions["engine"]) as session:
@@ -66,6 +72,10 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 abort(404, NOT_FOUND)
             if event.status != PLANNING:
                 abort(409, "A venue booking can be requested only while the event is in Planning.")
+            # SPL-132 AC5: a replacement names the disrupted booking it replaces. The event lock
+            # above orders concurrent replacement requests, so only one can be pending.
+            if replaces_id is not None:
+                check_replaceable(session, event, replaces_id)
             venue = lock_venue(session, venue_id)
             if venue is None:
                 abort(404, "Venue not found.")
@@ -74,7 +84,7 @@ def register_venue_booking_request_routes(app: Flask) -> None:
 
             if app.config["EXACT_VENUE_TIMING_ENABLED"]:
                 return _request_exact(
-                    session, event, venue, layout_name, attendee_count, facilities
+                    session, event, venue, layout_name, attendee_count, facilities, replaces_id
                 )
             # SPL-131 AC5: with slot timing every booking uses the event's saved slots, so any
             # active booking of this event at this venue overlaps.
@@ -104,6 +114,7 @@ def register_venue_booking_request_routes(app: Flask) -> None:
                 event_slots=event_slots,
                 requested_by_account_id=g.user_id,
                 requested_at=datetime.now(SINGAPORE),
+                replaces_booking_id=replaces_id,
             )
             session.add(booking)
             session.flush()
@@ -205,21 +216,24 @@ def serialize_venue_booking(session: Session, booking: VenueBooking) -> dict[str
         "rejected_at": _timestamp(booking.rejected_at),
         "rejection_reason": booking.rejection_reason,
         "rejection_alternative_suggestion": booking.rejection_alternative_suggestion,
+        # SPL-132: the replacement link in both directions, and whether it can be replaced now.
+        **serialize_replacement_links(session, booking),
     }
 
 
-def _booking_request_body() -> tuple[int, str, int | None, list[str] | None]:
+def _booking_request_body() -> tuple[int, str, int | None, list[str] | None, int | None]:
     """Allow only reviewed inputs; identity, requirements and status remain server-owned.
 
     SPL-131 adds two optional fields, the booking's attendee count and facilities; omitted, the
-    event's values apply.
+    event's values apply. SPL-132 adds the optional booking this request replaces.
     """
 
     data = request.get_json(silent=True)
     allowed = {"venue_id", "layout"}
     if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
         allowed |= {"date", "start_time", "end_time", "venue_revision"}
-    if not isinstance(data, dict) or not allowed <= set(data) <= allowed | ARRANGEMENT_FIELDS:
+    optional = ARRANGEMENT_FIELDS | {REPLACES_FIELD}
+    if not isinstance(data, dict) or not allowed <= set(data) <= allowed | optional:
         if current_app.config["EXACT_VENUE_TIMING_ENABLED"]:
             abort(400, "Send venue, layout, date, start/end times and the reviewed venue revision.")
         abort(400, "Send only the venue and the selected layout.")
@@ -230,7 +244,14 @@ def _booking_request_body() -> tuple[int, str, int | None, list[str] | None]:
         abort(400, "Choose a layout for the booking.")
     if len(layout.strip()) > MAX_LAYOUT_LENGTH:
         abort(400, f"Keep the layout to {MAX_LAYOUT_LENGTH} characters or fewer.")
-    return venue_id, layout.strip(), *arrangement_fields(data)
+    replaces_id = data.get(REPLACES_FIELD)
+    if replaces_id is not None and (
+        isinstance(replaces_id, bool) or not isinstance(replaces_id, int) or replaces_id <= 0
+    ):
+        abort(400, "Choose the venue booking this request replaces.")
+    if replaces_id is not None and replaces_id > MAX_EVENT_REQUEST_ID:
+        abort(404, REPLACEMENT_NOT_FOUND)
+    return venue_id, layout.strip(), *arrangement_fields(data), replaces_id
 
 
 def _event_slots(event: EventRequest) -> list[str]:
@@ -315,7 +336,7 @@ def _already_held(venue: Venue) -> str:
     )
 
 
-def _request_exact(session, event, venue, layout_name, attendee_count, facilities):
+def _request_exact(session, event, venue, layout_name, attendee_count, facilities, replaces_id):
     from app.exact_venue_availability import exact_availability, timing_for
     from app.exact_venue_bookings import requirements, saved_event_interval
     from app.venue_timing import parse_event_interval
@@ -376,6 +397,7 @@ def _request_exact(session, event, venue, layout_name, attendee_count, facilitie
         reviewed_requirements=requirements(event),
         requested_by_account_id=g.user_id,
         requested_at=datetime.now(SINGAPORE),
+        replaces_booking_id=replaces_id,
     )
     session.add(booking)
     session.flush()

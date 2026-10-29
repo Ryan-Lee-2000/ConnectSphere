@@ -20,7 +20,10 @@ export type VenueBooking = {
   required_facilities?: string[];
   // SPL-133: when the tentative hold expires (Requested bookings only).
   expires_at?: string | null;
+  // SPL-132: the replacement link in both directions, and whether this booking can be replaced.
+  replaces?: BookingLink | null; replacements?: BookingLink[]; replaceable?: boolean;
 };
+export type BookingLink = { id: number; venue: { id: number; name: string }; status: string };
 
 const SLOT_NAMES: Record<string, string> = { AM: 'AM', PM: 'PM', NIGHT: 'Night' };
 const layoutName = (layout: string) => layout.replace(/\b\w/g, letter => letter.toUpperCase());
@@ -28,12 +31,14 @@ const slotName = (slot: string) => SLOT_NAMES[slot] || slot;
 const dateName = (day: string) => new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   .format(new Date(`${day}T00:00:00Z`));
 
-export function VenueBookingRequest({ api, eventId, venueId, venueName, expectedAttendance, preferredRoomLayout, timing, attendeeCount, requiredFacilities = NO_FACILITIES, proposedFacilities, onRequested }: {
+export function VenueBookingRequest({ api, eventId, venueId, venueName, expectedAttendance, preferredRoomLayout, timing, attendeeCount, requiredFacilities = NO_FACILITIES, proposedFacilities, replacesBookingId, onRequested }: {
   api: ApiRequest; eventId: number; venueId: number; venueName: string;
   timing?: BookingTiming; expectedAttendance: number | null; preferredRoomLayout: string | null; onRequested: (booking: VenueBooking) => void;
   attendeeCount?: number; requiredFacilities?: string[];
   // SPL-131: facilities chosen in the search for this booking; the event's are the default.
   proposedFacilities?: string[];
+  // SPL-132: the disrupted booking this request replaces.
+  replacesBookingId?: number;
 }) {
   const [layouts, setLayouts] = useState<Layout[] | null>(null);
   const [venueFacilities, setVenueFacilities] = useState<string[]>([]);
@@ -87,7 +92,8 @@ export function VenueBookingRequest({ api, eventId, venueId, venueName, expected
           venue_revision: timing.venue_revision,
         } : {}),
         ...(attendeeValue !== expectedAttendance ? { attendee_count: attendeeValue } : {}),
-        ...(facilitiesChanged ? { required_facilities: facilities } : {}) }),
+        ...(facilitiesChanged ? { required_facilities: facilities } : {}),
+        ...(replacesBookingId ? { replaces_booking_id: replacesBookingId } : {}) }),
       });
       if (!response.ok) { setError(await responseError(response, 'Could not request this venue. Try again.')); return; }
       const body = await response.json() as { booking?: VenueBooking };
@@ -123,7 +129,7 @@ export function VenueBookingRequest({ api, eventId, venueId, venueName, expected
       {facilityOptions.map(item => <label key={item}><input checked={facilities.includes(item)} type="checkbox"
         onChange={() => setFacilities(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} />{item}</label>)}
     </fieldset>}
-    <button className="button button--primary" disabled={submitting} type="submit"><CalendarCheck size={17} />{submitting ? 'Requesting…' : 'Request booking'}</button>
+    <button className="button button--primary" disabled={submitting} type="submit"><CalendarCheck size={17} />{submitting ? 'Requesting…' : replacesBookingId ? 'Request replacement' : 'Request booking'}</button>
     <p className="venue-booking-request__note">{timing ? 'Requests the times shown above using the saved event requirements. The full occupied interval is held while Venue Staff review the request.' : 'Uses the event’s saved date and time. Setup and turnaround are added from this venue’s requirements, and the slots are held until Venue Staff decide.'}</p>
     {error && <p className="error" role="alert">{error}</p>}
   </form>;

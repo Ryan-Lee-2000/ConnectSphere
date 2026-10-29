@@ -389,6 +389,7 @@ class EventRequest(Base):
 
 BOOKING_STATUSES = ("requested", "approved", "rejected", "withdrawn", "cancelled", "expired")
 ACTIVE_BOOKING_STATUSES = ("requested", "approved")
+ONE_REQUESTED_REPLACEMENT = "status = 'requested' AND replaces_booking_id IS NOT NULL"
 
 
 class VenueBooking(Base):
@@ -402,6 +403,14 @@ class VenueBooking(Base):
         ),
         # SPL-133: finds the holds whose deadline has passed without scanning every booking.
         Index("ix_venue_bookings_status_expires_at", "status", "expires_at"),
+        # SPL-132: at most one Requested replacement per disrupted booking.
+        Index(
+            "uq_venue_bookings_one_requested_replacement",
+            "replaces_booking_id",
+            unique=True,
+            postgresql_where=text(ONE_REQUESTED_REPLACEMENT),
+            sqlite_where=text(ONE_REQUESTED_REPLACEMENT),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -472,6 +481,10 @@ class VenueBooking(Base):
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     rejection_alternative_suggestion: Mapped[str | None] = mapped_column(Text)
+    # SPL-132. The disrupted booking this request replaces; null for an ordinary booking.
+    replaces_booking_id: Mapped[int | None] = mapped_column(
+        ForeignKey("venue_bookings.id", ondelete="SET NULL")
+    )
     event_request: Mapped[EventRequest] = relationship(back_populates="venue_bookings")
     venue: Mapped[Venue] = relationship(back_populates="bookings")
     occupancy: Mapped[list["VenueBookingOccupancy"]] = relationship(

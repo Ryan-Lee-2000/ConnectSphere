@@ -165,6 +165,10 @@ export function VenueBookingReview({ accessToken, bookingId, request }: {
     ...(booking.expires_at && (booking.status === 'requested' || booking.status === 'expired')
       ? [[booking.status === 'expired' ? 'Hold expired' : 'Hold expires', `${holdTime(booking.expires_at)} SGT`] as [string, string]]
       : []),
+    // SPL-132 AC7: approving a replacement releases the booking it replaces.
+    ...(booking.replaces
+      ? [['Replaces', `${booking.replaces.venue.name} booking #${booking.replaces.id} (${STATUS_NAMES[booking.replaces.status] || booking.replaces.status}); approving releases it`] as [string, string]]
+      : []),
   ];
   // SPL-80 AC3: what the event needs of a venue, so the decision can be made here rather than by
   // chasing the coordinator. Empty values are dropped rather than shown as "None", because an

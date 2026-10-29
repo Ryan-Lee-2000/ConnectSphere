@@ -31,6 +31,7 @@ from app.venue_booking_queue import decision_event_details
 from app.venue_booking_requests import serialize_venue_booking
 from app.venue_booking_status import _review
 from app.venue_conflicts import VenueOccupancyConflict, transition_booking_status
+from app.venue_disruption import lock_replacement_venues, release_replaced_original
 from app.venue_hold_expiry import EXPIRED, HOLD_EXPIRED, aware, expire_booking, format_deadline
 from app.venue_slot_locks import lock_venue_slots
 
@@ -70,7 +71,8 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
         note = _approval_note()
         with Session(app.extensions["engine"]) as session:
             # Row lock: a concurrent approval or withdrawal waits here, then sees the outcome (AC7).
-            booking = _booking(session, booking_id, lock=True)
+            # SPL-132: a replacement's original venue is locked with its own, in id order.
+            booking = _booking(session, booking_id, lock=True, with_original_venue=True)
             # SPL-133 AC4/AC10: approval must commit strictly before the deadline. A due hold
             # that the request hook has not reached yet is expired here, under the same lock.
             if expire_booking(session, booking, venue_hold_expiry._now()):
@@ -116,14 +118,26 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
                 changed_at=booking.approved_at,
                 note=note,
             )
+            # SPL-132 AC7: the replaced original is released in this same transaction. A repeated
+            # approval is refused above, so it can never release anything further.
+            original = release_replaced_original(
+                session, booking, actor_id=g.user_id, now=booking.approved_at
+            )
             session.flush()
+            released = (
+                f" It replaces the {session.get(Venue, original.venue_id).name} booking, "
+                "which has been released."
+                if original is not None
+                else ""
+            )
             add_arrangement_notice(
                 session,
                 event,
                 kind="booking_approved",
                 source_id=entry.id,
-                message=f"Venue booking for {event.name} at {venue.name} was approved.",
+                message=f"Venue booking for {event.name} at {venue.name} was approved.{released}",
             )
+            # After the release, so attendees get one notice naming the venues the event now holds.
             add_venue_change_notices(session, event, booking.id, added=True)
             session.commit()
             return jsonify(booking=serialize_venue_booking(session, booking))
@@ -181,12 +195,16 @@ def register_venue_booking_approval_routes(app: Flask) -> None:
             return jsonify(booking=serialize_venue_booking(session, booking))
 
 
-def _booking(session: Session, booking_id: int, *, lock: bool = False) -> VenueBooking:
+def _booking(
+    session: Session, booking_id: int, *, lock: bool = False, with_original_venue: bool = False
+) -> VenueBooking:
     if booking_id > MAX_EVENT_REQUEST_ID:
         abort(404, NOT_FOUND)
     query = select(VenueBooking).where(VenueBooking.id == booking_id)
     from app.exact_venue_bookings import lock_booking
 
+    if lock and with_original_venue:
+        lock_replacement_venues(session, booking_id)
     booking = lock_booking(session, booking_id) if lock else session.scalar(query)
     if booking is None:
         abort(404, NOT_FOUND)

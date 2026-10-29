@@ -196,7 +196,8 @@ def test_qa_spl_121_007_a_failed_decision_leaves_no_notice(app, client, monkeypa
 
 
 # QA-SPL-121-030 | AC3 | BB
-def test_qa_spl_121_030_a_block_over_the_booking_notifies_without_its_reason(app, client):
+def test_qa_spl_121_030_a_block_over_the_booking_notifies_with_its_time_and_reason(app, client):
+    # SPL-132 AC2 superseded the reason-free wording: the notice names the time and reason.
     _, venue_id, [booking] = venue.scenario(app, client, approved=True)
     before = len(notices(app))
     response = block(client, venue_id)
@@ -206,10 +207,12 @@ def test_qa_spl_121_030_a_block_over_the_booking_notifies_without_its_reason(app
     key, message = rows[-1]
     assert key.startswith("arrangement_booking_flagged:block-")
     assert key.endswith(f"-booking-{booking['id']}")
+    day = venue.DAY
     assert message == (
-        f"Venue booking for {EVENT} at {HALL} needs review: Venue Staff blocked time it uses."
+        f"Venue booking for {EVENT} at {HALL} on {day:%a} {day.day} {day:%b %Y}, 10:00–11:00 SGT "
+        "needs a replacement: Venue Staff marked the venue unavailable "
+        "(Burst pipe in the plant room)."
     )
-    assert "Burst pipe" not in message
 
 
 # QA-SPL-121-031 | AC3 | BB

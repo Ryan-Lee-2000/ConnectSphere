@@ -119,15 +119,23 @@ def apply_prepared_change(session, event, values, changes, impacts, equipment=No
     return audit, status_change, released
 
 
-def return_to_planning(session: Session, event: EventRequest, now: datetime):
+def return_to_planning(
+    session: Session,
+    event: EventRequest,
+    now: datetime,
+    *,
+    actor_id: str | None = None,
+    message: str | None = None,
+):
     if event.status not in {"confirmed", "preparing"}:
         return None
+    actor_id = actor_id or g.user_id
     # AC4: the durable status-history event is the handoff to SPL-123, in this transaction.
     history = transition_event_status(
         session,
         event_request_id=event.id,
         action="significant_change",
-        actor_account_id=g.user_id,
+        actor_account_id=actor_id,
         changed_at=now,
     )
     event.status = "planning"
@@ -137,10 +145,11 @@ def return_to_planning(session: Session, event: EventRequest, now: datetime):
     add_organiser_notice(
         session,
         event,
-        actor_id=g.user_id,
+        actor_id=actor_id,
         kind="returned_to_planning",
         source=history,
-        message=f"{event.name} has returned to Planning after a significant change and must be "
+        message=message
+        or f"{event.name} has returned to Planning after a significant change and must be "
         "confirmed again.",
     )
     return history

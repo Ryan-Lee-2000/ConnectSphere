@@ -454,6 +454,20 @@ def _active_role_holders(session: Session, role: Role) -> list[str]:
     ).all()
 
 
+def booking_time(booking: VenueBooking, event: EventRequest) -> str:
+    """The booking's own date and Singapore event times, for a coordinator notice (SPL-132)."""
+
+    day = booking.booking_date
+    if booking.exact_timing:
+        start, end = _interval(booking.exact_timing["event"])
+        return f" on {_day(start.date())}, {start:%H:%M}–{end:%H:%M} SGT"
+    if day is None:
+        return ""
+    if event.start_time and event.end_time:
+        return f" on {_day(day)}, {event.start_time:%H:%M}–{event.end_time:%H:%M} SGT"
+    return f" on {_day(day)}"
+
+
 def _booking_details(booking: VenueBooking, event: EventRequest) -> str:
     """AC5: date, Singapore times and the whole occupied window, from the booking's own timing."""
 
