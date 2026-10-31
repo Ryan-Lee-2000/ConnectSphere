@@ -279,14 +279,14 @@ it('[QA-SPL-111-108] a network failure keeps the form, and a repeat click while 
 });
 
 // QA-SPL-111-109 | AC5 | BB
-it('[QA-SPL-111-109] shows the pending request with every item: field, now, requested, reason', async () => {
+it('[QA-SPL-111-109] shows the pending request with every item: field, at submission, requested, reason', async () => {
   panel(scripted(list(PENDING)));
   const group = await screen.findByRole('group', { name: 'Pending change request' });
   const text = group.textContent ?? '';
   for (const expected of [
-    'Expected attendance', 'Now: 150', 'Requested: 50', 'Reason: Fewer guests.',
-    'Required facilities', 'Now: None', 'Requested: Stage, AV', 'Reason: Band.',
-    'Description', 'Now: Not set', 'Requested: A new one',
+    'Expected attendance', 'At submission: 150', 'Requested: 50', 'Reason: Fewer guests.',
+    'Required facilities', 'At submission: None', 'Requested: Stage, AV', 'Reason: Band.',
+    'Description', 'At submission: Not set', 'Requested: A new one',
   ]) expect(text).toContain(expected);
   expect(within(group).getAllByRole('listitem')).toHaveLength(3);
 });
@@ -326,7 +326,7 @@ it('[QA-SPL-111-112] cancelling closes the form without a request; reopening sta
 });
 
 // QA-SPL-111-113 | AC1/AC5 | BB: the organiser's My requests screen
-it('[QA-SPL-111-113] My requests offers Change requests only for an allowed status and opens the panel', async () => {
+it('[QA-SPL-111-113] My requests offers change request history for every submitted status and opens the panel', async () => {
   const rows = ['submitted', 'under_review', 'planning', 'confirmed', 'cancelled'].map((status, index) => ({
     id: index + 1, name: `Event ${status}`, status, status_label: status, status_explanation: '',
     status_changed_at: null, last_saved_at: null, coordinator: null,
@@ -337,7 +337,7 @@ it('[QA-SPL-111-113] My requests offers Change requests only for an allowed stat
   })) as unknown as ApiRequest & ReturnType<typeof vi.fn>;
   render(<EventRequestDrafts accessToken="t" request={request} />);
   await screen.findByText('Event planning');
-  expect(screen.getAllByRole('button', { name: 'Change requests' })).toHaveLength(3);
+  expect(screen.getAllByRole('button', { name: 'Change requests' })).toHaveLength(5);
   const row = screen.getByText('Event planning').closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: 'Change requests' }));
   expect(await screen.findByRole('heading', { name: 'Change requests for Event planning' })).toBeTruthy();

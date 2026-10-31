@@ -15,6 +15,10 @@ type EventDetail = EventSummary & {
   start_time: string;
   end_time: string;
   expected_attendance: number;
+  preferred_room_layout?: string | null;
+  required_facilities?: string[];
+  accessibility_needs?: string[];
+  venue_notes?: string | null;
   status: string;
   status_label: string;
   status_explanation: string;
@@ -40,6 +44,7 @@ type EquipmentArrangement = {
   requirement_id: number;
   equipment: string;
   required_quantity: number;
+  notes?: string | null;
   reserved_quantity: number;
   status: string;
   status_label: string;
@@ -108,7 +113,9 @@ function ArrangementsSummary({ event }: { event: EventDetail }) {
         : <div className="organisation-events__table-wrap"><table className="organisation-events__table">
           <thead><tr><th scope="col">Equipment</th><th scope="col">Quantity</th><th scope="col">Status</th></tr></thead>
           <tbody>{equipment.map(item => <tr key={item.requirement_id}>
-            <td><strong>{item.equipment}</strong><small>{item.essentiality_label}</small></td>
+            <td><strong>{item.equipment}</strong><small>{item.essentiality_label}</small>
+              {'notes' in item && <small>Technical notes: {item.notes || 'None'}</small>}
+            </td>
             <td><strong>{item.reserved_quantity}/{item.required_quantity}</strong><small>reserved / required</small></td>
             <td><span className={`arrangement-status arrangement-status--${item.status}`}>{item.status_label}</span></td>
           </tr>)}</tbody>
@@ -230,6 +237,10 @@ export function OrganisationEvents({
       <div><dt>Proposed date</dt><dd>{formatDate(event.proposed_date)}</dd></div>
       <div><dt>Time</dt><dd>{event.start_time} to {event.end_time}</dd></div>
       <div><dt>Expected attendance</dt><dd>{event.expected_attendance}</dd></div>
+      <div><dt>Preferred room layout</dt><dd>{event.preferred_room_layout || 'Not set'}</dd></div>
+      <div><dt>Required facilities</dt><dd>{event.required_facilities?.join(', ') || 'None'}</dd></div>
+      <div><dt>Accessibility needs</dt><dd>{event.accessibility_needs?.join(', ') || 'None'}</dd></div>
+      <div><dt>Venue preferences and notes</dt><dd>{event.venue_notes || 'None'}</dd></div>
       <div><dt>Assigned coordinator</dt><dd>{event.coordinator?.name || 'Not assigned'}</dd></div>
     </dl>
     {event.status === 'returned_for_clarification' && <p className="notice" role="status">{event.status_explanation}</p>}

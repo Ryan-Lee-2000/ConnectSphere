@@ -178,7 +178,8 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
   if (changing !== null) return <div className="event-request-status">
     <p className="eyebrow">My requests</p>
     <h1>Change request</h1>
-    <ChangeRequestsPanel api={api} eventId={changing.id} eventStatus={changing.status}
+    <p><a href={`/workspace/organisation-events/${changing.id}`}>View current event details</a></p>
+    <ChangeRequestsPanel key={changing.id} api={api} eventId={changing.id} eventStatus={changing.status}
       eventName={changing.name} canSubmit />
     <button className="button button--secondary" type="button" onClick={() => setChanging(null)}>
       Back to my requests
@@ -296,10 +297,9 @@ export function EventRequestDrafts({ accessToken, request, onUnsavedChanges }: {
                 <button className="button button--secondary" onClick={() => void openClarification(item)} type="button">
                   Respond to clarification
                 </button>}
-              {['under_review', 'planning', 'confirmed'].includes(item.status) &&
-                <button className="button button--secondary" onClick={() => setChanging(item)} type="button">
+              <button className="button button--secondary" onClick={() => setChanging(item)} type="button">
                   Change requests
-                </button>}
+                </button>
             </td>
             <td>{item.coordinator ? item.coordinator.name : 'Not assigned yet'}</td>
             <td>{item.status_changed_at ? new Date(item.status_changed_at).toLocaleString() : 'Not recorded'}</td>
