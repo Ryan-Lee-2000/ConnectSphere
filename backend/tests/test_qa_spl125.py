@@ -1607,7 +1607,7 @@ from app.event_requests import SINGAPORE
 from sqlalchemy.orm import Session
 sent = []
 create_app = importlib.import_module("backend.app").create_app
-app = create_app({{"TESTING": True, "DATABASE_URL": "sqlite:///{tmp_path}/d1.db",
+app = create_app({{"TESTING": True, "DATABASE_URL": "sqlite:///{tmp_path.as_posix()}/d1.db",
                   "EMAIL_SENDER": lambda message: sent.append(message["Subject"])}})
 import sys
 assert "backend.app.email_delivery" in sys.modules and "app.email_delivery" in sys.modules

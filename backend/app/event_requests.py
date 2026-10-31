@@ -618,9 +618,8 @@ def _serialize_organisation_event_summary(event: EventRequest) -> dict[str, Any]
 def _serialize_organisation_event_detail(session: Session, event: EventRequest) -> dict[str, Any]:
     """The organiser's safe, read-only event and arrangement summary.
 
-    This response is an allowlist. In particular, event notes, equipment notes and Venue Staff
-    approval notes stay out even though the loaded aggregates contain them. Those notes support
-    internal planning decisions and SPL-110 does not grant organisers access to them.
+    Internal event notes and Venue Staff approval notes remain private (SPL-110).
+    SPL-113 exposes equipment requirement notes only to the responsible organiser.
     """
 
     return {
@@ -634,6 +633,10 @@ def _serialize_organisation_event_detail(session: Session, event: EventRequest) 
         "status_label": status_label(event.status),
         "status_explanation": status_explanation(event.status),
         "coordinator": _serialize_organisation_coordinator(event),
+        "preferred_room_layout": event.preferred_room_layout,
+        "required_facilities": event.required_facilities,
+        "accessibility_needs": event.accessibility_needs,
+        "venue_notes": event.venue_notes,
         "venue_arrangements": _serialize_organisation_venues(session, event),
         "equipment_arrangements": _serialize_organisation_equipment(event),
         "registration_settings": _serialize_organisation_registration(event),
@@ -702,6 +705,7 @@ def _serialize_organisation_equipment(event: EventRequest) -> list[dict[str, Any
                     line.catalogue_type.name if line.catalogue_type else line.equipment_type
                 ),
                 "required_quantity": line.quantity,
+                **({"notes": line.notes} if event.organiser_account_id == g.user_id else {}),
                 "reserved_quantity": sum(
                     remaining_quantity(reservation) for reservation in line.reservations
                 ),
