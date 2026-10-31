@@ -312,6 +312,10 @@ def test_tc_cs_e01_s3_02_opens_the_approved_read_only_detail(organisation_app, c
             "status_label": "Submitted",
             "status_explanation": status_explanation("submitted"),
             "coordinator": None,
+            "preferred_room_layout": None,
+            "required_facilities": [],
+            "accessibility_needs": [],
+            "venue_notes": None,
             "venue_arrangements": [],
             "equipment_arrangements": [],
             "registration_settings": {
@@ -523,6 +527,14 @@ def test_tc_spl_110_006_excludes_internal_event_equipment_and_venue_notes(organi
         "Internal equipment note",
     ):
         assert private_value not in body
+
+    owner = client.get(f"/api/organisation/events/{event_id}", headers=headers("organiser-two"))
+    assert owner.status_code == 200
+    assert owner.json["event"]["equipment_arrangements"][0]["notes"] == (
+        "Internal equipment note — never expose."
+    )
+    assert "Internal coordinator handover" not in owner.get_data(as_text=True)
+    assert "Venue Staff internal note" not in owner.get_data(as_text=True)
 
 
 def test_tc_spl_110_007_get_is_read_only_and_creates_no_arrangement_state(organisation_app, client):

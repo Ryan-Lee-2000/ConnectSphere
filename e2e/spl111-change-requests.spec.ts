@@ -68,8 +68,10 @@ test('QA-SPL-111-200: an organiser submits a change request, the coordinator see
   // AC1 (negative): a Submitted event cannot have a change request started.
   const row = () => page.getByRole('row').filter({ hasText: name });
   await expect(row()).toContainText('Submitted');
-  await expect(row().getByRole('button', { name: 'Change requests' })).toHaveCount(0);
-  await caption(page, 'AC1: not offered while the event is Submitted');
+  await row().getByRole('button', { name: 'Change requests' }).click();
+  await expect(page.getByText('No pending change request.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request a change', exact: true })).toHaveCount(0);
+  await caption(page, 'AC1: history opens while Submitted, but a new change request is not offered');
   await signOut(page);
 
   await signIn(page, manager);
@@ -165,7 +167,7 @@ test('QA-SPL-111-200: an organiser submits a change request, the coordinator see
   await row().getByRole('button', { name: 'Change requests' }).click();
   const after = page.getByRole('group', { name: 'Pending change request' });
   await expect(after).toContainText('Expected attendance');
-  await expect(after).toContainText('Now: 120');
+  await expect(after).toContainText('At submission: 120');
   await expect(after).toContainText('Requested: 80');
   await expect(after).toContainText('The client reduced the guest list.');
   await expect(after).toContainText('Description');

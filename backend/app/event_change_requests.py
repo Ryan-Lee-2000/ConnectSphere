@@ -39,6 +39,7 @@ from app.authorization import require_roles
 from app.coordinator_assignment import MAX_EVENT_REQUEST_ID, is_assigned_coordinator
 from app.event_requests import _iso_date, _iso_time, _positive_integer, _string_list
 from app.models import (
+    Account,
     EquipmentRequirement,
     EquipmentType,
     EventChangeRequest,
@@ -305,7 +306,9 @@ def _own_event(session: Session, event_request_id: int, *, lock: bool = False) -
 
 def _may_read(session: Session, event: EventRequest) -> bool:
     if Role.EVENT_ORGANISER.value in g.account_roles and event.organiser_account_id == g.user_id:
-        return True
+        account = session.get(Account, g.user_id)
+        if account is not None and account.organisation_id == event.organisation_id:
+            return True
     return Role.EVENT_COORDINATOR.value in g.account_roles and is_assigned_coordinator(
         session, event.id, g.user_id
     )

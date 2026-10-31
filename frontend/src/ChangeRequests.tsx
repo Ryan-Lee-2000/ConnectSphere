@@ -87,14 +87,18 @@ function requestedValue(kind: Kind, text: string): unknown {
   return text;
 }
 
-export function ChangeRequestItems({ items }: { items: ChangeRequestItem[] }) {
+export function ChangeRequestItems({ items, showOutcomes = false }: { items: ChangeRequestItem[]; showOutcomes?: boolean }) {
   return <ul className="request-list">
     {items.map(item => <li key={item.id}>
       <div>
         <strong>{item.field_label}</strong>
-        <p>Now: {show(item.current_value)}</p>
+        <p>{showOutcomes ? 'At submission' : 'Now'}: {show(item.current_value)}</p>
         <p>Requested: {show(item.requested_value)}</p>
         <p>Reason: {item.reason}</p>
+        {showOutcomes && <>
+          <p><strong>Outcome: {item.decision === 'accepted' ? 'Accepted' : item.decision === 'declined' ? 'Declined' : 'Pending'}</strong></p>
+          {item.decision === 'declined' && <p>Decline reason: {item.decline_reason}</p>}
+        </>}
       </div>
     </li>)}
   </ul>;
@@ -168,6 +172,7 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
   }, [api, eventId, needsEquipment, equipmentRetry]);
 
   const pending = requests?.find(item => item.status === 'pending') ?? null;
+  const closed = requests?.filter(item => item.status === 'closed') ?? [];
   const canStart = canSubmit && CHANGEABLE_STATUSES.includes(status) && requests !== null && !pending;
 
   function update(key: number, change: Partial<Draft>) {
@@ -262,11 +267,18 @@ export function ChangeRequestsPanel({ api, eventId, eventStatus, canSubmit = fal
           : <p role="status">No change requests.</p>}
       </> : pending ? <div role="group" aria-label="Pending change request">
         <p><strong>Pending</strong> · submitted {new Date(pending.submitted_at).toLocaleString()}</p>
-        <ChangeRequestItems items={pending.items} />
+        <ChangeRequestItems items={pending.items} showOutcomes />
         {canSubmit && <p className="notice" role="status">
           You can submit another change request once this one is Closed.
         </p>}
       </div> : <p role="status">No pending change request.</p>}
+      {!onDecided && closed.length > 0 && <section aria-label="Closed change request history">
+        <h3>Closed change requests</h3>
+        {closed.map(request => <div key={request.id} role="group" aria-label={`Closed change request ${request.id}`}>
+          <p><strong>Closed</strong> · submitted {new Date(request.submitted_at).toLocaleString()}</p>
+          <ChangeRequestItems items={request.items} showOutcomes />
+        </div>)}
+      </section>}
       {canStart && <button className="button button--primary" type="button" onClick={open}>
         Request a change
       </button>}
