@@ -54,7 +54,7 @@ def add_notice(app, recipient, event_id, message="Something happened", *, minute
             recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=event_id,
             message=message,
-            dedupe_key=f"seed:{recipient}:{message}:{minutes}",
+            dedupe_key=f"coordinator_assigned:{recipient}:{message}:{minutes}",
             created_at=NOW + timedelta(minutes=minutes),
             read_at=NOW if read else None,
         )
@@ -428,9 +428,15 @@ def test_qa_spl_101_030_the_same_change_cannot_be_stored_twice_for_one_recipient
         )
 
     with Session(app.extensions["engine"]) as session:
-        session.add_all([notice(ALICE, "k1"), notice(BOB, "k1"), notice(ALICE, "k2")])
+        session.add_all(
+            [
+                notice(ALICE, "coordinator_assigned:k1"),
+                notice(BOB, "coordinator_assigned:k1"),
+                notice(ALICE, "coordinator_assigned:k2"),
+            ]
+        )
         session.commit()  # same key for another recipient, or another key, is allowed
-        session.add(notice(ALICE, "k1"))
+        session.add(notice(ALICE, "coordinator_assigned:k1"))
         with pytest.raises(IntegrityError):
             session.commit()
 
@@ -541,7 +547,7 @@ def test_qa_spl_101_039_listing_uses_a_constant_number_of_queries(app, client):
                     recipient_role=Role.EVENT_COORDINATOR,
                     event_request_id=event_id,
                     message=f"n{size}-{i}",
-                    dedupe_key=f"{size}:{i}",
+                    dedupe_key=f"coordinator_assigned:{size}-{i}",
                     created_at=NOW + timedelta(minutes=i),
                 )
                 for i in range(size)
@@ -576,7 +582,7 @@ def test_qa_spl_101_040_a_large_inbox_is_returned_in_full(app, client):
                 recipient_role=Role.EVENT_COORDINATOR,
                 event_request_id=event_id,
                 message=f"notice {i}",
-                dedupe_key=f"bulk:{i}",
+                dedupe_key=f"coordinator_assigned:{i}",
                 created_at=NOW + timedelta(seconds=i),
                 read_at=NOW if i % 2 else None,
             )

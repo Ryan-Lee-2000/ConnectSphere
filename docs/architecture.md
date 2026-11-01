@@ -368,3 +368,13 @@ Backends (`EMAIL_BACKEND`): tests always use `log`; local development uses `smtp
 Supabase's Mailpit (port 54325, inbox http://127.0.0.1:54324); Render uses `gmail_api` over
 HTTPS. Outside tests the app refuses to start without a valid backend and its settings. All
 mail goes to one shared address and names its intended recipient and role (Release 1 decision).
+
+## Notification email settings (SPL-126)
+
+Every notice carries `notifications.notification_type`, one of the fixed `NotificationType` list,
+set from its dedupe-key kind when it is saved; `NOTIFICATION_TYPE_BY_KIND` must name every kind,
+so a new trigger is refused until its kind has a type. `notification_email_opt_outs` holds one row
+per account and type with email turned off (RLS, no browser grants), so every type starts on.
+SPL-125's flush hook skips the email for an opted-out recipient and type; the notice itself is
+always written. `GET /api/notification-settings` and `PUT /api/notification-settings/<type>` act
+only on the session's account and only on types for roles it holds. See [SPL-126](tasks/SPL-126.md).

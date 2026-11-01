@@ -107,9 +107,17 @@ export function Notifications({
     <p className="eyebrow">Your inbox</p>
     <div className="notifications__heading">
       <h2 id="notifications-title">Notifications</h2>
-      {notices !== null && <p className="notifications__count" role="status">
-        <strong>{unread}</strong> unread
-      </p>}
+      <div className="notifications__actions">
+        {notices !== null && <p className="notifications__count" role="status">
+          <strong>{unread}</strong> unread
+        </p>}
+        {/* SPL-126: email for each notification type is chosen on its own page. */}
+        <a
+          className="notifications__settings-link"
+          href="/workspace/notification-settings"
+          onClick={click => { click.preventDefault(); onNavigate('/workspace/notification-settings'); }}
+        >Email settings</a>
+      </div>
     </div>
     {error && <p className="error" role="alert">{error}</p>}
     {notices !== null && (notices.length === 0
