@@ -1,7 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VenueOccupancyCalendar } from './VenueOccupancyCalendar';
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 // QA-SPL-88 TC-SPL-88-22 and -23. The API is stubbed, so these prove what an authorised user can
 // see and do with a given payload; the payload's own shape is proved server-side in
@@ -85,7 +88,12 @@ describe('VenueOccupancyCalendar', () => {
   });
 
   // TC-SPL-88-22
-  it('[TC-SPL-88-22] refetches on venue or date change, and never issues a write', async () => {
+  it.each(['2026-10-31T09:54:00Z', '2026-10-31T22:59:00Z'])(
+    '[TC-SPL-88-22] refetches on venue or date change, and never issues a write (clock %s)', async now => {
+    // Reproduce both sides of the Singapore date rollover between PR and main CI.
+    // Keep async timers real so waitFor still observes completed React updates.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(now));
     const request = api();
     render(<VenueOccupancyCalendar accessToken="token" venues={VENUES} request={request} />);
     await screen.findByRole('grid');
@@ -95,9 +103,13 @@ describe('VenueOccupancyCalendar', () => {
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     expect(String(request.mock.calls[1][0])).toContain('/api/venues/2/occupancy');
 
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-01' } });
+    const from = screen.getByLabelText('From') as HTMLInputElement;
+    const nextDay = new Date(`${from.value}T00:00:00Z`);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const changedDate = nextDay.toISOString().slice(0, 10);
+    fireEvent.change(from, { target: { value: changedDate } });
     await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
-    expect(String(request.mock.calls[2][0])).toContain('start_date=2026-11-01');
+    expect(String(request.mock.calls[2][0])).toContain(`start_date=${changedDate}`);
 
     // AC6: refreshing the view must never modify booking or block data.
     for (const [, init] of request.mock.calls) {
