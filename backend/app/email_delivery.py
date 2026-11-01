@@ -30,7 +30,16 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.event_requests import SINGAPORE
-from app.models import ROLE_DISPLAY_NAMES, Account, EmailDelivery, EventRequest, Notification, Role
+from app.models import (
+    ROLE_DISPLAY_NAMES,
+    Account,
+    EmailDelivery,
+    EventRequest,
+    Notification,
+    NotificationEmailOptOut,
+    Role,
+    notification_type_for,
+)
 from app.notifications import _event_link
 
 logger = logging.getLogger(__name__)
@@ -190,11 +199,32 @@ def _queue_emails(session: Session, _context, _instances) -> None:
     if settings is None:
         return
     with session.no_autoflush:
-        for notice in notices:
+        muted = _muted(session, notices)
+        # SPL-126 AC4, AC6: a type its recipient turned off gets no email; the notice still stands.
+        emailed = [
+            notice
+            for notice in notices
+            if (notice.recipient_account_id, notification_type_for(notice.dedupe_key).value)
+            not in muted
+        ]
+        for notice in emailed:
             session.add(_render(session, notice, settings))
-    # The dispatch itself is kept, not a flag: when the app is loaded as backend.app (npm start)
-    # this module is imported twice, and whichever copy's hook runs first must start delivery.
-    session.info["spl125_email_dispatch"] = settings.dispatch
+    if emailed:
+        # The dispatch itself is kept, not a flag: when the app is loaded as backend.app (npm
+        # start) this module is imported twice, and whichever copy's hook runs first must start
+        # delivery.
+        session.info["spl125_email_dispatch"] = settings.dispatch
+
+
+def _muted(session: Session, notices: list[Notification]) -> set[tuple[str, str]]:
+    recipients = {notice.recipient_account_id for notice in notices}
+    return set(
+        session.execute(
+            select(
+                NotificationEmailOptOut.account_id, NotificationEmailOptOut.notification_type
+            ).where(NotificationEmailOptOut.account_id.in_(recipients))
+        ).tuples()
+    )
 
 
 @event.listens_for(Session, "after_commit")

@@ -52,6 +52,8 @@ PRODUCT_TABLES = {
     "safety_reviews",
     # SPL-125: one email record per notice, sent or failed.
     "email_deliveries",
+    # SPL-126: the notification types each account has turned email off for.
+    "notification_email_opt_outs",
 }
 PRODUCT_TABLE_LIST = ", ".join(f"'{table}'" for table in sorted(PRODUCT_TABLES))
 

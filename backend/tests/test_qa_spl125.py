@@ -186,7 +186,9 @@ def delivery_for(app, recipient):
     return next(d for d in deliveries(app) if d.recipient_account_id == recipient)
 
 
-def add_notice(app, *, role=Role.EVENT_COORDINATOR, recipient=ALICE, kind="future_kind", **extra):
+def add_notice(
+    app, *, role=Role.EVENT_COORDINATOR, recipient=ALICE, kind="coordinator_assigned", **extra
+):
     """Adds a notice directly, as a future notification type would, and commits it."""
 
     event_id = extra.pop("event_id", None) or add_event(app, extra.pop("event_name", "Gala"))
@@ -254,7 +256,7 @@ def test_qa_spl_125_002_a_reassignment_emails_every_notified_account_once(app, c
 
 # QA-SPL-125-003 | AC1 | WB future type
 def test_qa_spl_125_003_a_notice_type_added_later_is_emailed_without_email_work(app, outbox):
-    notice_id = add_notice(app, role=Role.SAFETY_OFFICER, kind="spl999_future_type")
+    notice_id = add_notice(app, role=Role.SAFETY_OFFICER, kind="safety_decision")
 
     [email] = deliveries(app)
     assert email.notification_id == notice_id
@@ -273,7 +275,7 @@ def test_qa_spl_125_004_many_notices_in_one_commit_get_one_email_each(app, outbo
                 recipient_role=Role.EVENT_COORDINATOR,
                 event_request_id=event_id,
                 message=f"Change {i}",
-                dedupe_key=f"bulk:{i}",
+                dedupe_key=f"coordinator_assigned:{i}",
                 created_at=datetime.now(SINGAPORE),
             )
             for i in range(25)
@@ -360,9 +362,9 @@ def test_qa_spl_125_011_the_send_starts_only_after_the_action_is_saved(app, clie
 
 # QA-SPL-125-012 | AC2 | WB no batching
 def test_qa_spl_125_012_separate_actions_send_separately_and_immediately(app, outbox):
-    add_notice(app, kind="first", event_name="First Event")
+    add_notice(app, kind="clarification_answered", event_name="First Event")
     assert len(outbox.messages) == 1
-    add_notice(app, kind="second", event_name="Second Event")
+    add_notice(app, kind="change_request_submitted", event_name="Second Event")
     assert len(outbox.messages) == 2
     assert "First Event" in outbox.messages[0]["Subject"]
     assert "Second Event" in outbox.messages[1]["Subject"]
@@ -485,12 +487,12 @@ def test_qa_spl_125_024_html_in_names_and_messages_is_escaped(app, outbox):
 
 # QA-SPL-125-025 | AC3 | WB config
 def test_qa_spl_125_025_every_email_goes_to_the_configured_shared_address(app, outbox):
-    for role, recipient in (
-        (Role.EVENT_COORDINATOR, ALICE),
-        (Role.VENUE_STAFF, VENUE_STAFF),
-        (Role.EVENT_ORGANISER, ORGANISER),
+    for role, recipient, kind in (
+        (Role.EVENT_COORDINATOR, ALICE, "coordinator_assigned"),
+        (Role.VENUE_STAFF, VENUE_STAFF, "venue_booking_requested"),
+        (Role.EVENT_ORGANISER, ORGANISER, "organiser_decision"),
     ):
-        add_notice(app, role=role, recipient=recipient, kind=f"k_{role.value}")
+        add_notice(app, role=role, recipient=recipient, kind=kind)
 
     assert {m["To"] for m in outbox.messages} == {SHARED_ADDRESS}
     assert {d.to_address for d in deliveries(app)} == {SHARED_ADDRESS}
@@ -506,7 +508,7 @@ def _bare_notice(event_id, **overrides):
         recipient_account_id=ALICE,
         event_request_id=event_id,
         message="x",
-        dedupe_key="bare:1",
+        dedupe_key="coordinator_removed:1",
         created_at=datetime.now(SINGAPORE),
     )
     values.update(overrides)
@@ -809,10 +811,14 @@ def test_qa_spl_125_071_the_time_is_shown_in_singapore_time(app, outbox):
     ("kind", "role", "path"),
     [
         ("coordinator_assigned", Role.EVENT_COORDINATOR, "/workspace/assigned-events/{id}"),
-        ("organiser_approved", Role.EVENT_ORGANISER, "/workspace/organisation-events/{id}"),
-        ("technical_added", Role.TECHNICAL_SUPPORT_STAFF, "/workspace/equipment-review-queue"),
+        ("organiser_decision", Role.EVENT_ORGANISER, "/workspace/organisation-events/{id}"),
+        (
+            "technical_requirement_recorded",
+            Role.TECHNICAL_SUPPORT_STAFF,
+            "/workspace/equipment-review-queue",
+        ),
         ("venue_booking_requested", Role.VENUE_STAFF, "/workspace/booking-requests"),
-        ("attendee_cancelled", Role.ATTENDEE, "/workspace/my-registrations"),
+        ("attendee_event_cancelled", Role.ATTENDEE, "/workspace/my-registrations"),
     ],
 )
 def test_qa_spl_125_072_the_link_opens_the_same_page_as_the_notice(app, outbox, kind, role, path):
@@ -886,10 +892,14 @@ def test_qa_spl_125_082_a_rolled_back_action_leaves_no_notice_or_email(app, outb
 
 # QA-SPL-125-083 | AC5 | WB failed commit (duplicate notice)
 def test_qa_spl_125_083_an_action_that_fails_on_commit_sends_nothing_more(app, outbox):
-    notice_id = add_notice(app, kind="dup", source=1)
+    notice_id = add_notice(app, kind="coordinator_removed", source=1)
     event_id = notices(app)[0].event_request_id
     with Session(app.extensions["engine"]) as session:
-        session.add(_bare_notice(event_id, recipient_role="event_coordinator", dedupe_key="dup:1"))
+        session.add(
+            _bare_notice(
+                event_id, recipient_role="event_coordinator", dedupe_key="coordinator_removed:1"
+            )
+        )
         with pytest.raises(IntegrityError):
             session.commit()
 
@@ -1622,7 +1632,7 @@ with Session(engine) as session:
         expected_attendance=10, status="submitted")
     session.add(event); session.flush()
     session.add(Notification(recipient_account_id="{ALICE}", recipient_role=Role.EVENT_COORDINATOR,
-        event_request_id=event.id, message="m", dedupe_key="d1:1",
+        event_request_id=event.id, message="m", dedupe_key="coordinator_assigned:1",
         created_at=datetime.now(SINGAPORE)))
     session.commit()
 print("SENT", len(sent))
@@ -1642,7 +1652,11 @@ print("SENT", len(sent))
 
 def _flushed_notice(session, event_id, key):
     session.add(
-        _bare_notice(event_id, recipient_role=Role.EVENT_COORDINATOR, dedupe_key=f"{key}:1")
+        _bare_notice(
+            event_id,
+            recipient_role=Role.EVENT_COORDINATOR,
+            dedupe_key=f"coordinator_assigned:{key}",
+        )
     )
     session.flush()
 

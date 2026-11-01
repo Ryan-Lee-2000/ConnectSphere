@@ -14,6 +14,7 @@ import {
 import { EventRequestForm } from './EventRequestForm';
 import { VenueCatalogue } from './VenueCatalogue';
 import { EventRequestDrafts } from './EventRequestDrafts';
+import { NotificationSettings } from './NotificationSettings';
 import { Notifications } from './Notifications';
 import { OrganisationEvents } from './OrganisationEvents';
 import { MyRegistrations } from './MyRegistrations';
@@ -58,6 +59,8 @@ function roleCanAccessPath(role: AccountRole, requestedPath: string) {
   if (requestedPath === '/workspace') return true;
   // SPL-101. Every role has a personal notification inbox.
   if (requestedPath === '/workspace/notifications') return true;
+  // SPL-126 AC5. Every role chooses email for its own notification types.
+  if (requestedPath === '/workspace/notification-settings') return true;
   if (requestedPath === '/workspace/event-requests') return role === 'event_organiser';
   // CS-E07-S1. An organiser's own requests; every other role is refused here, including the
   // coordinator, who reads requests through their own story rather than this view.
@@ -432,6 +435,8 @@ function Workspace({
   const unavailabilityTypeId = unavailabilityMatch ? Number(unavailabilityMatch[1]) : undefined;
   const contentLabel = safePath === '/workspace/notifications'
     ? 'Notifications workspace'
+    : safePath === '/workspace/notification-settings'
+    ? 'Email settings workspace'
     : safePath === '/workspace/venues'
     ? 'Venue catalogue workspace'
     : safePath === '/workspace/venue-calendar'
@@ -588,7 +593,8 @@ function Workspace({
           onClick={event => { event.preventDefault(); navigate('/workspace/my-registrations'); }}
         >My registrations</a>}
         <a
-          aria-current={safePath === '/workspace/notifications' ? 'page' : undefined}
+          aria-current={safePath === '/workspace/notifications'
+            || safePath === '/workspace/notification-settings' ? 'page' : undefined}
           href="/workspace/notifications"
           onClick={event => { event.preventDefault(); navigate('/workspace/notifications'); }}
         >Notifications</a>
@@ -684,6 +690,13 @@ function Workspace({
             // Keyed by account as well as role: the inbox loads once on mount, so a different
             // account with the same role must remount it rather than keep showing the last inbox.
             key={`${session.user.id}:${activeRole}:notifications`}
+            onNavigate={navigate}
+          />
+        ) : safePath === '/workspace/notification-settings' ? (
+          <NotificationSettings
+            accessToken={session.access_token}
+            // Keyed by account, as the inbox is: the settings load once on mount.
+            key={`${session.user.id}:${activeRole}:notification-settings`}
             onNavigate={navigate}
           />
         ) : safePath === '/workspace/venue-calendar' ? (

@@ -376,6 +376,8 @@ def main():
             "backend/tests/test_qa_spl125_postgres.py",
             # SPL-132: racing replacement requests, block versus confirmation, release once.
             "backend/tests/test_qa_spl132_postgres.py",
+            # SPL-126: the type backfill, racing turn-offs, checks, grants and the email check.
+            "backend/tests/test_qa_spl126_postgres.py",
             "-q",
         )
     elif cmd == "dev":

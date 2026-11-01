@@ -151,7 +151,7 @@ def _assign(world):
     )
 
 
-def _add_notice(world, key="spl125_pg:1"):
+def _add_notice(world, key="coordinator_assigned:1"):
     with Session(world["app"].extensions["engine"]) as session:
         notice = Notification(
             recipient_account_id=world["ids"]["alice"],
@@ -233,7 +233,7 @@ def test_qa_spl_125_161_two_workers_never_send_the_same_email_twice(engine, worl
 
 # QA-SPL-125-162 | AC10 | WB restart picks up the pending retry
 def test_qa_spl_125_162_a_new_app_instance_sends_a_pending_retry_once(engine, world):
-    notice_id = _add_notice(world, "spl125_pg:restart")
+    notice_id = _add_notice(world, "coordinator_assigned:restart")
     _make_pending(world, notice_id)
     world["app"].extensions["engine"].dispose()
 
@@ -262,7 +262,7 @@ def test_qa_spl_125_162_a_new_app_instance_sends_a_pending_retry_once(engine, wo
 
 # QA-SPL-125-163 | AC10 | WB a retry that is not yet due waits
 def test_qa_spl_125_163_a_retry_is_not_sent_before_it_is_due(engine, world):
-    notice_id = _add_notice(world, "spl125_pg:later")
+    notice_id = _add_notice(world, "coordinator_assigned:later")
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -284,7 +284,7 @@ def test_qa_spl_125_163_a_retry_is_not_sent_before_it_is_due(engine, world):
 
 # QA-SPL-125-164 | AC11 | WB records block deleting their notice
 def test_qa_spl_125_164_a_notice_with_an_email_record_cannot_be_deleted(engine, world):
-    notice_id = _add_notice(world, "spl125_pg:keep")
+    notice_id = _add_notice(world, "coordinator_assigned:keep")
 
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.execute(text("DELETE FROM notifications WHERE id = :n"), {"n": notice_id})
@@ -308,7 +308,7 @@ def test_qa_spl_125_164_a_notice_with_an_email_record_cannot_be_deleted(engine, 
 def test_qa_spl_125_165_postgresql_enforces_role_and_outcome_rules(
     engine, world, statement, constraint
 ):
-    notice_id = _add_notice(world, f"spl125_pg:{constraint}:{uuid.uuid4().hex[:6]}")
+    notice_id = _add_notice(world, f"coordinator_assigned:{constraint}:{uuid.uuid4().hex[:6]}")
 
     with pytest.raises(IntegrityError) as refused, engine.begin() as connection:
         connection.execute(text(statement), {"n": notice_id})
@@ -399,11 +399,11 @@ KINDS = {
     "change_request_submitted:4": "event_coordinator",
     "safety_decision:5": "event_coordinator",
     "organiser_coordinator_changed:6": "event_organiser",
-    "organiser_approved:7": "event_organiser",
+    "organiser_decision:7": "event_organiser",
     "arrangement_booking_approved:8": "event_coordinator",
-    "technical_requirement_added:9": "technical_support_staff",
+    "technical_requirement_recorded:9": "technical_support_staff",
     "venue_booking_requested:10": "venue_staff",
-    "attendee_cancelled:11": "attendee",
+    "attendee_event_cancelled:11": "attendee",
 }
 
 
@@ -525,7 +525,7 @@ def test_qa_spl_125_173_a_savepoint_does_not_lose_the_immediate_send(engine, wor
             recipient_role=Role.EVENT_COORDINATOR,
             event_request_id=world["event_id"],
             message="Something changed.",
-            dedupe_key=f"spl125_pg:savepoint_{savepoint}",
+            dedupe_key=f"coordinator_assigned:savepoint_{savepoint}",
             created_at=datetime.now(SINGAPORE),
         )
         session.add(notice)

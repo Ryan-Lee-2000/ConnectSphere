@@ -18,6 +18,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     Uuid,
+    event,
     text,
     true,
 )
@@ -95,6 +96,91 @@ if missing := set(Role) - {role for role, name in ROLE_DISPLAY_NAMES.items() if 
 KNOWN_NOTIFICATION_ROLE = (
     "recipient_role in (" + ", ".join(repr(role) for role in ROLE_VALUES) + ")"
 )
+
+
+class NotificationType(StrEnum):
+    """SPL-126 AC1: the fixed list of notification types a user can turn email off for."""
+
+    COORDINATOR_ASSIGNMENT = "coordinator_assignment"
+    COORDINATOR_REQUESTS = "coordinator_requests"
+    COORDINATOR_ARRANGEMENTS = "coordinator_arrangements"
+    COORDINATOR_HOLD_DEADLINES = "coordinator_hold_deadlines"
+    COORDINATOR_SAFETY = "coordinator_safety"
+    ORGANISER_REVIEW = "organiser_review"
+    ORGANISER_COORDINATOR = "organiser_coordinator"
+    ORGANISER_CONFIRMATION = "organiser_confirmation"
+    TECHNICAL_EQUIPMENT = "technical_equipment"
+    VENUE_BOOKING_REQUESTS = "venue_booking_requests"
+    ATTENDEE_REGISTRATION = "attendee_registration"
+    ATTENDEE_EVENT_CHANGES = "attendee_event_changes"
+
+
+# The role each type is written for, which decides whose settings screen lists it.
+NOTIFICATION_TYPE_ROLES = {
+    NotificationType.COORDINATOR_ASSIGNMENT: Role.EVENT_COORDINATOR,
+    NotificationType.COORDINATOR_REQUESTS: Role.EVENT_COORDINATOR,
+    NotificationType.COORDINATOR_ARRANGEMENTS: Role.EVENT_COORDINATOR,
+    NotificationType.COORDINATOR_HOLD_DEADLINES: Role.EVENT_COORDINATOR,
+    NotificationType.COORDINATOR_SAFETY: Role.EVENT_COORDINATOR,
+    NotificationType.ORGANISER_REVIEW: Role.EVENT_ORGANISER,
+    NotificationType.ORGANISER_COORDINATOR: Role.EVENT_ORGANISER,
+    NotificationType.ORGANISER_CONFIRMATION: Role.EVENT_ORGANISER,
+    NotificationType.TECHNICAL_EQUIPMENT: Role.TECHNICAL_SUPPORT_STAFF,
+    NotificationType.VENUE_BOOKING_REQUESTS: Role.VENUE_STAFF,
+    NotificationType.ATTENDEE_REGISTRATION: Role.ATTENDEE,
+    NotificationType.ATTENDEE_EVENT_CHANGES: Role.ATTENDEE,
+}
+# Every notice kind (its dedupe key's prefix) and its type. A kind missing here is refused, so a
+# new trigger cannot ship without a type its recipients can turn off.
+NOTIFICATION_TYPE_BY_KIND = {
+    "coordinator_assigned": NotificationType.COORDINATOR_ASSIGNMENT,
+    "coordinator_removed": NotificationType.COORDINATOR_ASSIGNMENT,
+    "clarification_answered": NotificationType.COORDINATOR_REQUESTS,
+    "change_request_submitted": NotificationType.COORDINATOR_REQUESTS,
+    "arrangement_booking_approved": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_booking_rejected": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_booking_flagged": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_equipment_flagged": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_equipment_unavailable": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_equipment_reserved": NotificationType.COORDINATOR_ARRANGEMENTS,
+    "arrangement_hold_created": NotificationType.COORDINATOR_HOLD_DEADLINES,
+    "arrangement_hold_deadline_changed": NotificationType.COORDINATOR_HOLD_DEADLINES,
+    "arrangement_hold_expired": NotificationType.COORDINATOR_HOLD_DEADLINES,
+    "safety_decision": NotificationType.COORDINATOR_SAFETY,
+    "organiser_clarification_requested": NotificationType.ORGANISER_REVIEW,
+    "organiser_decision": NotificationType.ORGANISER_REVIEW,
+    "organiser_withdrawn": NotificationType.ORGANISER_REVIEW,
+    "organiser_coordinator_changed": NotificationType.ORGANISER_COORDINATOR,
+    "organiser_event_confirmed": NotificationType.ORGANISER_CONFIRMATION,
+    "organiser_returned_to_planning": NotificationType.ORGANISER_CONFIRMATION,
+    "organiser_change_item_decided": NotificationType.ORGANISER_CONFIRMATION,
+    "organiser_event_cancelled": NotificationType.ORGANISER_CONFIRMATION,
+    "technical_requirement_recorded": NotificationType.TECHNICAL_EQUIPMENT,
+    "technical_requirement_changed": NotificationType.TECHNICAL_EQUIPMENT,
+    "technical_requirement_removed": NotificationType.TECHNICAL_EQUIPMENT,
+    "technical_event_cancelled": NotificationType.TECHNICAL_EQUIPMENT,
+    "venue_booking_requested": NotificationType.VENUE_BOOKING_REQUESTS,
+    "venue_booking_withdrawn": NotificationType.VENUE_BOOKING_REQUESTS,
+    "attendee_registered": NotificationType.ATTENDEE_REGISTRATION,
+    "attendee_withdrawn": NotificationType.ATTENDEE_REGISTRATION,
+    "attendee_event_cancelled": NotificationType.ATTENDEE_EVENT_CHANGES,
+    "attendee_schedule_changed": NotificationType.ATTENDEE_EVENT_CHANGES,
+    "attendee_venue_added": NotificationType.ATTENDEE_EVENT_CHANGES,
+    "attendee_venue_removed": NotificationType.ATTENDEE_EVENT_CHANGES,
+}
+if missing := set(NotificationType) - set(NOTIFICATION_TYPE_ROLES):
+    raise RuntimeError(f"Notification types without a role: {sorted(missing)}")
+NOTIFICATION_TYPE_VALUES = tuple(kind.value for kind in NotificationType)
+KNOWN_NOTIFICATION_TYPE = (
+    "notification_type in (" + ", ".join(repr(kind) for kind in NOTIFICATION_TYPE_VALUES) + ")"
+)
+
+
+def notification_type_for(dedupe_key: str) -> NotificationType:
+    kind = dedupe_key.split(":", 1)[0]
+    if kind not in NOTIFICATION_TYPE_BY_KIND:
+        raise ValueError(f"No notification type is known for notice kind {kind!r}.")
+    return NOTIFICATION_TYPE_BY_KIND[kind]
 
 
 class Organisation(Base):
@@ -1203,6 +1289,7 @@ class Notification(Base):
         # One notice per recipient per triggering change, so a retry cannot add a duplicate.
         UniqueConstraint("recipient_account_id", "dedupe_key", name="uq_notifications_dedupe"),
         CheckConstraint(KNOWN_NOTIFICATION_ROLE, name="ck_notifications_known_role"),
+        CheckConstraint(KNOWN_NOTIFICATION_TYPE, name="ck_notifications_known_type"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1216,6 +1303,8 @@ class Notification(Base):
     )
     message: Mapped[str] = mapped_column(Text, nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    # SPL-126 AC1: set from the dedupe key when saved, so trigger stories never name a type.
+    notification_type: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # Null means unread.
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1227,6 +1316,29 @@ class Notification(Base):
         if value not in ROLE_VALUES:
             raise ValueError(f"Unknown notification role: {value!r}")
         return Role(value).value
+
+
+@event.listens_for(Notification, "before_insert")
+def _type_from_kind(_mapper, _connection, notice: Notification) -> None:
+    notice.notification_type = notification_type_for(notice.dedupe_key).value
+
+
+class NotificationEmailOptOut(Base):
+    """A notification type one account has turned email off for (SPL-126).
+
+    Every type is on until a row says otherwise (AC3). In-app notices ignore this table (AC4).
+    """
+
+    __tablename__ = "notification_email_opt_outs"
+    __table_args__ = (
+        CheckConstraint(KNOWN_NOTIFICATION_TYPE, name="ck_notification_email_opt_outs_known_type"),
+    )
+
+    account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    notification_type: Mapped[str] = mapped_column(String(40), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 # SPL-125 AC8 and AC11: one email record per notice, never one per attempt.
