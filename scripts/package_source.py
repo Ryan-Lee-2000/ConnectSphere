@@ -21,6 +21,9 @@ PATTERNS = (
     ".github/**/*.yml",
     ".github/**/*.md",
     ".github/CODEOWNERS*",
+    ".agents/skills/**/*.md",
+    ".agents/skills/**/*.yaml",
+    ".claude/skills/**/*.md",
     "backend/**/*.py",
     "backend/**/*.mako",
     "scripts/**/*.py",
@@ -32,16 +35,28 @@ PATTERNS = (
     "frontend/src/**/*.ts",
     "frontend/src/**/*.tsx",
     "frontend/src/**/*.css",
+    "frontend/src/assets/**/*.png",
+    "frontend/src/assets/**/*.svg",
     "e2e/*.ts",
     "playwright.config.ts",
+    "playwright.evidence.config.ts",
     "docs/**/*.md",
+    "docs/**/*.png",
     "docs/infrastructure/ci-budget.json",
     "supabase/config.toml",
 )
+LOCAL_ONLY = {"LOCAL_DEVELOPER_CHEATSHEET.md", "scripts/local_refresh_demo.py"}
 
 
 def package_source(root, destination):
-    paths = sorted({path for pattern in PATTERNS for path in root.glob(pattern) if path.is_file()})
+    paths = sorted(
+        {
+            path
+            for pattern in PATTERNS
+            for path in root.glob(pattern)
+            if path.is_file() and path.relative_to(root).as_posix() not in LOCAL_ONLY
+        }
+    )
     with ZipFile(destination, "w", ZIP_DEFLATED) as archive:
         for path in paths:
             if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):

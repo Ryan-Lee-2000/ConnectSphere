@@ -1,6 +1,6 @@
 # Project documentation
 
-Start with the [project README](../README.md) to install and run the foundation.
+Start with the [project README](../README.md) for setup, demo accounts, submission navigation and the team workflow.
 Paths written as plain text in these documents are relative to the repository root.
 
 | Need | Document |
